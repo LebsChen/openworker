@@ -97,6 +97,15 @@ const openWebSocket = (url: string): WebSocket => {
     : new WebSocket(url);
 };
 
+export const openRvmPty = (
+  sessionId: string,
+  cols: number,
+  rows: number,
+): WebSocket =>
+  openWebSocket(
+    `${wsBase()}/ws/rvm/pty/${encodeURIComponent(sessionId)}?cols=${Math.max(2, Math.round(cols))}&rows=${Math.max(2, Math.round(rows))}`,
+  );
+
 export const isRemoteMode = (): boolean => Boolean((globalThis as any).__COWORKER_REMOTE_MODE__);
 export const remoteProfileName = (): string | null =>
   typeof (globalThis as any).__COWORKER_REMOTE_NAME__ === "string"

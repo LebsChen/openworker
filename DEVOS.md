@@ -116,3 +116,13 @@ selected checkout with a worktree. New-session clients may pass `isolate=true`; 
 server create `<root>/sessions/<session_id>/`. A Git checkout becomes a worktree on
 `openworker/session-<session_id>`; a non-Git directory gets a normal isolated directory. Session
 listing reports `workspace`, `workspace_isolated`, `workspace_worktree`, and `workspace_branch`.
+
+## Remote PTY shell
+
+Remote sessions expose an interactive shell through the OpenWorker server proxy at
+`/ws/rvm/pty/{session_id}`. The browser authenticates with the same `openworker` WebSocket
+subprotocol as the session stream; the RVM credential is used only in the server-to-RVM
+`Authorization: Bearer` header and is never placed in a URL. Binary frames carry stdin/output,
+while text frames carry resize JSON. Every upgrade starts a fresh shell, so reconnect is labeled
+as starting a new shell. Windows uses piped PowerShell without ConPTY; resize is a no-op and full
+TUI fidelity is not guaranteed.

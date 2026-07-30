@@ -18,10 +18,13 @@ from collections import deque
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Optional
+from urllib.parse import urlencode
 
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from websockets.asyncio.client import connect as rvm_ws_connect
+from websockets.exceptions import InvalidStatus
 
 # Origins allowed to talk to the local sidecar. It binds to 127.0.0.1, but a page in the
 # user's own browser can still reach loopback — so without an origin gate, any website they
@@ -1932,6 +1935,111 @@ def create_app(manager: SessionManager) -> FastAPI:
             pass
         finally:
             manager.unregister_session_client(session_id, ws.send_json)
+
+    @app.websocket("/ws/rvm/pty/{session_id}")
+    async def ws_rvm_pty(ws: WebSocket, session_id: str) -> None:
+        """Proxy a bound remote RVM PTY without exposing the RVM token to the browser."""
+        if not _websocket_authenticated(ws):
+            await ws.close(code=1008, reason="OpenWorker authentication failed")
+            return
+        if not _origin_allowed(ws.headers.get("origin")):
+            await ws.close(code=1008, reason="WebSocket origin not allowed")
+            return
+
+        try:
+            engine = manager.get_engine(
+                session_id,
+                agent=ws.query_params.get("agent") or "code",
+            )
+            target = getattr(engine, "remote_target", None)
+            if target is None:
+                await ws.close(code=1008, reason="PTY requires a remote RVM session")
+                return
+            token = manager.rvm_hosts.token(target.host.id)
+            if not token:
+                await ws.close(code=1008, reason="RVM host has no configured token")
+                return
+        except ValueError as exc:
+            message = str(exc)
+            if "unauthorized" in message.lower():
+                reason = "RVM host unauthorized"
+            elif "offline" in message.lower() or "unreachable" in message.lower():
+                reason = "RVM host offline or unreachable"
+            elif "unknown RVM host" in message:
+                reason = "Unknown RVM host"
+            else:
+                reason = "Unable to prepare the remote RVM PTY"
+            await ws.close(code=1008, reason=reason)
+            return
+        except Exception:
+            await ws.close(code=1011, reason="Unable to prepare the remote RVM PTY")
+            return
+
+        try:
+            cols = max(2, int(ws.query_params.get("cols") or 80))
+            rows = max(2, int(ws.query_params.get("rows") or 24))
+        except ValueError:
+            cols, rows = 80, 24
+        query = urlencode({"cols": cols, "rows": rows, "cwd": target.workspace})
+        base_url = target.client.base_url.rstrip("/")
+        upstream_url = (
+            base_url.replace("https://", "wss://", 1).replace("http://", "ws://", 1)
+            + "/pty-ws?"
+            + query
+        )
+
+        await ws.accept(subprotocol="openworker" if api_token else None)
+        try:
+            async with rvm_ws_connect(
+                upstream_url,
+                additional_headers={"Authorization": f"Bearer {token}"},
+                max_size=None,
+            ) as upstream:
+                async def client_to_rvm() -> None:
+                    while True:
+                        message = await ws.receive()
+                        if message["type"] == "websocket.disconnect":
+                            return
+                        if message.get("bytes") is not None:
+                            await upstream.send(message["bytes"])
+                        elif message.get("text") is not None:
+                            await upstream.send(message["text"])
+
+                async def rvm_to_client() -> None:
+                    async for message in upstream:
+                        if isinstance(message, bytes):
+                            await ws.send_bytes(message)
+                        else:
+                            await ws.send_text(message)
+
+                client_task = asyncio.create_task(client_to_rvm())
+                rvm_task = asyncio.create_task(rvm_to_client())
+                done, pending = await asyncio.wait(
+                    {client_task, rvm_task},
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                for task in pending:
+                    task.cancel()
+                if pending:
+                    await asyncio.gather(*pending, return_exceptions=True)
+                if rvm_task in done and ws.client_state.name == "CONNECTED":
+                    await ws.close(code=1000, reason="Remote RVM PTY closed")
+                for task in done:
+                    if not task.cancelled() and task.exception() is not None:
+                        raise task.exception()
+        except WebSocketDisconnect:
+            pass
+        except InvalidStatus as exc:
+            if ws.client_state.name == "CONNECTED":
+                reason = (
+                    "RVM host unauthorized"
+                    if getattr(exc.response, "status_code", None) in (401, 403)
+                    else "Remote RVM PTY unavailable"
+                )
+                await ws.close(code=1011, reason=reason)
+        except Exception:
+            if ws.client_state.name == "CONNECTED":
+                await ws.close(code=1011, reason="Remote RVM PTY disconnected")
 
     @app.websocket("/ws/events")
     async def ws_events(ws: WebSocket) -> None:

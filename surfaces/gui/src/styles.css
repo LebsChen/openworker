@@ -598,6 +598,46 @@ button.btn.danger { color: var(--accent); }
   border-left: 1px solid var(--line);
   backdrop-filter: blur(12px);
 }
+
+.remote-shell-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 360px;
+  background: #111318;
+}
+
+.remote-shell-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.remote-shell-toolbar button {
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  padding: 4px 7px;
+  color: var(--ink);
+  background: var(--panel);
+  font-size: 11px;
+}
+
+.remote-shell-terminal {
+  flex: 1;
+  min-height: 280px;
+  padding: 8px;
+}
+
+.remote-shell-note {
+  padding: 7px 10px 10px;
+  color: #aeb4c0;
+  font-size: 11px;
+  line-height: 1.35;
+}
 .right-panel-shell.collapsed {
   width: 42px;
 }

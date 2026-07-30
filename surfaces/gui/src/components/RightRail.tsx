@@ -16,6 +16,7 @@ import { Icon } from "./Icon";
 import { Markdown, OPEN_ARTIFACT_EVENT } from "./Markdown";
 import { hostProbeResult, HOST_STATUS_CHANGED } from "../hostStatus";
 import { selectWorklog, type WorklogEntry } from "../worklogSelector";
+import { RemoteShellPanel } from "./RemoteShellPanel";
 
 export type PanelTab = "info" | "worklog" | "changes" | "shell" | "ide" | "desktop";
 const PANEL_TABS: { id: PanelTab; label: string; icon: "audit" | "clock" | "fileCode" | "terminal" | "code" | "monitor" }[] = [
@@ -216,7 +217,11 @@ export function RightRail({
           />
         </div>
         <div style={{ display: panelOpen && isRvmTab && !selected ? "block" : "none" }}>
-          <RvmUnavailablePanel host={host} tab={tab} />
+          {tab === "shell" ? (
+            <RemoteShellPanel active={panelOpen && tab === "shell"} sessionId={sessionId} host={host} />
+          ) : (
+            <RvmUnavailablePanel host={host} tab={tab} />
+          )}
         </div>
       </div>
       {selected && (
