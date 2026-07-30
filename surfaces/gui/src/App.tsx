@@ -863,6 +863,13 @@ export function App() {
           if (d.model) setModel(d.model);
           setItems((p) => [...p, { kind: "notice", tone: "info", text: d.text || "Model switched" }]);
           break;
+        case "persona_changed":
+          if (d.persona) setAgent(d.persona);
+          setItems((p) => [
+            ...p,
+            { kind: "notice", tone: "info", text: d.text || "Persona switched" },
+          ]);
+          break;
         case "compacted":
           // Auto-compaction marker (OPE-27): outbound-only — the transcript stays intact,
           // this divider just shows where the model's memory was summarized.
@@ -1101,6 +1108,13 @@ export function App() {
     if (running) return; // the server refuses mid-turn rebinds — don't let the header lie
     setModel(m);
     sessionRef.current?.setModel(m);
+  };
+  const changePersona = (name: string) => {
+    if (running || name === agent) return;
+    const target = personas?.find((p) => p.id === name);
+    if (!target || !target.enabled) return;
+    if (target.needs_workspace !== needsWorkspace(agent)) return;
+    sessionRef.current?.setPersona(name);
   };
 
   const startNewSession = (forAgent?: string) => {
@@ -1763,6 +1777,31 @@ export function App() {
                     {host.name} · {host.offline ? "offline" : host.local ? "online" : host.status || "unknown"}
                   </option>
                 ))}
+              </select>
+            )}
+            {personas && personas.length > 1 && (
+              <select
+                aria-label="Session persona"
+                value={agent}
+                disabled={running}
+                onChange={(e) => changePersona(e.target.value)}
+                className="text-[12px] bg-transparent border border-line rounded px-1.5 py-1 text-muted"
+                title={running ? "Persona switching is unavailable while a turn is running" : "Switch persona for this live session"}
+              >
+                {personas.map((persona) => {
+                  const compatible = persona.needs_workspace === needsWorkspace(agent);
+                  const disabled = !persona.enabled || !compatible;
+                  const reason = !persona.enabled
+                    ? "disabled in Persona settings"
+                    : !compatible
+                      ? "requires a different workspace setup; start a new session"
+                      : "";
+                  return (
+                    <option key={persona.id} value={persona.id} disabled={disabled} title={reason}>
+                      {persona.name}{reason ? ` — ${reason}` : ""}
+                    </option>
+                  );
+                })}
               </select>
             )}
             {!sessionHost.local && (sessionHost.offline || sessionHost.status !== "online") && (

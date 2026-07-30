@@ -184,7 +184,16 @@ class ConversationStore:
                         self._append(sid, legacy)
 
             existing = self._count(sid)
-            if len(record.messages) > existing:
+            existing_messages = self._read_jsonl(sid) or []
+            prefix_matches = (
+                len(record.messages) >= len(existing_messages)
+                and record.messages[: len(existing_messages)] == existing_messages
+            )
+            if not prefix_matches:
+                with open(self._file(sid), "w", encoding="utf-8") as f:
+                    for m in record.messages:
+                        f.write(json.dumps(m) + "\n")
+            elif len(record.messages) > existing:
                 self._append(sid, record.messages[existing:])
             elif len(record.messages) < existing:  # rare; not append-only
                 with open(self._file(sid), "w", encoding="utf-8") as f:

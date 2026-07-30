@@ -136,6 +136,8 @@ def build_engine(
     routing_targets: Optional[list[str]] = None,
     connector_filter: Optional[set[str]] = None,
     remote_target: Optional[RemoteTarget] = None,
+    todo: Optional[TodoList] = None,
+    executor: Optional[Any] = None,
 ) -> TurnEngine:
     ws = (
         remote_target.workspace
@@ -169,21 +171,22 @@ def build_engine(
         if not remote_target
         else load_config(None)
     )
-    executor = (
-        (
-            RvmExecutor(
-                client=remote_target.client,
-                cwd=str(ws),
-                style=remote_target.style,
-                session_id=session_id,
+    if executor is None:
+        executor = (
+            (
+                RvmExecutor(
+                    client=remote_target.client,
+                    cwd=str(ws),
+                    style=remote_target.style,
+                    session_id=session_id,
+                )
+                if remote_target is not None and agent.needs_workspace and ws is not None
+                else LocalExecutor(cwd=ws)
             )
-            if remote_target is not None and agent.needs_workspace and ws is not None
-            else LocalExecutor(cwd=ws)
+            if (agent.needs_workspace and ws is not None)
+            else None
         )
-        if (agent.needs_workspace and ws is not None)
-        else None
-    )
-    todo = TodoList()
+    todo = todo or TodoList()
     context = AgentContext(
         workspace=ws,
         executor=executor,

@@ -279,7 +279,7 @@ class TurnEngine:
         for message in reversed(self.messages):
             if message.get("role") != "notice":
                 return False
-            if message.get("kind") == "model_switch":
+            if message.get("kind") in {"model_switch", "persona_switch"}:
                 continue
             return message.get("kind") == "error"
         return False

@@ -2066,6 +2066,10 @@ export class Session {
     this.send({ type: "set_model", model });
   }
 
+  setPersona(persona: string) {
+    this.send({ type: "set_persona", persona });
+  }
+
   close() {
     // Detach before closing: this socket's async `close` event may land AFTER the
     // successor session's `open` (observed when switching into an automation-run
