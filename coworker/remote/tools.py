@@ -171,7 +171,7 @@ def _apply_remote_diff(target: RemoteTarget, diff: str) -> dict[str, Any]:
             q = target.style.quote(remote_path)
             command = (
                 f"git apply {q}; if ($LASTEXITCODE -ne 0) "
-                f"{{ patch --batch -p1 < {q} }}"
+                f"{{ Get-Content -Raw {q} | patch --batch -p1 }}"
             )
         else:
             q = target.style.quote(remote_path)
