@@ -118,6 +118,7 @@ def test_file_read_windowing_and_mutations():
     write = by_name(tools, "write_file")
     assert "exists" in write(path="main.py", content="new", overwrite=False)
     assert write(path="new.txt", content="new") == "wrote new.txt"
+    assert by_name(tools, "create_directory")(path="new-dir")["ok"] is True
     replace = by_name(tools, "replace_in_file")
     assert "error" in replace(path="main.py", old="missing", new="x")
     assert replace(path="main.py", old="first", new="updated")["replacements"] == 1

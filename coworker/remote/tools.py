@@ -307,6 +307,12 @@ def remote_file_tools(target: RemoteTarget, *, repo_oriented: bool = True) -> li
         except (RvmError, RemotePathError) as exc:
             return _error(exc)
 
+    def create_directory(path: str) -> dict[str, Any]:
+        try:
+            return target.client.mkdir(target.resolve(path))
+        except (RvmError, RemotePathError) as exc:
+            return _error(exc)
+
     def apply_unified_diff(diff: str) -> dict[str, Any]:
         return _apply_remote_diff(target, diff)
 
@@ -322,6 +328,7 @@ def remote_file_tools(target: RemoteTarget, *, repo_oriented: bool = True) -> li
     tools.extend([
         _wrap(write_file, "filesystem", "medium", True, capabilities=["write_file"]),
         _wrap(replace_in_file, "filesystem", "medium", True, capabilities=["edit_file"]),
+        _wrap(create_directory, "filesystem", "medium", True, capabilities=["create_directory"]),
         _wrap(apply_unified_diff, "filesystem", "medium", True, capabilities=["apply_patch"]),
         _wrap(apply_patch, "filesystem", "medium", True, capabilities=["apply_patch"]),
     ])
