@@ -12,6 +12,11 @@ from coworker.remote.hosts import RvmHost
 from coworker.remote.paths import RemotePathStyle
 from coworker.remote.tools import RemoteTarget
 from coworker.server import SessionManager, create_app
+from coworker.server.manager import (
+    RvmHostOfflineError,
+    RvmHostUnauthorizedError,
+)
+from coworker.sessions import SessionRecord
 
 
 class FakeUpstream:
@@ -57,7 +62,7 @@ def _manager(tmp_path, monkeypatch):
         style=RemotePathStyle("posix"),
         workspace="/workspace/session-1",
     )
-    manager.get_engine = lambda *_args, **_kwargs: SimpleNamespace(remote_target=target)
+    manager.resolve_remote_target = lambda *_args, **_kwargs: target
     return manager
 
 
@@ -101,20 +106,31 @@ def test_pty_proxy_rejects_browser_auth(tmp_path, monkeypatch):
 
 def test_pty_proxy_unknown_host_never_creates_local_shell(tmp_path, monkeypatch):
     manager = SessionManager(data_dir=tmp_path)
-    called = False
-
-    def fail(*_args, **_kwargs):
-        nonlocal called
-        called = True
-        raise ValueError("unknown RVM host for session s: missing")
-
-    manager.get_engine = fail
+    manager.session_store.save(
+        SessionRecord(
+            session_id="s",
+            workspace="/workspace",
+            model="test",
+            mode="auto",
+            host_id="missing",
+        )
+    )
     with TestClient(create_app(manager)) as client:
-        with client.websocket_connect("/ws/rvm/pty/s") as socket:
+        with client.websocket_connect("/ws/rvm/pty/s?agent=cowork") as socket:
             with pytest.raises(WebSocketDisconnect) as error:
                 socket.receive_text()
-    assert called
     assert error.value.reason == "Unknown RVM host"
+    assert manager.session_store.load("stray") is None
+
+
+def test_pty_proxy_unknown_session_never_materializes_session(tmp_path):
+    manager = SessionManager(data_dir=tmp_path)
+    with TestClient(create_app(manager)) as client:
+        with client.websocket_connect("/ws/rvm/pty/not-created?agent=cowork") as socket:
+            with pytest.raises(WebSocketDisconnect) as error:
+                socket.receive_text()
+    assert error.value.reason == "Unknown session"
+    assert manager.session_store.load("not-created") is None
 
 
 @pytest.mark.parametrize(
@@ -128,7 +144,12 @@ def test_pty_proxy_host_health_failures_are_explicit(
     tmp_path, monkeypatch, message, reason
 ):
     manager = SessionManager(data_dir=tmp_path)
-    manager.get_engine = lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError(message))
+    failure = (
+        RvmHostOfflineError(message)
+        if "offline" in message
+        else RvmHostUnauthorizedError(message)
+    )
+    manager.resolve_remote_target = lambda *_args, **_kwargs: (_ for _ in ()).throw(failure)
     with TestClient(create_app(manager)) as client:
         with client.websocket_connect("/ws/rvm/pty/s") as socket:
             with pytest.raises(WebSocketDisconnect) as error:

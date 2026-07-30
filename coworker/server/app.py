@@ -168,7 +168,13 @@ from ..remote.client import (
     RvmUnreachableError,
     RvmTimeoutError,
 )
-from .manager import SessionManager
+from .manager import (
+    RvmHostOfflineError,
+    RvmHostUnauthorizedError,
+    SessionManager,
+    UnknownRvmHostError,
+    UnknownSessionError,
+)
 from .token import token_matches
 
 
@@ -1948,11 +1954,7 @@ def create_app(manager: SessionManager) -> FastAPI:
         await ws.accept(subprotocol="openworker" if api_token else None)
 
         try:
-            engine = manager.get_engine(
-                session_id,
-                agent=ws.query_params.get("agent") or "code",
-            )
-            target = getattr(engine, "remote_target", None)
+            target = manager.resolve_remote_target(session_id)
             if target is None:
                 await ws.close(code=1008, reason="PTY requires a remote RVM session")
                 return
@@ -1960,16 +1962,20 @@ def create_app(manager: SessionManager) -> FastAPI:
             if not token:
                 await ws.close(code=1008, reason="RVM host has no configured token")
                 return
-        except ValueError as exc:
-            message = str(exc)
-            if "unauthorized" in message.lower():
-                reason = "RVM host unauthorized"
-            elif "offline" in message.lower() or "unreachable" in message.lower():
-                reason = "RVM host offline or unreachable"
-            elif "unknown RVM host" in message:
-                reason = "Unknown RVM host"
-            else:
-                reason = "Unable to prepare the remote RVM PTY"
+        except UnknownSessionError:
+            reason = "Unknown session"
+            await ws.close(code=1008, reason=reason)
+            return
+        except UnknownRvmHostError:
+            reason = "Unknown RVM host"
+            await ws.close(code=1008, reason=reason)
+            return
+        except RvmHostOfflineError:
+            reason = "RVM host offline or unreachable"
+            await ws.close(code=1008, reason=reason)
+            return
+        except RvmHostUnauthorizedError:
+            reason = "RVM host unauthorized"
             await ws.close(code=1008, reason=reason)
             return
         except Exception:
