@@ -63,7 +63,6 @@ struct RemoteHostsFile {
 struct RemoteHostInfo {
     name: String,
     base_url: String,
-    active: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -248,12 +247,10 @@ fn validate_remote_url(base_url: &str) -> Result<String, String> {
 #[tauri::command]
 fn list_remote_hosts() -> Vec<RemoteHostInfo> {
     let hosts = read_remote_hosts();
-    let active = hosts.active.clone();
     hosts
         .hosts
         .into_iter()
         .map(|host| RemoteHostInfo {
-            active: active.as_deref() == Some(host.name.as_str()),
             name: host.name,
             base_url: host.base_url,
         })
@@ -326,29 +323,6 @@ fn save_remote_host(name: String, base_url: String, token: String) -> Result<(),
 fn delete_remote_host(name: String) -> Result<(), String> {
     let mut hosts = read_remote_hosts();
     hosts.hosts.retain(|h| h.name != name);
-    if hosts.active.as_deref() == Some(name.as_str()) {
-        hosts.active = None;
-    }
-    write_remote_hosts(&hosts)
-}
-
-#[tauri::command]
-fn activate_remote_host(name: Option<String>) -> Result<(), String> {
-    let mut hosts = read_remote_hosts();
-    if let Some(ref selected) = name {
-        if !hosts.hosts.iter().any(|h| &h.name == selected) {
-            return Err("Remote host profile not found.".into());
-        }
-        if hosts
-            .hosts
-            .iter()
-            .find(|h| &h.name == selected)
-            .is_some_and(|h| h.token.is_empty())
-        {
-            return Err("Remote host token is not configured.".into());
-        }
-    }
-    hosts.active = name;
     write_remote_hosts(&hosts)
 }
 
@@ -894,7 +868,6 @@ pub fn run() {
             session_host,
             save_remote_host,
             delete_remote_host,
-            activate_remote_host,
             restart_app
         ])
         .setup(move |app| {
@@ -1050,7 +1023,7 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{activate_remote_host, save_remote_host, validate_remote_url};
+    use super::{save_remote_host, validate_remote_url};
     use std::fs;
     use std::time::SystemTime;
 
@@ -1087,7 +1060,6 @@ mod tests {
             "test-token".into(),
         )
         .unwrap();
-        activate_remote_host(Some("rvm".into())).unwrap();
 
         let after = fs::metadata(&secrets).unwrap();
         assert_eq!(before_bytes, fs::read(&secrets).unwrap());

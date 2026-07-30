@@ -28,10 +28,8 @@ import {
   pickFolder,
   setAutostart,
   setKeepAwake,
-  activateRemoteHost,
   deleteRemoteHost,
   listRemoteHosts,
-  restartApp,
   saveRemoteHost,
   remoteHostConfigError,
   type RemoteHostInfo,
@@ -176,15 +174,6 @@ function RemoteHostsSection() {
       );
     }
   };
-  const activate = async (host: RemoteHostInfo | null) => {
-    setError(null);
-    try {
-      await activateRemoteHost(host?.name ?? null);
-      await restartApp();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not activate remote host.");
-    }
-  };
   return (
     <section>
       <PanelHead
@@ -203,11 +192,6 @@ function RemoteHostsSection() {
               <div className="text-[13px] font-medium">{host.name}</div>
               <div className="text-[12px] text-muted truncate">{host.base_url}</div>
             </div>
-            {host.active ? (
-              <span className="text-[12px] text-accent">Active</span>
-            ) : (
-              <button className={BTN_BORDERED} onClick={() => activate(host)}>Use</button>
-            )}
             <button className="text-[12px] text-danger" onClick={() => deleteRemoteHost(host.name).then(refresh)}>
               Remove
             </button>
@@ -218,10 +202,7 @@ function RemoteHostsSection() {
         <input className={INPUT} placeholder="https://rvm-host:8765" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
         <input className={INPUT} type="password" placeholder="Server token" value={token} onChange={(e) => setToken(e.target.value)} />
         <button className={BTN_ACCENT} disabled={!name || !baseUrl || !token} onClick={save}>Save profile</button>
-        {hosts.some((h) => h.active) && (
-          <button className={BTN_BORDERED} onClick={() => activate(null)}>Use local server</button>
-        )}
-        {saved && <div className="text-[12px] text-accent">Saved securely. Select Use to restart in remote mode.</div>}
+        {saved && <div className="text-[12px] text-accent">Saved securely. Remote hosts are available when selecting a VM for a new session.</div>}
         {error && <div role="alert" className="text-[12px] text-danger">{error}</div>}
       </div>
     </section>
