@@ -565,9 +565,11 @@ button.btn.danger { color: var(--accent); }
   display: block; align-self: start; width: 7px; min-width: 7px; height: 7px;
   margin-top: 4px; border-radius: 50%; background: var(--faint);
 }
-.right-panel-worklog-dot.tool { background: var(--accent); }
-.right-panel-worklog-dot.file { background: var(--ok); }
-.right-panel-worklog-dot.assistant { background: var(--teal); }
+.right-panel-worklog-dot--tool { background: var(--accent); }
+.right-panel-worklog-dot--file { background: var(--ok); }
+.right-panel-worklog-dot--assistant { background: var(--teal); }
+.right-panel-worklog-dot--user { background: var(--muted); }
+.right-panel-worklog-dot--notice { background: var(--warn-ink); }
 .right-panel-worklog-status { margin-left: 6px; color: var(--faint); }
 .right-panel-worklog-row pre { max-height: 84px; margin: 4px 0 0; overflow: auto; white-space: pre-wrap; color: var(--faint); font: 10px/1.35 ui-monospace, monospace; }
 .right-panel-empty { padding: 32px 8px; text-align: center; color: var(--faint); font-size: 12px; }
@@ -616,6 +618,12 @@ button.btn.danger { color: var(--accent); }
 .right-panel-rail-btn.active { color: var(--ink); background: var(--paper); }
 .right-panel-rail-btn:disabled { color: var(--faint); opacity: .35; cursor: not-allowed; }
 .right-panel-local-hint { margin: 10px 12px 0; padding: 8px; border: 1px solid var(--line); border-radius: 7px; color: var(--faint); font-size: 11px; }
+.main-topbar-actions select {
+  min-width: 0;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .main.rail-open:has(.right-panel-shell.artifact-mode) .main-chat { margin-right: var(--artifact-rail-w); }
 .main.rail-open:has(.right-panel-shell.artifact-mode) .main-topbar { right: var(--artifact-rail-w); }
 .artifact-head { display: flex; justify-content: space-between; gap: 14px; align-items: center; }

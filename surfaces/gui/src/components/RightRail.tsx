@@ -342,7 +342,7 @@ function WorklogPanel({ entries }: { entries: WorklogEntry[] }) {
       <div className="right-panel-worklog">
         {entries.map((entry) => (
           <div className="right-panel-worklog-row" key={entry.id}>
-            <span className={"right-panel-worklog-dot " + entry.kind} />
+            <span className={"right-panel-worklog-dot right-panel-worklog-dot--" + entry.kind} />
             <div>
               <strong>{entry.title}</strong>
               {entry.status && <span className="right-panel-worklog-status">{entry.status}</span>}
