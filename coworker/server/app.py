@@ -1945,6 +1945,7 @@ def create_app(manager: SessionManager) -> FastAPI:
         if not _origin_allowed(ws.headers.get("origin")):
             await ws.close(code=1008, reason="WebSocket origin not allowed")
             return
+        await ws.accept(subprotocol="openworker" if api_token else None)
 
         try:
             engine = manager.get_engine(
@@ -1988,7 +1989,6 @@ def create_app(manager: SessionManager) -> FastAPI:
             + query
         )
 
-        await ws.accept(subprotocol="openworker" if api_token else None)
         try:
             async with rvm_ws_connect(
                 upstream_url,

@@ -110,9 +110,9 @@ def test_pty_proxy_unknown_host_never_creates_local_shell(tmp_path, monkeypatch)
 
     manager.get_engine = fail
     with TestClient(create_app(manager)) as client:
-        with pytest.raises(WebSocketDisconnect) as error:
-            with client.websocket_connect("/ws/rvm/pty/s"):
-                pass
+        with client.websocket_connect("/ws/rvm/pty/s") as socket:
+            with pytest.raises(WebSocketDisconnect) as error:
+                socket.receive_text()
     assert called
     assert error.value.reason == "Unknown RVM host"
 
@@ -130,7 +130,7 @@ def test_pty_proxy_host_health_failures_are_explicit(
     manager = SessionManager(data_dir=tmp_path)
     manager.get_engine = lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError(message))
     with TestClient(create_app(manager)) as client:
-        with pytest.raises(WebSocketDisconnect) as error:
-            with client.websocket_connect("/ws/rvm/pty/s"):
-                pass
+        with client.websocket_connect("/ws/rvm/pty/s") as socket:
+            with pytest.raises(WebSocketDisconnect) as error:
+                socket.receive_text()
     assert error.value.reason == reason
