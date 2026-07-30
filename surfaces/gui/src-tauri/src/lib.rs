@@ -69,7 +69,6 @@ struct RemoteHostsFile {
 struct RemoteHostInfo {
     name: String,
     url: String,
-    vnc_password: Option<String>,
     offline: bool,
 }
 
@@ -82,7 +81,6 @@ struct SessionHostInfo {
     token: String,
     local: bool,
     url: String,
-    vnc_password: Option<String>,
     offline: bool,
 }
 
@@ -264,7 +262,6 @@ fn list_remote_hosts() -> Vec<RemoteHostInfo> {
         .map(|host| RemoteHostInfo {
             name: host.name,
             url: host.url,
-            vnc_password: host.vnc_password,
             offline: host.offline,
         })
         .collect()
@@ -286,7 +283,6 @@ fn list_session_hosts() -> Vec<SessionHostInfo> {
             token: host.token,
             local: false,
             url: host.url,
-            vnc_password: host.vnc_password,
             offline: host.offline,
         })
         .collect()

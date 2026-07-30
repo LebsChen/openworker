@@ -77,7 +77,6 @@ export const setKeepAwake = (enabled: boolean) => invoke<boolean>("set_keep_awak
 export type RemoteHostInfo = {
   name: string;
   url: string;
-  vnc_password?: string | null;
   offline?: boolean;
 };
 
@@ -201,7 +200,6 @@ export const saveRemoteHost = async (name: string, url: string, token: string, v
     ws_url: normalized.replace(/^https:/, "wss:").replace(/^http:/, "ws:"),
     token,
     local: false,
-    vnc_password: vncPassword || null,
   };
   (globalThis as any).__COWORKER_HOSTS__ = [
     ...hosts.filter((host) => host.id !== name),

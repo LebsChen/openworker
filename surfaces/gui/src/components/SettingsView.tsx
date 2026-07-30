@@ -283,7 +283,7 @@ function RemoteHostsSection() {
               setName(host.name);
               setUrl(host.url);
               setToken(savedTokens[host.name] || "");
-              setVncPassword(host.vnc_password || "");
+              setVncPassword("");
             }}>
               Edit
             </button>
