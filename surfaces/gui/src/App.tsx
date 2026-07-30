@@ -209,6 +209,7 @@ export function App() {
   const [sessionId, setSessionId] = useState<string>(newId());
   const [sessionHost, setSessionHost] = useState<SessionHost>(() => sessionHosts()[0]);
   const sessionLoadRef = useRef(0);
+  const [sessionHistoryUnavailable, setSessionHistoryUnavailable] = useState(false);
   const [isolateWorkspace, setIsolateWorkspace] = useState(false);
   // Automation-run context (§ owner ask 2026-07-04): which task an open __run__ session belongs
   // to, driving the banner + "Back to runs". Best-effort — a run session without context still
@@ -461,6 +462,12 @@ export function App() {
           setSessionHost(restoredHost);
           rememberSessionHost(last.session_id, restoredHost);
           setSessionOffline(last.host_status === "offline");
+          setSessionHistoryUnavailable(
+            !restoredHost.local &&
+              (Boolean(restoredHost.offline) ||
+                restoredHost.status !== "online" ||
+                last.host_status === "offline"),
+          );
         }
         if (last.agent) setAgent(last.agent);
         if (last.workspace) {
@@ -474,6 +481,7 @@ export function App() {
         } catch {
           setItems([]);
           setUsage(emptyUsage());
+          setSessionHistoryUnavailable(Boolean(restoredHost && !restoredHost.local));
         }
         setSessionId(last.session_id);
         setShowGate(false);
@@ -1018,6 +1026,7 @@ export function App() {
     setSurface("session"); // return to the conversation view if we were on a sub-view
     setItems([]);
     setUsage(emptyUsage());
+    setSessionHistoryUnavailable(false);
     setStreaming("");
     setTodo([]);
     setRunning(false);
@@ -1083,7 +1092,13 @@ export function App() {
     if (selectedHost) setSessionHost(selectedHost);
     if (selectedHost) rememberSessionHost(id, selectedHost);
     const selectedInfo = sessions.find((item) => item.session_id === id);
-    setSessionOffline(selectedInfo?.host_status === "offline");
+    const remoteUnavailable =
+      Boolean(selectedHost && !selectedHost.local) &&
+      (Boolean(selectedHost?.offline) ||
+        selectedHost?.status !== "online" ||
+        selectedInfo?.host_status === "offline");
+    setSessionOffline(Boolean(remoteUnavailable));
+    setSessionHistoryUnavailable(Boolean(remoteUnavailable));
     setIsolateWorkspace(Boolean(selectedInfo?.workspace_isolated));
     if (isTauri()) bindSessionHost(id, selectedHost?.id || "local").catch(() => {});
     if (!gatesWorkspace(ag)) setShowGate(false);
@@ -1097,11 +1112,13 @@ export function App() {
       if (loadId !== sessionLoadRef.current) return;
       setItems(itemsFromMessages(messages));
       setUsage(usageFromMessages(messages));
+      setSessionHistoryUnavailable(false);
     } catch {
       if (loadId !== sessionLoadRef.current) return;
       setItems([]);
       setUsage(emptyUsage());
       setSessionOffline(!selectedHost?.local);
+      setSessionHistoryUnavailable(Boolean(!selectedHost?.local));
     }
   };
   const switchAgent = async (name: string) => {
@@ -1688,7 +1705,13 @@ export function App() {
               </div>
             )}
             <div className="main-scroll" ref={scrollRef} onScroll={handleScroll}>
-              {idle ? (
+              {idle && sessionHistoryUnavailable && !sessionHost.local ? (
+                <div className="session-history-unavailable">
+                  <h1>Can&apos;t load this session&apos;s history</h1>
+                  <p>Remote host &quot;{sessionHost.name}&quot; is offline.</p>
+                  <p>History remains on that host and will reload when it is available again.</p>
+                </div>
+              ) : idle ? (
                 agent === "cowork" ? (
                   <SessionIntro
                     sessionId={sessionId}
