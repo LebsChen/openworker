@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { t, useT } from "../i18n";
 import { useEffect, useRef, useState } from "react";
 import {
   cloudLogin,
@@ -161,6 +161,7 @@ export function AutomationQuickstart({
     permissions?: { tool: string; target: string; access: "read" | "write" }[];
   }) => void;
 }) {
+  useT();
   const [pickedKey, setPickedKey] = useState<string | null>(null);
   const picked = TEMPLATES.find((t) => t.key === pickedKey) || null;
 

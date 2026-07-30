@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { t, useT } from "../i18n";
 import { useEffect, useRef, useState } from "react";
 import {
   checkForUpdate,
@@ -32,6 +32,7 @@ const RECHECK_MS = 30 * 60_000;
 type Phase = "downloading" | "ready" | "fallback" | "installing" | "error";
 
 export function UpdateBanner() {
+  useT();
   const [update, setUpdate] = useState<UpdateInfo | null>(null);
   const [phase, setPhase] = useState<Phase>("downloading");
   // Per-run, per-version dismissal — no localStorage, so a restart re-offers, and a

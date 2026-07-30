@@ -1,7 +1,8 @@
-import { t } from "../i18n";
+import { t, useT } from "../i18n";
 import type { TodoItem } from "../types";
 
 export function TodoPanel({ items }: { items: TodoItem[] }) {
+  useT();
   if (!items || items.length === 0) return null;
   const box = (s: string) => (s === "done" ? "☑" : s === "in_progress" ? "◉" : "☐");
   return (

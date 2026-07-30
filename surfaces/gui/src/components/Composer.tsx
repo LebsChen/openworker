@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { t, useT } from "../i18n";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { Attachment, SessionUsage } from "../types";
 import { isPdfFile, readFile } from "../attach";
@@ -581,6 +581,7 @@ function UsageChip({
   model: string;
   modelLabels?: Record<string, string>;
 }) {
+  useT();
   const [open, setOpen] = useState(false);
   const total = totalTokens(usage);
   const pct = contextWindow

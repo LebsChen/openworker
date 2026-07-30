@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { t, useT } from "../i18n";
 import { useState } from "react";
 import type { Item } from "../types";
 import { Icon } from "./Icon";
@@ -16,6 +16,7 @@ export function PlanCard({
   item: PlanItem;
   onRespond: (approved: boolean, mode?: string, feedback?: string) => void;
 }) {
+  useT();
   const [rejecting, setRejecting] = useState(false);
   const [feedback, setFeedback] = useState("");
 

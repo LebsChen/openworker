@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { t, useT } from "../i18n";
 import { useEffect, useState } from "react";
 import {
   cloudLogin,
@@ -53,6 +53,7 @@ export function GalleryModal({
   onClose: () => void;
   onInstalled?: () => void;
 }) {
+  useT();
   const [cloud, setCloud] = useState<CloudStatus | null>(null);
   const [cards, setCards] = useState<GalleryPersona[]>([]);
   const [installed, setInstalled] = useState<Set<string>>(new Set());

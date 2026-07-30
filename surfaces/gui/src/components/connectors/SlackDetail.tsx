@@ -1,4 +1,4 @@
-import { t } from "../../i18n";
+import { t, useT } from "../../i18n";
 import { useEffect, useRef, useState } from "react";
 import {
   hostForSession,
@@ -189,6 +189,7 @@ function WorkspaceGroup({
   tokenOk: boolean;
   onChanged: () => void;
 }) {
+  useT();
   const [busy, setBusy] = useState(false);
   const parked = (c.unauthorized ?? []).filter((m) => m.team_id === w.team_id);
   const listening = subs.filter((s) => s.channel.startsWith(`slack:${w.team_id}/`));

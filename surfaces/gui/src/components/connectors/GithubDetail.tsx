@@ -1,4 +1,4 @@
-import { t } from "../../i18n";
+import { t, useT } from "../../i18n";
 import { useEffect, useState } from "react";
 import {
   hostForSession,
@@ -169,6 +169,7 @@ function InstallationGroup({
   tokenOk: boolean;
   onChanged: () => void;
 }) {
+  useT();
   const [busy, setBusy] = useState(false);
   const parked = (c.unauthorized ?? []).filter((m) => m.team_id === inst.installation_id);
   const empty = inst.allowed_users.length === 0 && parked.length === 0;

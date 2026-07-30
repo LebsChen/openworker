@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { t, useT } from "../i18n";
 import { useEffect, useState } from "react";
 import { getRecentWorkspaces, openWorkspace, type RecentWorkspace } from "../api";
 import { chooseFolder } from "../tauri";
@@ -14,6 +14,7 @@ interface Props {
 }
 
 export function FolderGate({ onChoose, onCancel, create }: Props) {
+  useT();
   const [recents, setRecents] = useState<RecentWorkspace[]>([]);
   const [path, setPath] = useState("");
   const [error, setError] = useState("");

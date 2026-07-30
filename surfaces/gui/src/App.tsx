@@ -1,4 +1,4 @@
-import { t } from "./i18n";
+import { t, useT } from "./i18n";
 import { useCallback, useEffect, useRef, useState, type PointerEvent } from "react";
 import {
   announceInboxUnlock,
@@ -169,6 +169,7 @@ function fallbackWorkspace(current: string | null, projects: RecentWorkspace[]):
 }
 
 export function App() {
+  useT();
   const [workspace, setWorkspace] = useState<string | null>(null);
   const [branch, setBranch] = useState<string | null>(null);
   const [showGate, setShowGate] = useState(false);
@@ -1906,7 +1907,7 @@ export function App() {
             <div className="main-scroll" ref={scrollRef} onScroll={handleScroll}>
               {idle && sessionHistoryUnavailable && !sessionHost.local ? (
                 <div className="session-history-unavailable">
-                  <h1>{t("app.canAposTLoadSessionAposSHistory")}</h1>
+                  <h1>{t("app.historyLoadFailed")}</h1>
                   <p>Remote host &quot;{sessionHost.name}&quot; is offline.</p>
                   <p>{t("app.historyReloadsWithHost")}</p>
                 </div>

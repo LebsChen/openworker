@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { t, useT } from "../i18n";
 import { useEffect, useMemo, useState } from "react";
 import {
   getConnectors,
@@ -58,6 +58,7 @@ export function InboxView({
 }: {
   onOpenSession: (sessionId: string, workspace: string, agent: string) => void;
 }) {
+  useT();
   const [tab, setTab] = useState<"pending" | "configure">("pending");
   const [items, setItems] = useState<InboxItem[]>([]);
   const [personas, setPersonas] = useState<Persona[] | null>(null);

@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { t, useT } from "../i18n";
 import { useEffect, useState } from "react";
 import {
   cloudLogin,
@@ -39,6 +39,7 @@ const TOOL_ROWS = [
 const TOOLS_SOON = ["gmail", "google_calendar"];
 
 export function Onboarding({ onDone }: { onDone: (next?: "work" | "gallery" | "automations") => void }) {
+  useT();
   const [step, setStep] = useState(0);
 
   // -- step 1: model (provider gallery ⇄ key form, shared machinery) ---------------

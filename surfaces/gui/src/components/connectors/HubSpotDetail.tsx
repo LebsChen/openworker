@@ -1,4 +1,4 @@
-import { t } from "../../i18n";
+import { t, useT } from "../../i18n";
 import { useState } from "react";
 import {
   disconnectHubSpotPortal,
@@ -90,6 +90,7 @@ export function HubSpotDetail({ c, cloud, slack: _slack, onChanged }: DetailProp
 }
 
 function PortalRow({ p, onChanged }: { p: HubSpotPortal; onChanged: () => void }) {
+  useT();
   const [busy, setBusy] = useState(false);
   return (
     <div className={ROW} data-testid={`hubspot-portal-${p.hub_id}`}>
@@ -151,7 +152,7 @@ function PrivacyGroup({ c, onChanged }: Pick<DetailProps, "c" | "onChanged">) {
   };
   return (
     <>
-      <div className={GRP_H}>{t("connectors.hubspot.accessAmpPrivacy")}</div>
+      <div className={GRP_H}>{t("connectors.hubspot.accessPrivacy")}</div>
       <div className={GRP}>
         <div className={ROW} data-testid="hubspot-hidden-fields">
           <span className={LABEL}>{t("connectors.hubspot.hiddenFields")}</span>

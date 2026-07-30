@@ -1,4 +1,4 @@
-import { t } from "../../i18n";
+import { t, useT } from "../../i18n";
 import { useState } from "react";
 import {
   connectManaged,
@@ -116,6 +116,7 @@ function Row({
   a: AccountRow;
   onChanged: () => void;
 }) {
+  useT();
   const [busy, setBusy] = useState(false);
   return (
     <div className={ROW} data-testid={`account-${a.account_id}`}>

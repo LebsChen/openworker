@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { t, useT } from "../i18n";
 // PersonaView — the persona detail page (§5, mock parity). Identity header + Enable toggle, About,
 // Built-in capabilities (tools), "Connections for full benefit" (manifest `recommends`, core/optional
 // + reason + connect state), "New sessions get by default" (persona-default connection toggles), and a
@@ -42,6 +42,7 @@ export function PersonaView({
   onBack?: () => void;
   onOpenIntegrations?: () => void;
 }) {
+  useT();
   const [detail, setDetail] = useState<PersonaDetail | null>(null);
   const [byName, setByName] = useState<ConnectorMap>({});
   const [error, setError] = useState<string | null>(null);

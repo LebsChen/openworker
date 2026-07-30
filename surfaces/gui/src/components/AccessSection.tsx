@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { t, useT } from "../i18n";
 // AccessSection — the rail's "what can this session touch" section (§32; absorbs the §23
 // Session-settings drawer and retires the topbar row/glance). One collapsible rail section:
 //   · header: "Access" + a permanent summary ("Slack, GitHub · 2 folders") — the §23 trust
@@ -73,6 +73,7 @@ export function AccessSection({
   openKey?: number;
   onOpenIntegrations?: () => void;
 }) {
+  useT();
   const [open, setOpen] = useState(false);
   const [conns, setConns] = useState<SessionConnections | null>(null);
   const [byName, setByName] = useState<ConnectorMap>({});

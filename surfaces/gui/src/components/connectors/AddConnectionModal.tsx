@@ -1,4 +1,4 @@
-import { t } from "../../i18n";
+import { t, useT } from "../../i18n";
 import { useEffect, useState } from "react";
 import {
   connectConnector,
@@ -34,6 +34,7 @@ export function AddConnectionModal({
   onClose: () => void;
   onChanged: () => void;
 }) {
+  useT();
   // MCP-backed one-click (§42): local OAuth against the vendor's hosted MCP server —
   // with manual fields alongside (jira, asana) it's a second mode; alone (monday)
   // it IS the connect flow.

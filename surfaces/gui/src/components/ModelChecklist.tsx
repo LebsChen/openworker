@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { t, useT } from "../i18n";
 import { useState } from "react";
 import {
   addModel,
@@ -49,6 +49,7 @@ export function ModelChecklist({
   onCapabilitiesChanged?: (next: Record<string, Record<string, unknown>>) => void;
   onChanged: (next: { models: string[]; model: string }) => void;
 }) {
+  useT();
   const [draft, setDraft] = useState("");
   const families = MODEL_FAMILIES[provider];
   const [family, setFamily] = useState(families?.[0]?.value || "");

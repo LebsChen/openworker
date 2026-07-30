@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { t, useT } from "../i18n";
 import { useEffect, useState } from "react";
 import {
   getConnectors,
@@ -32,6 +32,7 @@ const SELECT = "px-2.5 py-1.5 rounded-lg border border-line bg-paper text-[13px]
 const BTN_ACCENT_SM = "text-[12px] px-2.5 py-1 rounded-md bg-accent text-white disabled:opacity-50";
 
 export function InboxConfigure() {
+  useT();
   return (
     <div data-testid="inbox-configure">
       <div className="grid grid-cols-2 gap-4 mb-4">

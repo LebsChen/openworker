@@ -1,4 +1,4 @@
-import { t } from "../../i18n";
+import { t, useT } from "../../i18n";
 import { useState } from "react";
 import {
   connectManaged,
@@ -97,6 +97,7 @@ export function GmailDetail({ c, cloud, slack: _slack, onChanged }: DetailProps)
 }
 
 function AccountRow({ a, onChanged }: { a: GmailAccount; onChanged: () => void }) {
+  useT();
   const [busy, setBusy] = useState(false);
   return (
     <div className={ROW} data-testid={`gmail-account-${a.email}`}>

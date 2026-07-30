@@ -1,4 +1,4 @@
-import { t } from "../../i18n";
+import { t, useT } from "../../i18n";
 import { updateConnectorTools, type Connector } from "../../api";
 import { GRP, ROW, TAG_QUIET, TAG_WARN } from "./ui";
 
@@ -6,6 +6,7 @@ import { GRP, ROW, TAG_QUIET, TAG_WARN } from "./ui";
 // (UX-DECISIONS §21): the lever exists everywhere but stays quiet — expanding
 // shows one row per tool with its read/write tag; writes always ask first.
 export function ToolsDisclosure({ c, onChanged }: { c: Connector; onChanged: () => void }) {
+  useT();
   if (!c.tools?.length) return null;
   const enabled = c.tools.filter((t) => t.enabled).length;
   return (

@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { t, useT } from "../i18n";
 import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Icon } from "./Icon";
@@ -37,6 +37,7 @@ function ArtifactChip({ path, title }: { path: string; title: string }) {
 // links). Links open externally — never navigate the app shell — except artifact: links,
 // which open the session's artifact viewer.
 export function Markdown({ text }: { text: string }) {
+  useT();
   return (
     <div className="md">
       <ReactMarkdown

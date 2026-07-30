@@ -1,4 +1,4 @@
-import { t } from "../../i18n";
+import { t, useT } from "../../i18n";
 import { useEffect, useState } from "react";
 import {
   disconnectConnector,
@@ -123,6 +123,7 @@ function GenericDetail({
   onChanged,
   onGone,
 }: DetailProps & { onGone: () => void }) {
+  useT();
   return (
     <div>
       <div className="flex items-center gap-3.5 mb-5">

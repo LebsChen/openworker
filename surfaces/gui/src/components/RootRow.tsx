@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { t, useT } from "../i18n";
 import type { RootInfo } from "../api";
 import { Icon } from "./Icon";
 import { baseName } from "../paths";
@@ -22,6 +22,7 @@ export function RootRow({
   onToggle: (r: RootInfo) => void;
   onRemove: (path: string) => void;
 }) {
+  useT();
   const label = root.primary
     ? scratchPrimary
       ? "Temporary space"

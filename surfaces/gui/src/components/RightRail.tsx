@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { t, useT } from "../i18n";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 // Emits the asset URL only; the worker itself loads lazily with the pdfjs chunk.
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -292,6 +292,7 @@ function InfoPanel({
   openAccessKey: number;
   onOpenIntegrations?: () => void;
 }) {
+  useT();
   return (
     <div className="right-panel-section">
       <h3 className="right-panel-heading">Info</h3>

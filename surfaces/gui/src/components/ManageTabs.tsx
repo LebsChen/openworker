@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { t, useT } from "../i18n";
 import { useEffect, useState } from "react";
 import {
   hostForSession,
@@ -187,6 +187,7 @@ function ComposerPickerCard({
   providers: ProviderInfo[];
   onChanged: () => void;
 }) {
+  useT();
   const names = providers.map((p) => p.name);
   const provOf = (id: string) => {
     const i = id.indexOf(":");
@@ -364,6 +365,7 @@ function McpRow({
   onRemove: () => void;
   onRefresh: () => void;
 }) {
+  useT();
   const [tools, setTools] = useState<{ name: string; description: string }[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [toolErr, setToolErr] = useState<string | null>(null);
@@ -532,6 +534,7 @@ export function UnauthorizedBlock({
   onChanged: () => void;
   teamId?: string;
 }) {
+  useT();
   const items = (c.unauthorized ?? []).filter(
     (m) => teamId === undefined || m.team_id === teamId,
   );
@@ -594,6 +597,7 @@ export function UnauthorizedBlock({
 // Channel-subscriptions table (Integrations ▸ Messaging routing). Subscribing happens from a
 // session's Sources ▸ Channels panel; here the owner can see and revoke.
 export function ListeningSessionsBlock({ c }: { c: Connector }) {
+  useT();
   const [subs, setSubs] = useState<Subscription[] | null>(null);
   const load = () => getSubscriptions().then(setSubs).catch(() => setSubs([]));
   useEffect(() => {
@@ -655,6 +659,7 @@ export function AllowlistBlock({
   allowed?: string[];
   allowedNames?: Record<string, string | null>;
 }) {
+  useT();
   const allowedUsers = allowed ?? c.allowed_users;
   const names = allowedNames ?? c.allowed_user_names;
   const recent = (c.recent ?? []).filter(
@@ -727,6 +732,7 @@ export function AllowlistBlock({
 }
 
 export function ConnectorTools({ c, onChanged }: { c: Connector; onChanged: () => void }) {
+  useT();
   const toggle = async (toolName: string, enabled: boolean) => {
     await updateConnectorTools(c.name, { [toolName]: enabled });
     onChanged();
@@ -781,6 +787,7 @@ export function ConnectSetup({
   // pill, so don't render the managed block again here.
   manualOnly?: boolean;
 }) {
+  useT();
   const [values, setValues] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [waiting, setWaiting] = useState(false); // managed flow: browser is open

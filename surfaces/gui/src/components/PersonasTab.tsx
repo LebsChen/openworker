@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { t, useT } from "../i18n";
 import { useEffect, useState } from "react";
 import {
   deletePersona,
@@ -27,6 +27,7 @@ const BTN_BORDERED =
   "text-[12.5px] px-2.5 py-1.5 rounded-lg border border-line bg-paper hover:border-lineStrong shrink-0 disabled:opacity-40 disabled:hover:border-line";
 
 export function PersonasTab({ onOpenPersona }: { onOpenPersona?: (id: string) => void }) {
+  useT();
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [mode, setMode] = useState<"git" | "dir">("git");
   const [src, setSrc] = useState("");

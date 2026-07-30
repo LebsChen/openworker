@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { t, useT } from "../i18n";
 import { useState } from "react";
 import type { Item } from "../types";
 import { chooseFolder } from "../tauri";
@@ -15,6 +15,7 @@ export function DirectoryRequestCard({
   item: DirReqItem;
   onRespond: (granted: boolean, path?: string, writable?: boolean) => void;
 }) {
+  useT();
   const [path, setPath] = useState(item.path || "");
   const [writable, setWritable] = useState(!!item.writable);
 

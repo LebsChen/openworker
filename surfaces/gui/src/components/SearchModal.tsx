@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { t, useT } from "../i18n";
 import { useEffect, useRef, useState } from "react";
 import type { Persona } from "../api";
 import type { SessionInfo } from "../types";
@@ -24,6 +24,7 @@ export function SearchModal({
   onSelect: (id: string, workspace: string, agent: string, hostId?: string) => void;
   onClose: () => void;
 }) {
+  useT();
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);

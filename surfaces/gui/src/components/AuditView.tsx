@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { t, useT } from "../i18n";
 import { useEffect, useState } from "react";
 import { getAudit, type AuditEvent } from "../api";
 import { PanelHead } from "./IntegrationsView";
@@ -64,6 +64,7 @@ export function AuditView() {
 }
 
 function AuditRow({ ev }: { ev: AuditEvent }) {
+  useT();
   return (
     <div className={CARD + " p-3.5"}>
       <div className="flex items-center gap-2 flex-wrap">

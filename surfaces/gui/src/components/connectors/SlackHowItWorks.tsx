@@ -1,4 +1,4 @@
-import { t } from "../../i18n";
+import { t, useT } from "../../i18n";
 import { useEffect, useRef, useState } from "react";
 import type { SlackWorkspace } from "../../api";
 
@@ -25,6 +25,7 @@ function readCollapsed(): boolean {
 }
 
 export function SlackHowItWorks({ workspaces }: { workspaces: SlackWorkspace[] }) {
+  useT();
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [tab, setTab] = useState(0);
   const [cycle, setCycle] = useState(0); // bump = remount the scene = restart its animations
@@ -175,14 +176,14 @@ function SlackRail({ active }: { active: string }) {
     <div className="hiw-slrail">
       <div className="hiw-ws">{WS_NAME} ▾</div>
       <div className="hiw-slnav"><ThreadsIcon /> Threads</div>
-      <div className="hiw-slnav"><SendIcon />{t("connectors.slack.help.draftsAmpSent")}</div>
+      <div className="hiw-slnav"><SendIcon />{t("connectors.slack.help.draftsSent")}</div>
       <div className="hiw-sect">{t("connectors.slack.help.channels")}</div>
       <div className={"hiw-ch" + (active === "general" ? " on" : "")}>{t("connectors.slack.help.general")}</div>
       <div className={"hiw-ch" + (active === "launch-room" ? " on" : "")}>{t("connectors.slack.help.launchRoom")}</div>
       <div className="hiw-sect">{t("connectors.slack.help.directMessages")}</div>
       <div className="hiw-slnav"><span className="hiw-pres" />{t("connectors.slack.help.priyaN")}</div>
       <div className="hiw-slnav"><span className="hiw-pres" />{t("connectors.slack.help.emmaW")}</div>
-      <div className="hiw-sect">{t("connectors.slack.help.agentsAmpApps")}</div>
+      <div className="hiw-sect">{t("connectors.slack.help.agentsApps")}</div>
       <div className="hiw-slnav"><span className="hiw-appav">OW</span>OpenWorker</div>
     </div>
   );
@@ -455,7 +456,7 @@ function SceneTeammates() {
           <div className="hiw-owtitle">Slack — {WS_NAME}</div>
           <div className="hiw-waitrow hiw-k hiw-glow" style={d("2s", { "--g": "2.5s" })}>
             <span className="min-w-0"><b>{t("connectors.slack.help.priyaN")}</b>{t("connectors.slack.help.waiting")}</span>
-            <span className="hiw-allowbtn ml-auto">{t("connectors.slack.help.allowAmpDeliver")}</span>
+            <span className="hiw-allowbtn ml-auto">{t("connectors.slack.help.allowDeliver")}</span>
           </div>
           <div className="hiw-waitcap hiw-k" style={d("3.4s")}>
             Each teammate&apos;s <b>first</b> mention waits for your OK — then they&apos;re on the People list and it flows.

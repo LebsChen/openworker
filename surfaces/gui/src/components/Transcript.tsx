@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { t, useT } from "../i18n";
 import { useState } from "react";
 import type { ApprovalDecision, Item } from "../types";
 import { shortArgs } from "./ApprovalCard";
@@ -55,6 +55,7 @@ function BubbleMeta({ text, ts, align }: { text: string; ts?: number; align: "le
 // collapsed by default, the trace one click away. `live` = still streaming (pulsing label);
 // App renders that variant above the transcript, this one rides a finalized assistant item.
 export function ThinkingBlock({ text, live }: { text: string; live?: boolean }) {
+  useT();
   const [open, setOpen] = useState(false);
   return (
     <div className="thinking">
@@ -319,6 +320,7 @@ interface Props {
 // models and THEN retrying is the intended recovery path). -1 when the tail is anything else.
 export function retryAnchor(items: Item[]): number {
   for (let i = items.length - 1; i >= 0; i--) {
+  useT();
     const it = items[i];
     if (it.kind !== "notice") return -1;
     if (it.retriable) return i;
@@ -328,6 +330,7 @@ export function retryAnchor(items: Item[]): number {
 }
 
 export function Transcript({ items, running, streamingText, onRetry }: Props) {
+  useT();
   // §33 grouping: a turn = the maximal run of assistant/tool/resolved-approval items between
   // breakers (user, connector, notices, plan/dir requests…). Trailing assistant texts are the
   // ANSWER and render as bubbles after the group; interior assistant texts are narration and

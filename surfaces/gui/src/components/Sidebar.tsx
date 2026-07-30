@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { t, useT } from "../i18n";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   announceCloudChanged,
@@ -1319,6 +1319,7 @@ function NewSessionSplit({
   onNew: (agent: string) => void;
   onManage: () => void;
 }) {
+  useT();
   const [open, setOpen] = useState(false);
   const enabled = (personas || []).filter((p) => p.enabled);
   // With a single enabled persona there is nothing to pick — the split collapses to a plain

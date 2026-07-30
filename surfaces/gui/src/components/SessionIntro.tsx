@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { t, useT } from "../i18n";
 import { useEffect, useState } from "react";
 import { getConnectors, getSessionConnections, type SessionHost } from "../api";
 import type { Attachment } from "../types";
@@ -33,6 +33,7 @@ export function SessionIntro({
   onOpenSessionSettings: () => void;
   onPrefill: (text: string, attachments?: Attachment[]) => void;
 }) {
+  useT();
   const { roots, busy, error, addRoot } = useRoots(sessionId, host);
   const [live, setLive] = useState<Set<string>>(new Set());
   const [byName, setByName] = useState<ConnectorMap>({});

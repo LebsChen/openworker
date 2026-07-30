@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { t, useT } from "../i18n";
 import { useState } from "react";
 import { setWorkspaceTrusted, type WorkspaceCommandTrust } from "../api";
 
@@ -9,6 +9,7 @@ export function WorkspaceTrustPrompt({
   request: WorkspaceCommandTrust;
   onClose: () => void;
 }) {
+  useT();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -28,7 +29,7 @@ export function WorkspaceTrustPrompt({
     <div className="gate-overlay" role="dialog" aria-modal="true" aria-labelledby="workspace-trust-title">
       <div className="gate max-w-[560px]">
         <div className="gate-mark">✦</div>
-        <h2 id="workspace-trust-title">{t("workspace.trust.trustWorkspaceRsquoSCommands")}</h2>
+        <h2 id="workspace-trust-title">{t("workspace.trust.trustWorkspaceCommands")}</h2>
         <p className="gate-sub">
           This project asks OpenWorker to run the commands below without individual approval.
           Trust applies to future configuration changes at this exact folder until you revoke it

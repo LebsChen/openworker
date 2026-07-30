@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { t, useT } from "../i18n";
 import { useState } from "react";
 import { chooseFolder } from "../tauri";
 import { Icon } from "./Icon";
@@ -21,6 +21,7 @@ export function AddFolderForm({
   startOpen?: boolean;
   onDismiss?: () => void;
 }) {
+  useT();
   const [open, setOpen] = useState(!!startOpen);
   const [path, setPath] = useState("");
   const [writable, setWritable] = useState(false);

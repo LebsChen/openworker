@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { t, useT } from "../i18n";
 import { useEffect, useState } from "react";
 import {
   getSettings,
@@ -87,6 +87,7 @@ export function SettingsView({
   initialTab?: SetTab;
   onOpenPersona?: (id: string) => void;
 }) {
+  useT();
   // Personas is flag-gated (hidden for launch) — filter the tab AND coerce a stale
   // deep-link to it (openSettings("personas") callers) so the page never opens on a
   // section with no nav entry.
@@ -621,7 +622,7 @@ function AppearanceSection() {
             </button>
           ))}
         </div>
-        <div className={FIELD_HELP}>{t("settings.autoFollowsMacRsquoSAppearance")}</div>
+        <div className={FIELD_HELP}>{t("settings.autoFollowsMacAppearance")}</div>
       </div>
 
       <div className={CARD + " p-4 mb-4"}>
@@ -668,7 +669,7 @@ function AppearanceSection() {
           every build, the browser dev shell runs the same first-run flow) and, on
           desktop, the manual update check (launch also checks automatically). */}
       <div className={CARD + " p-4 mt-4"}>
-        <div className={FIELD_LABEL + " mb-2"}>{t("settings.setupAmpUpdates")}</div>
+        <div className={FIELD_LABEL + " mb-2"}>{t("settings.setupUpdates")}</div>
         <div className="flex items-center gap-2">
           <button className={BTN_BORDERED} onClick={runSetupAgain}>
             Run setup again
@@ -986,7 +987,7 @@ function CompactionCard() {
           className="px-2 py-1.5 rounded-lg border border-line bg-paper text-[13px] text-ink outline-none focus:border-accent"
           onChange={(e) => save({ compaction_model: e.target.value })}
         >
-          <option value="">{t("settings.sessionRsquoSOwnModelDefault")}</option>
+          <option value="">{t("settings.sessionOwnModelDefault")}</option>
           {models.map((m) => (
             <option key={m} value={m}>
               {modelLabel(m)}

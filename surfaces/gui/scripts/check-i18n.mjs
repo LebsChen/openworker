@@ -24,6 +24,10 @@ const identicalAllowlist = new Set([
   "settings.windows1022H211X64",
   "workspace.trust.pathProject",
 ]);
+const enKeys = new Set(Object.keys(en));
+const zhKeys = new Set(Object.keys(zh));
+const missingInEn = [...zhKeys].filter((key) => !enKeys.has(key));
+const missingInZh = [...enKeys].filter((key) => !zhKeys.has(key));
 const source = path.resolve(here, "../src");
 const text = collect(source);
 const keys = new Set([...text.matchAll(/\bt\("([^"]+)"/g)].map((match) => match[1]));
@@ -36,8 +40,8 @@ const invalid = Object.keys(en).filter(
   (key) => key !== "test.englishFallback" && (/^ui\./.test(key) || /(?:^|\.)([0-9a-f]{8,})$/.test(key)),
 );
 const unused = Object.keys(en).filter((key) => !keys.has(key) && !key.startsWith("test."));
-if (missingEn.length || missingZh.length || invalid.length || identical.length || unused.length) {
-  console.error(JSON.stringify({ missingEn, missingZh, invalid, identical, unused }, null, 2));
+if (missingInEn.length || missingInZh.length || missingEn.length || missingZh.length || invalid.length || identical.length || unused.length) {
+  console.error(JSON.stringify({ missingInEn, missingInZh, missingEn, missingZh, invalid, identical, unused }, null, 2));
   process.exit(1);
 }
 console.log(`${keys.size} translation keys checked`);

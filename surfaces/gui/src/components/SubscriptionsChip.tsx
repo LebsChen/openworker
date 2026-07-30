@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { t, useT } from "../i18n";
 import { useEffect, useRef, useState } from "react";
 import {
   getConnectors,
@@ -40,6 +40,7 @@ export function ChannelPicker({
   // human name (+ workspace) wherever they show the target (§25 consent line, summaries).
   onPickName?: (address: string, name: string, workspace?: string) => void;
 }) {
+  useT();
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -259,6 +260,7 @@ export function SubscriptionsChip({
   channels: string[];
   onChanged: () => void;
 }) {
+  useT();
   const [open, setOpen] = useState(false);
   const [recent, setRecent] = useState<RecentChannel[]>([]);
   const [draft, setDraft] = useState("");

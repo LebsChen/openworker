@@ -7,11 +7,11 @@ export type Locale = "en" | "zh-CN";
 type Catalog = Record<string, string>;
 
 const catalogs: Record<Locale, Catalog> = { en, "zh-CN": zhCN };
-let activeLocale: Locale = "en";
+let activeLocale: Locale = systemLocale();
 
-export function t(key: string, vars?: Record<string, string | number>): string {
+function translate(locale: Locale, key: string, vars?: Record<string, string | number>): string {
   const fallback = catalogs.en[key] ?? key;
-  let value = catalogs[activeLocale][key] ?? fallback;
+  let value = catalogs[locale][key] ?? fallback;
   for (const [name, replacement] of Object.entries(vars || {})) {
     value = value.split(`{${name}}`).join(String(replacement));
   }
@@ -44,13 +44,8 @@ export function I18nProvider({ children }: { children: ReactNode }) {
         if (stored === "en" || stored === "zh-CN") {
           activeLocale = stored;
           setCurrentLocale(stored);
-        } else {
-          activeLocale = locale;
         }
-      })
-      .catch(() => {
-        activeLocale = locale;
-      });
+      }).catch(() => {});
   }, []);
 
   const setLocale = async (next: Locale) => {
@@ -61,15 +56,22 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   const value = useMemo(() => ({ locale, setLocale, t }), [locale]);
   return (
     <I18nContext.Provider value={value}>
-      <div key={locale} className="contents">
-        {children}
-      </div>
+      {children}
     </I18nContext.Provider>
   );
 }
 
 export function useI18n(): I18nContextValue {
   return useContext(I18nContext);
+}
+
+export function useT(): (key: string, vars?: Record<string, string | number>) => string {
+  const { locale } = useI18n();
+  return useMemo(() => (key, vars) => translate(locale, key, vars), [locale]);
+}
+
+export function t(key: string, vars?: Record<string, string | number>): string {
+  return translate(activeLocale, key, vars);
 }
 
 export function availableLocales(): { value: Locale; label: string }[] {

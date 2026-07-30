@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { t, useT } from "../i18n";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   discoverProviderModels,
@@ -42,6 +42,7 @@ export type Verify = { state: "idle" | "testing" | "ok" | "error"; msg?: string 
 
 /** Brand chip: always a light plate so multicolor marks read on any theme. */
 export function ProviderMark({ name, title, size = 32 }: { name: string; title: string; size?: number }) {
+  useT();
   const url = PROVIDER_LOGOS[name];
   return (
     <span
@@ -287,6 +288,7 @@ export function ProviderCards({
   gridClass?: string;
   lastUsed?: boolean;
 }) {
+  useT();
   const card =
     "flex items-center gap-2.5 rounded-xl border border-line bg-panel px-3 py-2.5 text-left hover:border-lineStrong transition-colors";
   return (
@@ -322,6 +324,7 @@ export function ProviderForm({
   tp: string;
   footer?: ReactNode;
 }) {
+  useT();
   const { info, sel } = ps;
   const [headerRows, setHeaderRows] = useState<{ name: string; value: string }[]>([]);
   const [discoveredModels, setDiscoveredModels] = useState<string[]>([]);
@@ -390,7 +393,7 @@ export function ProviderForm({
               className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-medium text-ok bg-okSoft rounded-full px-2 py-0.5 pointer-events-none"
               data-testid={`${tp}-saved-pill`}
             >
-              {info?.needs_key ? <>{t("settings.providers.testedAmpSaved")}</> : <>{t("settings.providers.detected")}</>}
+              {info?.needs_key ? <>{t("settings.providers.testedSaved")}</> : <>{t("settings.providers.detected")}</>}
             </span>
           )}
         </div>
@@ -498,7 +501,7 @@ export function ProviderForm({
                 disabled={ps.verify.state === "testing"}
                 data-testid={`${tp}-test`}
               >
-                {ps.verify.state === "testing" ? "…" : <>{t("settings.providers.testAmpSave")}</>}
+                {ps.verify.state === "testing" ? "…" : <>{t("settings.providers.testSave")}</>}
               </button>
             </div>
           </div>

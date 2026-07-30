@@ -1,4 +1,4 @@
-import { t } from "../../i18n";
+import { t, useT } from "../../i18n";
 import { useState } from "react";
 import { type CloudStatus, type Connector, type SlackStatus } from "../../api";
 import { ConnectorBadge } from "../../connectors/ConnectorIcon";
@@ -24,6 +24,7 @@ export function ConnectorsList({
   onOpen: (name: string) => void;
   onChanged: () => void;
 }) {
+  useT();
   const [filter, setFilter] = useState("");
   const [showAll, setShowAll] = useState(false);
   const [connecting, setConnecting] = useState<string | null>(null);
