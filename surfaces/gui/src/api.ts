@@ -1902,8 +1902,9 @@ export class Session {
     agent: string,
     handlers: Handlers,
     host?: SessionHost,
+    isolate = false,
   ) {
-    const q = `?workspace=${encodeURIComponent(workspace)}&agent=${encodeURIComponent(agent)}`;
+    const q = `?workspace=${encodeURIComponent(workspace)}&agent=${encodeURIComponent(agent)}&isolate=${isolate ? "true" : "false"}`;
     const endpoint = host?.ws_url || wsBase();
     const token = host?.token;
     this.ws = token

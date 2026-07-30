@@ -99,3 +99,11 @@ Each server stores session workspace metadata below its own data root. Session w
 `<root>/sessions/<session_id>/`; repository-backed sessions use `git worktree add` and archive uses
 `git worktree remove`, never recursive deletion of repository internals. Root checks reject paths
 outside the owning session workspace, so one session cannot read or write another session's files.
+
+### Explicit workspace isolation
+
+A user-selected workspace is used directly by default. OpenWorker never silently replaces a
+selected checkout with a worktree. New-session clients may pass `isolate=true`; only then does the
+server create `<root>/sessions/<session_id>/`. A Git checkout becomes a worktree on
+`openworker/session-<session_id>`; a non-Git directory gets a normal isolated directory. Session
+listing reports `workspace`, `workspace_isolated`, `workspace_worktree`, and `workspace_branch`.

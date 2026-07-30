@@ -369,6 +369,7 @@ class SessionManager:
         *,
         workspace: Optional[str] = None,
         agent: str = "code",
+        isolate: bool = False,
         approver: Optional[Approver] = None,
         extra_tools: Optional[list[Any]] = None,
         directory_requester: Optional[Any] = None,
@@ -408,18 +409,26 @@ class SessionManager:
             model, mode, messages = record.model, Mode(record.mode), record.messages
         else:
             ws = self.resolve_workspace(workspace) if ag.needs_workspace else None
-            if ag.needs_workspace and (workspace is not None or ag.family == "knowledge"):
+            if ag.needs_workspace and (isolate or ag.family == "knowledge"):
                 try:
+                    repository = (
+                        ws
+                        if workspace is not None
+                        and ws
+                        and (Path(ws) / ".git").exists()
+                        else None
+                    )
                     managed = self.session_workspaces.create(
                         session_id,
-                        repository=ws if workspace is not None and ws else None,
+                        repository=repository,
                     )
                     ws = str(managed.path)
                     managed_workspace = True
-                except (FileExistsError, RuntimeError, ValueError):
-                    # Preserve the existing explicit workspace behavior if
-                    # provisioning cannot be performed.
-                    pass
+                except (FileExistsError, RuntimeError, ValueError) as exc:
+                    if isolate:
+                        raise ValueError(
+                            f"workspace isolation failed for session {session_id}: {exc}"
+                        ) from exc
             model, mode, messages = self.model, self.mode, None
 
         if ag.needs_workspace and (not ws or not Path(ws).is_dir()):
@@ -3724,11 +3733,18 @@ class SessionManager:
     # -- read models ------------------------------------------------------------
     def list_sessions(self, workspace: Optional[str] = None) -> list[dict[str, Any]]:
         ws = self.resolve_workspace(workspace) if workspace else None
-        return [
-            {
+        out = []
+        for r in self.session_store.list(workspace=ws):
+            if r.session_id.startswith("__"):
+                continue
+            managed = self.session_workspaces._state.get(r.session_id)
+            out.append({
                 "session_id": r.session_id,
                 "title": r.title or "New session",
                 "workspace": r.workspace,
+                "workspace_isolated": bool(managed and not managed.archived),
+                "workspace_worktree": bool(managed and managed.worktree and not managed.archived),
+                "workspace_branch": managed.branch if managed and not managed.archived else None,
                 "host_id": r.host_id,
                 "agent": r.agent,
                 "model": r.model,
@@ -3751,10 +3767,8 @@ class SessionManager:
                 "subscriptions": [
                     s.channel for s in self.subscriptions.for_session(r.session_id)
                 ],
-            }
-            for r in self.session_store.list(workspace=ws)
-            if not r.session_id.startswith("__")  # hide internal threads
-        ]
+            })
+        return out
 
     def _session_liveness(self, session_id: str) -> str:
         if self.is_running(session_id):

@@ -1665,6 +1665,7 @@ def create_app(manager: SessionManager) -> FastAPI:
                 manager.inbox.resolve(pend[0].id, resolution)
 
         workspace = ws.query_params.get("workspace")
+        isolate = ws.query_params.get("isolate", "").lower() in {"1", "true", "yes"}
         mcp_tools = await manager.prepare_mcp_tools(
             session_id, workspace=workspace, agent=agent
         )
@@ -1672,6 +1673,7 @@ def create_app(manager: SessionManager) -> FastAPI:
             session_id,
             workspace=workspace,
             agent=agent,
+            isolate=isolate,
             approver=approver,
             extra_tools=mcp_tools,
             directory_requester=directory_requester,

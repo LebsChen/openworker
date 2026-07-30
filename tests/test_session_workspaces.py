@@ -113,8 +113,8 @@ def test_session_manager_wires_workspace_into_tool_boundary(tmp_path: Path):
     outside.write_text("secret", encoding="utf-8")
 
     manager = SessionManager(data_dir=tmp_path / "data")
-    engine_a = manager.get_engine("session-a", workspace=str(repo), agent="code")
-    engine_b = manager.get_engine("session-b", workspace=str(repo), agent="code")
+    engine_a = manager.get_engine("session-a", workspace=str(repo), agent="code", isolate=True)
+    engine_b = manager.get_engine("session-b", workspace=str(repo), agent="code", isolate=True)
 
     assert engine_a is not None and engine_b is not None
     assert engine_a.permissions.workspace_root != engine_b.permissions.workspace_root
@@ -124,3 +124,25 @@ def test_session_manager_wires_workspace_into_tool_boundary(tmp_path: Path):
     assert engine_a.registry.execute(
         "read_file", {"path": str(engine_b.permissions.workspace_root / "README.md")}
     ) == {"error": "path escapes the workspace"}
+
+
+def test_isolation_is_opt_in_and_non_git_targets_get_private_directories(tmp_path: Path):
+    from coworker.server.manager import SessionManager
+
+    selected = tmp_path / "selected"
+    selected.mkdir()
+    (selected / "marker.txt").write_text("selected", encoding="utf-8")
+    manager = SessionManager(data_dir=tmp_path / "data")
+
+    legacy = manager.get_engine("legacy", workspace=str(selected), agent="code")
+    assert legacy is not None
+    assert legacy.permissions.workspace_root == selected.resolve()
+
+    isolated = manager.get_engine(
+        "isolated", workspace=str(selected), agent="code", isolate=True
+    )
+    assert isolated is not None
+    assert isolated.permissions.workspace_root != selected.resolve()
+    assert isolated.permissions.workspace_root.is_relative_to(
+        (tmp_path / "data" / "session-workspaces" / "sessions").resolve()
+    )

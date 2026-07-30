@@ -11,3 +11,5 @@
 | `surfaces/gui/src/tauri.ts` | 暴露远程 profile 管理命令的薄 frontend bridge。 | 连接 Settings UI 与 Rust 的安全存储/激活逻辑。 | rebase 后确认命令名和 snake_case 参数与 Rust `#[tauri::command]` 一致。 |
 | `surfaces/gui/src/components/SettingsView.tsx` | 增加 Remote host profile 管理卡片。 | 为多 profile 保存、选择和恢复本机模式提供用户入口。 | rebase 后确认 token 仅作为 password 输入传给 Rust，不写入 localStorage/普通前端配置。 |
 | `surfaces/gui/src/App.tsx` | 启动失败时展示远程连接错误和 no-fallback 说明；扩展 Settings deep-link 类型。 | 让远程错误保持在远程模式语义下，而不是落入本机 folder gate。 | rebase 后确认远程 health 失败不会调用任何本机启动逻辑。 |
+
+- `coworker/server/manager.py`, `coworker/server/app.py`: explicit `isolate` session option; user-selected workspaces remain unchanged unless isolation is requested. Session list exposes actual isolation/worktree metadata.

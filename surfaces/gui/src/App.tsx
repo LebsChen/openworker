@@ -197,6 +197,7 @@ export function App() {
   const [projects, setProjects] = useState<RecentWorkspace[]>([]);
   const [sessionId, setSessionId] = useState<string>(newId());
   const [sessionHost, setSessionHost] = useState<SessionHost>(() => sessionHosts()[0]);
+  const [isolateWorkspace, setIsolateWorkspace] = useState(false);
   // Automation-run context (§ owner ask 2026-07-04): which task an open __run__ session belongs
   // to, driving the banner + "Back to runs". Best-effort — a run session without context still
   // shows a generic banner (detected by its __run__ id).
@@ -774,7 +775,7 @@ export function App() {
         }
       },
       onClose: () => setConnected(false),
-    }, sessionHost);
+    }, sessionHost, isolateWorkspace);
     sessionRef.current = session;
     return () => session.close();
     // NOTE: `workspace` is intentionally NOT a dependency. Every real workspace change
@@ -975,6 +976,8 @@ export function App() {
     if (ag) setAgent(ag);
     const selectedHost = sessionHosts().find((host) => host.id === hostId) || sessionHosts()[0];
     if (selectedHost) setSessionHost(selectedHost);
+    const selectedInfo = sessions.find((item) => item.session_id === id);
+    setIsolateWorkspace(Boolean(selectedInfo?.workspace_isolated));
     if (isTauri()) bindSessionHost(id, selectedHost?.id || "local").catch(() => {});
     if (!gatesWorkspace(ag)) setShowGate(false);
     if (ws && ws !== workspace) {
@@ -1449,6 +1452,14 @@ export function App() {
                 ))}
               </select>
             )}
+            <label className="flex items-center gap-1 text-[11px] text-muted" title="Create this session in an isolated workspace">
+              <input
+                type="checkbox"
+                checked={isolateWorkspace}
+                onChange={(e) => setIsolateWorkspace(e.target.checked)}
+              />
+              Isolate workspace
+            </label>
             {agent === "cowork" && railHidden && artifactCount > 0 && (
               <button
                 className="topbar-artifacts-btn"
