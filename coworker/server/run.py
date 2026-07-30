@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import os
-import secrets
 import sys
 from pathlib import Path
 
@@ -13,6 +13,7 @@ from ..permissions import Mode
 from ..secrets import state_dir, write_private_text
 from .app import _WS_MAX_FRAME_BYTES, create_app
 from .manager import SessionManager
+from .token import TokenSelection, resolve_token
 
 
 def _exit_when_orphaned() -> None:
@@ -125,15 +126,50 @@ def _ensure_ca_bundle() -> None:
         pass
 
 
-def _ensure_api_token(port: int) -> Path | None:
-    """Set launch auth; standalone/dev tokens use a user-only, port-specific file."""
-    if os.environ.get("COWORKER_API_TOKEN"):
-        return None  # Tauri supplied an in-memory token; never persist it.
-    token = secrets.token_hex(32)
-    os.environ["COWORKER_API_TOKEN"] = token
-    return write_private_text(
-        state_dir() / f"sidecar-{port}.token", token + "\n"
+def _ensure_api_token(
+    port: int,
+    *,
+    cli_token: str | None = None,
+    token_file: str | Path | None = None,
+    return_details: bool = False,
+) -> (
+    Path
+    | None
+    | tuple[Path | None, str | None, TokenSelection]
+):
+    """Set launch auth; only the default random token is persisted for discovery."""
+    previous = os.environ.get("COWORKER_API_TOKEN")
+    selection = resolve_token(
+        cli_token=cli_token,
+        token_file=token_file,
+        environ=os.environ,
     )
+    os.environ["COWORKER_API_TOKEN"] = selection.token
+    if selection.source != "random":
+        result = (None, previous, selection)
+    else:
+        token_path = write_private_text(
+            state_dir() / f"sidecar-{port}.token", selection.token + "\n"
+        )
+        result = (token_path, previous, selection)
+    return result if return_details else result[0]
+
+
+def _restore_api_token(previous: str | None) -> None:
+    if previous is None:
+        os.environ.pop("COWORKER_API_TOKEN", None)
+    else:
+        os.environ["COWORKER_API_TOKEN"] = previous
+
+
+def _require_bound_auth(host: str, selection: TokenSelection) -> None:
+    """Never allow a non-loopback bind to proceed without an API token."""
+    try:
+        loopback = ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        loopback = host.lower() == "localhost"
+    if not loopback and not selection.token:
+        raise RuntimeError("non-loopback server binding requires an API token")
 
 
 def main(argv=None) -> None:
@@ -149,6 +185,12 @@ def main(argv=None) -> None:
     )
     parser.add_argument("--host", default=cfg.host)
     parser.add_argument("--port", type=int, default=cfg.port)
+    parser.add_argument("--token", default=None, help="API token (not recommended in shell history)")
+    parser.add_argument(
+        "--token-file",
+        default=None,
+        help="read the API token from a file instead of exposing it in process arguments",
+    )
     args = parser.parse_args(argv)
 
     # Publish the ACTUAL bound port so loopback URLs (the managed-OAuth callback)
@@ -156,19 +198,29 @@ def main(argv=None) -> None:
     # a random free port (to coexist with a hand-run server on 8765), so the
     # managed-connect redirect must follow the real port, not the 8765 default.
     os.environ["COWORKER_PORT"] = str(args.port)
-    generated_token_path = _ensure_api_token(args.port)
+    generated_token_path, previous_api_token, token_selection = _ensure_api_token(
+        args.port,
+        cli_token=args.token,
+        token_file=args.token_file,
+        return_details=True,
+    )
+    _require_bound_auth(args.host, token_selection)
     try:
         import uvicorn
 
         _exit_when_orphaned()
         app = build_app(args.cwd, args.model, args.mode)
+        print(
+            f"[coworker] binding host={args.host} port={args.port} "
+            f"auth=token source={token_selection.source}"
+        )
         uvicorn.run(
             app, host=args.host, port=args.port, ws_max_size=_WS_MAX_FRAME_BYTES
         )
     finally:
         if generated_token_path is not None:
             generated_token_path.unlink(missing_ok=True)
-            os.environ.pop("COWORKER_API_TOKEN", None)
+        _restore_api_token(previous_api_token)
 
 
 if __name__ == "__main__":

@@ -160,6 +160,7 @@ from ..inbox import VIS_INBOX, VIS_INLINE, args_preview
 from ..permissions import Mode
 from ..providers import AssistantTurn
 from .manager import SessionManager
+from .token import token_matches
 
 
 def create_app(manager: SessionManager) -> FastAPI:
@@ -189,11 +190,7 @@ def create_app(manager: SessionManager) -> FastAPI:
 
     def _request_authenticated(request: Request) -> bool:
         provided = request.headers.get("x-openworker-token", "")
-        return bool(
-            api_token
-            and provided
-            and secrets.compare_digest(provided, api_token)
-        )
+        return token_matches(provided, api_token)
 
     def _websocket_authenticated(ws: WebSocket) -> bool:
         if not api_token:
@@ -203,7 +200,7 @@ def create_app(manager: SessionManager) -> FastAPI:
             for part in ws.headers.get("sec-websocket-protocol", "").split(",")
             if part.strip()
         }
-        return any(secrets.compare_digest(part, api_token) for part in protocols)
+        return any(token_matches(part, api_token) for part in protocols)
 
     @app.middleware("http")
     async def require_sidecar_token(request: Request, call_next):
