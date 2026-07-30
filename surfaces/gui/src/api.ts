@@ -37,6 +37,12 @@ const openWebSocket = (url: string): WebSocket => {
     : new WebSocket(url);
 };
 
+export const isRemoteMode = (): boolean => Boolean((globalThis as any).__COWORKER_REMOTE_MODE__);
+export const remoteProfileName = (): string | null =>
+  typeof (globalThis as any).__COWORKER_REMOTE_NAME__ === "string"
+    ? (globalThis as any).__COWORKER_REMOTE_NAME__
+    : null;
+
 export interface Health {
   status: string;
   default_workspace: string | null;
@@ -59,6 +65,14 @@ export interface WorkspaceCommandTrust {
 
 export async function getHealth(): Promise<Health> {
   const res = await fetch(`${httpBase()}/v1/health`);
+  if (typeof res.ok === "boolean" && !res.ok) {
+    if (res.status === 401 || res.status === 403) {
+      throw new Error("Remote host authentication failed. Check the selected profile token.");
+    }
+    throw new Error(
+      `Remote host connection failed (${res.status || "unreachable"}). Check the host address.`,
+    );
+  }
   return res.json();
 }
 

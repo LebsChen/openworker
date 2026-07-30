@@ -1,10 +1,10 @@
 //! OpenWorker desktop shell.
 //!
 //! Tauri is a thin native window over the existing React SPA. It:
-//!   1. picks a free localhost port and starts the Python `openworker-server` as a managed
-//!      sidecar on that port (so it never clashes with a hand-run server on 8765);
-//!   2. injects the sidecar HTTP/WS addresses and per-launch authentication token before the
-//!      SPA loads (single codebase — the browser build still hits 8765);
+//!   1. starts the Python `openworker-server` as a managed sidecar on a free localhost port,
+//!      unless an active remote-host profile selects an RVM server;
+//!   2. injects the selected HTTP/WS addresses and authentication token before the SPA loads
+//!      (single codebase — the browser build still hits 8765);
 //!   3. lives in the system tray: closing the window hides it (keeps MyHelper + the scheduler
 //!      running); only tray → Quit stops the sidecar;
 //!   4. exposes native commands: folder picker, autostart (open-at-login), and keep-awake
@@ -21,7 +21,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use ocw_stt::{Dictation, DownloadProgress};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
@@ -35,6 +35,31 @@ struct ServerProcess(Mutex<Option<Child>>);
 /// The active keep-awake guard while keep-awake is on (None when off). Dropping the guard
 /// releases the hold (kills `caffeinate` on macOS, clears the execution state on Windows).
 struct KeepAwake(Mutex<Option<KeepAwakeGuard>>);
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct RemoteHostMeta {
+    name: String,
+    base_url: String,
+    tls_verify: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+struct DesktopPrefs {
+    #[serde(default)]
+    keep_awake: bool,
+    #[serde(default)]
+    remote_hosts: Vec<RemoteHostMeta>,
+    #[serde(default)]
+    active_remote_host: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct RemoteHostInfo {
+    name: String,
+    base_url: String,
+    tls_verify: bool,
+    active: bool,
+}
 
 fn free_port() -> u16 {
     std::net::TcpListener::bind("127.0.0.1:0")
@@ -110,6 +135,164 @@ fn desktop_prefs_path() -> PathBuf {
     state_dir().join("desktop.json")
 }
 
+fn secrets_path() -> PathBuf {
+    state_dir().join("secrets.json")
+}
+
+fn read_desktop_prefs() -> DesktopPrefs {
+    std::fs::read_to_string(desktop_prefs_path())
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+fn write_desktop_prefs(prefs: &DesktopPrefs) -> Result<(), String> {
+    let path = desktop_prefs_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let bytes = serde_json::to_vec_pretty(prefs).map_err(|e| e.to_string())?;
+    std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+fn read_secret_profiles() -> serde_json::Map<String, serde_json::Value> {
+    std::fs::read_to_string(secrets_path())
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+fn write_secret_profiles(
+    profiles: &serde_json::Map<String, serde_json::Value>,
+) -> Result<(), String> {
+    let path = secrets_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let bytes = serde_json::to_vec_pretty(profiles).map_err(|e| e.to_string())?;
+    std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+fn remote_secret_key(name: &str) -> String {
+    format!("remote-host:{name}")
+}
+
+fn validate_remote_url(base_url: &str) -> Result<String, String> {
+    let value = base_url.trim().trim_end_matches('/');
+    if !(value.starts_with("http://") || value.starts_with("https://"))
+        || value.contains(['?', '#', ' '])
+    {
+        return Err("Remote host URL must be an http(s) URL without query or fragment.".into());
+    }
+    Ok(value.to_owned())
+}
+
+fn active_remote_host() -> Option<(RemoteHostMeta, String)> {
+    let prefs = read_desktop_prefs();
+    let name = prefs.active_remote_host?;
+    let host = prefs.remote_hosts.into_iter().find(|h| h.name == name)?;
+    let token = read_secret_profiles()
+        .get(&remote_secret_key(&host.name))
+        .and_then(|v| v.get("token"))
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_owned();
+    Some((host, token))
+}
+
+#[tauri::command]
+fn list_remote_hosts() -> Vec<RemoteHostInfo> {
+    let prefs = read_desktop_prefs();
+    prefs
+        .remote_hosts
+        .into_iter()
+        .map(|host| RemoteHostInfo {
+            active: prefs.active_remote_host.as_deref() == Some(host.name.as_str()),
+            name: host.name,
+            base_url: host.base_url,
+            tls_verify: host.tls_verify,
+        })
+        .collect()
+}
+
+#[tauri::command]
+fn save_remote_host(name: String, base_url: String, token: String) -> Result<(), String> {
+    let name = name.trim().to_owned();
+    if name.is_empty() || name.len() > 128 || name.contains(['/', '\\']) {
+        return Err("Remote host name must be 1-128 characters without path separators.".into());
+    }
+    let base_url = validate_remote_url(&base_url)?;
+    let token = token.trim().to_owned();
+    if token.is_empty() {
+        return Err("Remote host token cannot be empty.".into());
+    }
+    let mut prefs = read_desktop_prefs();
+    if let Some(existing) = prefs.remote_hosts.iter_mut().find(|h| h.name == name) {
+        existing.base_url = base_url;
+        existing.tls_verify = true;
+    } else {
+        prefs.remote_hosts.push(RemoteHostMeta {
+            name: name.clone(),
+            base_url,
+            tls_verify: true,
+        });
+    }
+    write_desktop_prefs(&prefs)?;
+    let mut profiles = read_secret_profiles();
+    profiles.insert(
+        remote_secret_key(&name),
+        serde_json::json!({"token": token}),
+    );
+    write_secret_profiles(&profiles)
+}
+
+#[tauri::command]
+fn delete_remote_host(name: String) -> Result<(), String> {
+    let mut prefs = read_desktop_prefs();
+    prefs.remote_hosts.retain(|h| h.name != name);
+    if prefs.active_remote_host.as_deref() == Some(name.as_str()) {
+        prefs.active_remote_host = None;
+    }
+    write_desktop_prefs(&prefs)?;
+    let mut profiles = read_secret_profiles();
+    profiles.remove(&remote_secret_key(&name));
+    write_secret_profiles(&profiles)
+}
+
+#[tauri::command]
+fn activate_remote_host(name: Option<String>) -> Result<(), String> {
+    let mut prefs = read_desktop_prefs();
+    if let Some(ref selected) = name {
+        if !prefs.remote_hosts.iter().any(|h| &h.name == selected) {
+            return Err("Remote host profile not found.".into());
+        }
+        if !read_secret_profiles().contains_key(&remote_secret_key(selected)) {
+            return Err("Remote host token is not configured.".into());
+        }
+    }
+    prefs.active_remote_host = name;
+    write_desktop_prefs(&prefs)
+}
+
+#[tauri::command]
+fn restart_app(app: tauri::AppHandle) {
+    app.restart();
+}
+
 /// The sidecar's log file: `<state_dir>/logs/openworker-server.log`, fresh per
 /// launch with the previous run kept as `.old`. None (→ /dev/null) only if the
 /// directory can't be created — logging must never block startup.
@@ -124,22 +307,13 @@ fn server_log_file() -> Option<std::fs::File> {
 }
 
 fn read_keep_awake_pref() -> bool {
-    std::fs::read_to_string(desktop_prefs_path())
-        .ok()
-        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
-        .and_then(|v| v.get("keep_awake").and_then(|b| b.as_bool()))
-        .unwrap_or(false)
+    read_desktop_prefs().keep_awake
 }
 
 fn write_keep_awake_pref(enabled: bool) {
-    let path = desktop_prefs_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let _ = std::fs::write(
-        &path,
-        serde_json::json!({ "keep_awake": enabled }).to_string(),
-    );
+    let mut prefs = read_desktop_prefs();
+    prefs.keep_awake = enabled;
+    let _ = write_desktop_prefs(&prefs);
 }
 
 // -- keep-awake: hold off idle + system sleep so the scheduler keeps firing -------------------
@@ -578,13 +752,30 @@ async fn install_update(
 }
 
 pub fn run() {
-    let port = free_port();
-    let api_token = launch_token();
-    let http = format!("http://127.0.0.1:{port}");
-    let ws = format!("ws://127.0.0.1:{port}");
+    let remote = active_remote_host();
+    let (http, ws, api_token) = match remote.as_ref() {
+        Some((host, token)) => (
+            host.base_url.clone(),
+            host.base_url
+                .replacen("https://", "wss://", 1)
+                .replacen("http://", "ws://", 1),
+            token.clone(),
+        ),
+        None => {
+            let port = free_port();
+            (
+                format!("http://127.0.0.1:{port}"),
+                format!("ws://127.0.0.1:{port}"),
+                launch_token(),
+            )
+        }
+    };
+    let remote_mode = remote.is_some();
+    let remote_name = remote.as_ref().map(|(host, _)| host.name.clone());
     // Debug-format yields a quoted JS string literal.
     let inject = format!(
-        "window.__COWORKER_HTTP__={http:?};window.__COWORKER_WS__={ws:?};window.__COWORKER_API_TOKEN__={api_token:?};window.__OCW_PLATFORM__={:?};",
+        "window.__COWORKER_HTTP__={http:?};window.__COWORKER_WS__={ws:?};window.__COWORKER_API_TOKEN__={api_token:?};window.__COWORKER_REMOTE_MODE__={remote_mode};window.__COWORKER_REMOTE_NAME__={:?};window.__OCW_PLATFORM__={:?};",
+        remote_name.as_deref(),
         std::env::consts::OS
     );
 
@@ -622,54 +813,64 @@ pub fn run() {
             check_for_update,
             download_update,
             clear_pending_update,
-            install_update
+            install_update,
+            list_remote_hosts,
+            save_remote_host,
+            delete_remote_host,
+            activate_remote_host,
+            restart_app
         ])
         .setup(move |app| {
-            // 1. Start the Python server sidecar on the chosen port (inherits our env).
-            let mut server_cmd = Command::new(server_bin());
-            server_cmd
-                .args(["--host", "127.0.0.1", "--port", &port.to_string()])
-                // The sidecar self-exits if we die abruptly (dev-watcher restart, crash) —
-                // belt-and-suspenders alongside the RunEvent::ExitRequested kill below.
-                // The explicit PID matters: under PyInstaller onefile the python process is a
-                // *grandchild* (bootloader in between), so getppid() never points at us and a
-                // reparenting check alone leaks both processes on quit.
-                .env("COWORKER_EXIT_WITH_PARENT", "1")
-                .env("COWORKER_PARENT_PID", std::process::id().to_string())
-                .env("COWORKER_API_TOKEN", &api_token)
-                // This GUI app has no console, so a console-subsystem child would inherit
-                // invalid std handles and crash a few seconds in when uvicorn writes its logs
-                // (the "Starting coworker…" freeze on Windows). Hand it real handles: the
-                // server's output goes to a log file so field issues are debuggable at all
-                // ("relay off, no messages" was undiagnosable with everything on /dev/null).
-                // One file per launch, previous run kept as .old.
-                .stdin(Stdio::null());
-            match server_log_file() {
-                Some(log) => {
-                    if let Ok(err_clone) = log.try_clone() {
-                        server_cmd
-                            .stdout(Stdio::from(log))
-                            .stderr(Stdio::from(err_clone));
-                    } else {
-                        server_cmd.stdout(Stdio::from(log)).stderr(Stdio::null());
+            // 1. Start the Python server sidecar unless a remote profile is active.
+            let child = if remote_mode {
+                eprintln!(
+                    "[coworker] remote host mode active{}; local server spawn skipped",
+                    remote_name
+                        .as_deref()
+                        .map(|name| format!(" profile={name}"))
+                        .unwrap_or_default()
+                );
+                None
+            } else {
+                let port = http
+                    .rsplit(':')
+                    .next()
+                    .and_then(|p| p.parse::<u16>().ok())
+                    .unwrap_or(8765);
+                let mut server_cmd = Command::new(server_bin());
+                server_cmd
+                    .args(["--host", "127.0.0.1", "--port", &port.to_string()])
+                    // The sidecar self-exits if we die abruptly (dev-watcher restart, crash) —
+                    // belt-and-suspenders alongside the RunEvent::ExitRequested kill below.
+                    .env("COWORKER_EXIT_WITH_PARENT", "1")
+                    .env("COWORKER_PARENT_PID", std::process::id().to_string())
+                    .env("COWORKER_API_TOKEN", &api_token)
+                    .stdin(Stdio::null());
+                match server_log_file() {
+                    Some(log) => {
+                        if let Ok(err_clone) = log.try_clone() {
+                            server_cmd
+                                .stdout(Stdio::from(log))
+                                .stderr(Stdio::from(err_clone));
+                        } else {
+                            server_cmd.stdout(Stdio::from(log)).stderr(Stdio::null());
+                        }
+                    }
+                    None => {
+                        server_cmd.stdout(Stdio::null()).stderr(Stdio::null());
                     }
                 }
-                None => {
-                    server_cmd.stdout(Stdio::null()).stderr(Stdio::null());
+                #[cfg(windows)]
+                {
+                    use std::os::windows::process::CommandExt;
+                    server_cmd.creation_flags(0x0800_0000);
                 }
-            }
-            // CREATE_NO_WINDOW: the sidecar is a console binary; without this a console window
-            // would flash when the GUI app spawns it on Windows.
-            #[cfg(windows)]
-            {
-                use std::os::windows::process::CommandExt;
-                server_cmd.creation_flags(0x0800_0000);
-            }
-            let child = match server_cmd.spawn() {
-                Ok(child) => Some(child),
-                Err(e) => {
-                    eprintln!("[coworker] failed to start server sidecar: {e}");
-                    None
+                match server_cmd.spawn() {
+                    Ok(child) => Some(child),
+                    Err(e) => {
+                        eprintln!("[coworker] failed to start server sidecar: {e}");
+                        None
+                    }
                 }
             };
             app.manage(ServerProcess(Mutex::new(child)));
@@ -769,4 +970,20 @@ pub fn run() {
                 }
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_remote_url;
+
+    #[test]
+    fn remote_urls_require_http_or_https_without_query() {
+        assert_eq!(
+            validate_remote_url("https://rvm.example.test:8765/").unwrap(),
+            "https://rvm.example.test:8765"
+        );
+        assert!(validate_remote_url("ftp://rvm.example.test").is_err());
+        assert!(validate_remote_url("https://rvm.example.test/?token=secret").is_err());
+        assert!(validate_remote_url("https://rvm.example.test/#fragment").is_err());
+    }
 }

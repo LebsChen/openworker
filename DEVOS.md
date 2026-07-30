@@ -59,6 +59,27 @@ git push origin devos/main
 ## 当前增量清单
 
 - 远程 token/server 模式：功能分支 `devos/1785422207-remote-token`，为 server 增加显式 token、token file、非回环绑定安全约束和常数时间鉴权。
+- 客户端远程主机模式：功能分支 `devos/1785423280-remote-host`。Tauri 客户端可保存多个远程 profile，profile 元数据保存在受限的 `desktop.json`，token 保存在同一用户的 SecretStore 文件（`secrets.json`，权限 `0600`），激活后重启客户端生效。未激活 profile 时继续启动本机 sidecar。
 - token 环境优先级：`COWORKER_API_TOKEN` 高于 `OPENWORKER_TOKEN`，因为前者是 Tauri 按会话显式注入的 token；两者都低于 CLI/token-file。
 - RVM 执行 VM 的首选方向：让整个 OpenWorker server 运行在 RVM 主机上，使现有 `LocalExecutor` 就地执行；只有确实需要客户端本机 server 时才考虑 `RvmExecutor`。
 - 当前增量的每个上游接缝见 `UPSTREAM_PATCHES.md`。
+
+## 远程主机模式
+
+在 RVM 主机上启动 server（token 文件应为用户可读、权限 `0600`）：
+
+```bash
+openworker-server \
+  --host 0.0.0.0 \
+  --token-file /path/to/rvm-openworker.token
+```
+
+在客户端 Settings → Remote host 中保存名称、`http(s)` base URL 和 token，再选择
+“Use”。客户端会重启并注入远程 HTTP/WS endpoint；WS endpoint 从 `http://`/`https://`
+分别派生为 `ws://`/`wss://`。HTTPS 证书校验默认保持开启，token 不进入 URL query、普通
+配置或日志。远程 profile 激活时 Tauri 不创建本地 `openworker-server` 子进程，server
+及其 `LocalExecutor` 全部运行在 RVM 主机。
+
+远程地址不可达或返回 401/403 时，客户端显示明确的连接/鉴权错误并保持远程模式；
+绝不会静默切回本机执行。使用 “Use local server” 或取消 active profile 才恢复本机
+sidecar。

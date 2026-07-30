@@ -13,6 +13,7 @@ import {
   getPersonas,
   getInbox,
   getUnattended,
+  isRemoteMode,
   PERSONAS_CHANGED,
   resolveInboxItem,
   deleteSession,
@@ -204,10 +205,10 @@ export function App() {
   const [scheduledOpenId, setScheduledOpenId] = useState<string | null>(null);
   const [gateCreate, setGateCreate] = useState(false);
   // Which Settings section the full-page Settings surface opens on (§ Settings-as-page).
-  const [settingsTab, setSettingsTab] = useState<"appearance" | "models" | "voice" | "personas">(
+  const [settingsTab, setSettingsTab] = useState<"appearance" | "models" | "voice" | "personas" | "remote">(
     "appearance",
   );
-  const openSettings = (tab: "appearance" | "models" | "voice" | "personas" = "appearance") => {
+  const openSettings = (tab: "appearance" | "models" | "voice" | "personas" | "remote" = "appearance") => {
     setSettingsTab(tab);
     setSurface("settings");
   };
@@ -381,6 +382,7 @@ export function App() {
   // Retry health for a while: the desktop shell starts its sidecar in parallel, so the
   // server may not answer for a second or two. Only fall back to the gate once it's truly up.
   const [booting, setBooting] = useState(true);
+  const [remoteError, setRemoteError] = useState<string | null>(null);
   const [onboarding, setOnboarding] = useState(false);
   // True once we've resumed a prior conversation on boot (drives the splash wording).
   const [resumedExisting, setResumedExisting] = useState(false);
@@ -465,9 +467,16 @@ export function App() {
           loadSettings();
           if (!cancelled) setBooting(false);
         })
-        .catch(() => {
+        .catch((error) => {
           if (cancelled) return;
           if (tries <= 0) {
+            if (isRemoteMode()) {
+              setRemoteError(
+                error instanceof Error
+                  ? error.message
+                  : "Remote host connection failed. Check the selected profile address and token.",
+              );
+            }
             setBooting(false);
             setShowGate(true);
           } else {
@@ -1157,7 +1166,7 @@ export function App() {
     startWindowDrag();
   };
 
-  if (booting || !uiReady) {
+  if (booting || !uiReady || remoteError) {
     return (
       <div className={"app boot-splash" + (overlay ? " tauri-overlay" : "")}>
         {/* overlay (not desktop): ?overlay=1 previews the splash's top-left in the browser
@@ -1180,9 +1189,14 @@ export function App() {
           <Icon name="logo" size={38} />
         </div>
         <div className="boot-text">
-          {resumedExisting ? "Restoring your session…" : "Starting OpenWorker…"}
+          {remoteError || (resumedExisting ? "Restoring your session…" : "Starting OpenWorker…")}
           <span className="beta-tag">BETA</span>
         </div>
+        {remoteError && (
+          <div className="mt-4 max-w-md text-center text-[12px] text-danger" role="alert">
+            Remote mode remains active. No local server fallback was attempted.
+          </div>
+        )}
       </div>
     );
   }
