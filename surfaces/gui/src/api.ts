@@ -867,6 +867,18 @@ export interface ModelSettings {
   compaction_threshold_pct?: number; // default 0.8, 0.10–0.95
   compaction_cap_tokens?: number; // default 250000
   compaction_model?: string;
+  locale?: "en" | "zh-CN" | null;
+}
+
+export async function setLocale(
+  locale: "en" | "zh-CN",
+): Promise<{ ok: boolean; locale?: "en" | "zh-CN"; error?: string }> {
+  const res = await fetch(`${httpBase()}/v1/settings/locale`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ locale }),
+  });
+  return res.json();
 }
 
 export interface PdfSettings {

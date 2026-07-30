@@ -2132,6 +2132,7 @@ class SessionManager:
             "model_ready": self._provider_configured(self._model_provider(self.model)),
             "source": "env" if env_key else ("store" if stored else None),
             "onboarded": bool(self._prefs.get("onboarded")),
+            "locale": self._prefs.get("locale") or None,
             "experimental_connectors": experimental_enabled(self.secrets),
             "surfaces": self._surfaces(),
             "nav_layout": self._nav_layout(),
@@ -2333,6 +2334,14 @@ class SessionManager:
         self._prefs["onboarded"] = bool(value)
         self._save_prefs()
         return {"ok": True, "onboarded": bool(value)}
+
+    def set_locale(self, locale: str) -> dict[str, Any]:
+        locale = (locale or "").strip()
+        if locale not in {"en", "zh-CN"}:
+            return {"ok": False, "error": "unsupported locale"}
+        self._prefs["locale"] = locale
+        self._save_prefs()
+        return {"ok": True, "locale": locale}
 
     def set_scratch_base(self, path: str) -> dict[str, Any]:
         """Set + persist the common area where each Cowork conversation's scratch directory is
