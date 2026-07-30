@@ -123,7 +123,7 @@ def test_background_commands_use_process_groups_and_style_quoting():
     class BackgroundClient(FakeClient):
         def exec_sync(self, *args, **kwargs):
             self.calls.append((args, kwargs))
-            return {"result": {"stdout": "", "stderr": "", "exit_code": 0}}
+            return {"result": {"stdout": "123\n", "stderr": "", "exit_code": 0}}
     posix = BackgroundClient({})
     RvmExecutor(client=posix, cwd="/workspace").run_background("echo hi")
     assert "setsid" in posix.calls[-1][0][0]
@@ -131,4 +131,4 @@ def test_background_commands_use_process_groups_and_style_quoting():
     RvmExecutor(client=win, cwd=r"C:\Work", style=RemotePathStyle("windows")).run_background("Write-Output hi")
     script = win.calls[-1][0][0]
     assert "-EncodedCommand" in script
-    assert "RedirectStandardError" not in script
+    assert "RedirectStandardError" in script

@@ -196,22 +196,25 @@ class RvmExecutor(Executor):
         task_id = f"bg-{uuid.uuid4().hex[:12]}"
         root = self.style.join(self.cwd, ".coworker/bg")
         log = self.style.join(root, task_id + ".log")
+        err = self.style.join(root, task_id + ".err")
         rc = self.style.join(root, task_id + ".rc")
         pid = self.style.join(root, task_id + ".pid")
         if self.style.name == "windows":
             child = (
-                f"& {{ {command} }} 2>&1\n"
+                f"& {{ {command} }}\n"
                 "$__ow_rc = if ($LASTEXITCODE -ne 0) { [int]$LASTEXITCODE } "
                 "elseif ($?) { 0 } else { 1 }\n"
-                f"[IO.File]::WriteAllText({self.style.quote(rc)}, [string]$__ow_rc)"
+                "Write-Output ('__COWORKER_BG_RC__' + [string]$__ow_rc)"
             )
             encoded = base64.b64encode(child.encode("utf-16le")).decode("ascii")
             script = (
                 f"New-Item -ItemType Directory -Force -Path {self.style.quote(root)} | Out-Null; "
-                f"$p=Start-Process powershell.exe -ArgumentList '-NoProfile','-EncodedCommand','{encoded}' "
+                f"$p=Start-Process powershell.exe -WindowStyle Hidden "
+                f"-ArgumentList '-NoProfile','-EncodedCommand','{encoded}' "
                 f"-WorkingDirectory {self.style.quote(self.cwd)} "
-                f"-RedirectStandardOutput {self.style.quote(log)} -PassThru; "
-                f"$p.Id | Out-File -Encoding ascii {self.style.quote(pid)}"
+                f"-RedirectStandardOutput {self.style.quote(log)} "
+                f"-RedirectStandardError {self.style.quote(err)} -PassThru; "
+                "$p.Id; $global:LASTEXITCODE=0"
             )
         else:
             child = (
@@ -227,7 +230,16 @@ class RvmExecutor(Executor):
         response = self.client.exec_sync(script, cwd=self.cwd, session=self.session_id)
         if isinstance(response.get("result"), dict) and int(response["result"].get("exit_code", 1)) != 0:
             return {"error": str(response["result"].get("stderr") or "failed to start background task")}
-        self._tasks[task_id] = {"log": log, "rc": rc, "pid": pid, "cursor": 0}
+        result = response.get("result", {})
+        launch_output = str(result.get("stdout") or "").strip().splitlines()
+        if self.style.name == "windows":
+            try:
+                pid_value: str | int = int(launch_output[-1])
+            except (IndexError, ValueError):
+                return {"error": "remote background launch did not return a process id"}
+        else:
+            pid_value = pid
+        self._tasks[task_id] = {"log": log, "err": err, "rc": rc, "pid": pid_value, "cursor": 0}
         return {
             "task_id": task_id, "command": command, "status": "running",
             "note": "use shell_task_output to read its output, shell_task_kill to stop it",
@@ -241,8 +253,7 @@ class RvmExecutor(Executor):
             content = str(self.client.read(task["log"]).get("content") or "")
         except RvmError:
             content = ""
-        new = content[task["cursor"] :]
-        task["cursor"] = len(content)
+        cursor = task["cursor"]
         exit_code: int | None = None
         status = "running"
         try:
@@ -251,6 +262,14 @@ class RvmExecutor(Executor):
             status = "exited"
         except (RvmError, ValueError):
             pass
+        if exit_code is None and self.style.name == "windows":
+            match = re.search(r"(?:^|\r?\n)__COWORKER_BG_RC__(-?\d+)\s*$", content)
+            if match:
+                exit_code = int(match.group(1))
+                status = "exited"
+                content = content[: match.start()].rstrip("\r\n") + "\n"
+        new = content[cursor:]
+        task["cursor"] = len(content)
         truncated = len(new) > self.max_output_chars
         if truncated:
             new = new[-self.max_output_chars :]
@@ -262,9 +281,8 @@ class RvmExecutor(Executor):
             return {"error": f"unknown task: {task_id}"}
         if self.style.name == "windows":
             command = (
-                f"$p=Get-Content -LiteralPath {self.style.quote(task['pid'])} "
-                f"-ErrorAction SilentlyContinue; if($p){{Stop-Process -Id ([int]$p) "
-                "-Force -ErrorAction SilentlyContinue}}"
+                f"taskkill /PID {int(task['pid'])} /T /F "
+                "2>$null; $global:LASTEXITCODE=0"
             )
         else:
             command = (
