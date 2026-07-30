@@ -18,13 +18,13 @@ import { hostProbeResult, HOST_STATUS_CHANGED } from "../hostStatus";
 import { selectWorklog, type WorklogEntry } from "../worklogSelector";
 
 export type PanelTab = "info" | "worklog" | "changes" | "shell" | "ide" | "desktop";
-const PANEL_TABS: { id: PanelTab; label: string }[] = [
-  { id: "info", label: "Info" },
-  { id: "worklog", label: "Worklog" },
-  { id: "changes", label: "File changes" },
-  { id: "shell", label: "Shell" },
-  { id: "ide", label: "Web IDE" },
-  { id: "desktop", label: "Browser/Desktop" },
+const PANEL_TABS: { id: PanelTab; label: string; icon: "sparkle" | "wrench" | "fileCode" | "code" | "sidebarRight" }[] = [
+  { id: "info", label: "Info", icon: "sparkle" },
+  { id: "worklog", label: "Worklog", icon: "wrench" },
+  { id: "changes", label: "File changes", icon: "fileCode" },
+  { id: "shell", label: "Shell", icon: "wrench" },
+  { id: "ide", label: "Web IDE", icon: "code" },
+  { id: "desktop", label: "Browser/Desktop", icon: "sidebarRight" },
 ];
 export const isRvmPanelTab = (tab: PanelTab): boolean =>
   tab === "shell" || tab === "ide" || tab === "desktop";
@@ -95,6 +95,7 @@ export function RightRail({
   onOpenIntegrations,
 }: Props) {
   const [tab, setTab] = useState<PanelTab>("info");
+  const [panelOpen, setPanelOpen] = useState(true);
   const [artifacts, setArtifacts] = useState<ArtifactInfo[]>([]);
   const [selected, setSelected] = useState<ArtifactInfo | null>(null);
   const [content, setContent] = useState<ArtifactContent | null>(null);
@@ -116,6 +117,7 @@ export function RightRail({
     setSelected(null);
     setContent(null);
     setTab("info");
+    setPanelOpen(true);
   }, [sessionId]);
 
   useEffect(() => {
@@ -181,30 +183,15 @@ export function RightRail({
   if (!active) return null;
 
   return (
-    <aside className={"right-rail right-panel-tabs" + (selected ? " artifact-mode" : "")}>
-      <nav className="right-panel-tabbar" aria-label="Session panel">
-        {PANEL_TABS.map((entry) => {
-          const disabled = isRvmTab && host.local;
-          return (
-            <button
-              key={entry.id}
-              className={"right-panel-tab" + (tab === entry.id ? " active" : "")}
-              disabled={disabled}
-              aria-selected={tab === entry.id}
-              onClick={() => setTab(entry.id)}
-            >
-              {entry.label}
-            </button>
-          );
-        })}
-      </nav>
-      {host.local && (
+    <aside className={"right-panel-shell" + (selected ? " artifact-mode" : "")}>
+      <div className={"right-panel-drawer" + (panelOpen ? " open" : " collapsed")}>
+      {host.local && panelOpen && (
         <div className="right-panel-local-hint">
           Requires an RVM host. The current session is bound to Local.
         </div>
       )}
       <div className="right-panel-tabbody">
-        <div style={{ display: tab === "info" && !selected ? "block" : "none" }}>
+        <div style={{ display: panelOpen && tab === "info" && !selected ? "block" : "none" }}>
           <InfoPanel
             host={host}
             probe={probe}
@@ -221,19 +208,19 @@ export function RightRail({
             onOpenIntegrations={onOpenIntegrations}
           />
         </div>
-        <div style={{ display: tab === "worklog" && !selected ? "block" : "none" }}>
+        <div style={{ display: panelOpen && tab === "worklog" && !selected ? "block" : "none" }}>
           <WorklogPanel entries={worklog} />
         </div>
-        <div style={{ display: tab === "changes" && !selected ? "block" : "none" }}>
+        <div style={{ display: panelOpen && tab === "changes" && !selected ? "block" : "none" }}>
           <FileChangesPanel
             artifacts={artifacts}
             showArtifacts={showArtifacts}
             onRefresh={refreshArtifacts}
             onReveal={() => artifacts[0] && revealArtifact(sessionId, artifacts[0].path, host, "reveal")}
-            onSelect={setSelected}
+            onSelect={(artifact) => { setSelected(artifact); setTab("changes"); setPanelOpen(true); }}
           />
         </div>
-        <div style={{ display: isRvmTab && !selected ? "block" : "none" }}>
+        <div style={{ display: panelOpen && isRvmTab && !selected ? "block" : "none" }}>
           <RvmUnavailablePanel host={host} tab={tab} />
         </div>
       </div>
@@ -247,6 +234,30 @@ export function RightRail({
           onBack={() => { setSelected(null); setTab("changes"); }}
         />
       )}
+      </div>
+      <nav className="right-panel-icon-rail" aria-label="Session panel">
+        {PANEL_TABS.map((entry) => {
+          const disabled = isRvmPanelTab(entry.id) && host.local;
+          return (
+            <button
+              key={entry.id}
+              type="button"
+              className={"right-panel-rail-btn" + (panelOpen && tab === entry.id ? " active" : "")}
+              disabled={disabled}
+              title={disabled ? "Requires an RVM host" : entry.label}
+              aria-label={entry.label}
+              aria-pressed={panelOpen && tab === entry.id}
+              onClick={() => {
+                if (disabled) return;
+                if (panelOpen && tab === entry.id) setPanelOpen(false);
+                else { setTab(entry.id); setPanelOpen(true); }
+              }}
+            >
+              <Icon name={entry.icon} size={17} />
+            </button>
+          );
+        })}
+      </nav>
     </aside>
   );
 }
