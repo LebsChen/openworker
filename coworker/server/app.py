@@ -605,6 +605,10 @@ def create_app(manager: SessionManager) -> FastAPI:
     def session_delete(session_id: str) -> dict[str, Any]:
         return manager.delete_session(session_id)
 
+    @app.post("/v1/sessions/{session_id}/workspace/archive")
+    def session_workspace_archive(session_id: str) -> dict[str, Any]:
+        return manager.archive_session_workspace(session_id)
+
     @app.get("/v1/sessions/{session_id}/roots")
     def session_roots(session_id: str) -> dict[str, Any]:
         return {"roots": manager.get_roots(session_id)}

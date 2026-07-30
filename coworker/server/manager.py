@@ -391,12 +391,35 @@ class SessionManager:
         is_new_session = record is None
         agent_name = (record.agent if record else agent) or "code"
         ag = get_agent(agent_name)
+        managed_workspace = False
 
         if record:
             ws = record.workspace or None
+            if ws:
+                try:
+                    managed = self.session_workspaces.attach(session_id)
+                    if managed.path == Path(ws).resolve():
+                        ws = str(managed.path)
+                        managed_workspace = True
+                except (KeyError, FileNotFoundError, ValueError):
+                    # Legacy sessions point at user-owned folders and must not
+                    # be migrated or rewritten.
+                    pass
             model, mode, messages = record.model, Mode(record.mode), record.messages
         else:
             ws = self.resolve_workspace(workspace) if ag.needs_workspace else None
+            if ag.needs_workspace and (workspace is not None or ag.family == "knowledge"):
+                try:
+                    managed = self.session_workspaces.create(
+                        session_id,
+                        repository=ws if workspace is not None and ws else None,
+                    )
+                    ws = str(managed.path)
+                    managed_workspace = True
+                except (FileExistsError, RuntimeError, ValueError):
+                    # Preserve the existing explicit workspace behavior if
+                    # provisioning cannot be performed.
+                    pass
             model, mode, messages = self.model, self.mode, None
 
         if ag.needs_workspace and (not ws or not Path(ws).is_dir()):
@@ -409,6 +432,11 @@ class SessionManager:
                 return None
 
         if ws:
+            if managed_workspace:
+                # Validate the authoritative workspace through the same
+                # containment helper used by lifecycle operations before it
+                # becomes the engine's primary root.
+                ws = str(self.session_workspaces.assert_owned(session_id, ws))
             self.session_store.touch_workspace(ws)
         # Orphan surfaces are multi-root: the scratch (ws) is the primary writable root, plus any
         # folders the user added (persisted per session). Code/Chat stay single-root (roots=None).
@@ -3668,6 +3696,19 @@ class SessionManager:
             except OSError:
                 pass  # a stale/foreign path must not fail the delete
         return {"ok": ok, "session_id": session_id}
+
+    def archive_session_workspace(self, session_id: str) -> dict[str, Any]:
+        try:
+            workspace = self.session_workspaces.archive(session_id)
+        except (KeyError, FileNotFoundError, ValueError, RuntimeError) as exc:
+            return {"ok": False, "session_id": session_id, "error": str(exc)}
+        self.session_store.set_flags(session_id, archived=True)
+        return {
+            "ok": True,
+            "session_id": session_id,
+            "workspace": str(workspace.path),
+            "archived": True,
+        }
 
     # -- provider proxy ---------------------------------------------------------
     def provider_complete(self, model, messages, tools=None):

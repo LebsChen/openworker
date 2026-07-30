@@ -133,12 +133,23 @@ class SessionWorkspaceManager:
             workspace = SessionWorkspace(sid, target)
         else:
             try:
-                subprocess.run(
+                add = subprocess.run(
                     ["git", "-C", str(repo), "worktree", "add", "-b", branch, str(target), "HEAD"],
-                    check=True,
                     capture_output=True,
                     text=True,
                 )
+                if add.returncode:
+                    # An archived session may be recreated. Its branch is still
+                    # useful state, so attach a new worktree to that branch.
+                    add = subprocess.run(
+                        ["git", "-C", str(repo), "worktree", "add", str(target), branch],
+                        capture_output=True,
+                        text=True,
+                    )
+                if add.returncode:
+                    raise subprocess.CalledProcessError(
+                        add.returncode, add.args, output=add.stdout, stderr=add.stderr
+                    )
             except subprocess.CalledProcessError as exc:
                 raise RuntimeError(exc.stderr.strip() or "git worktree add failed") from exc
             workspace = SessionWorkspace(sid, target, repo, True, branch)

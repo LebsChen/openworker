@@ -47,3 +47,80 @@ def test_repository_sessions_use_worktree_and_archive_safely(tmp_path: Path):
         text=True,
     ).stdout
     assert str(workspace.path) not in listed
+
+
+def test_archived_repository_session_reuses_branch(tmp_path: Path):
+    import subprocess
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    (repo / "README.md").write_text("base\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", "README.md"], check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo),
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-qm",
+            "base",
+        ],
+        check=True,
+    )
+
+    manager = SessionWorkspaceManager(tmp_path / "host")
+    first = manager.create("session-reused", repository=repo)
+    branch = first.branch
+    manager.archive("session-reused")
+    second = manager.create("session-reused", repository=repo)
+
+    assert second.branch == branch
+    assert second.path.exists()
+    assert second.worktree
+
+
+def test_session_manager_wires_workspace_into_tool_boundary(tmp_path: Path):
+    import subprocess
+
+    from coworker.server.manager import SessionManager
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    (repo / "README.md").write_text("base\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", "README.md"], check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo),
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-qm",
+            "base",
+        ],
+        check=True,
+    )
+    outside = tmp_path / "outside.txt"
+    outside.write_text("secret", encoding="utf-8")
+
+    manager = SessionManager(data_dir=tmp_path / "data")
+    engine_a = manager.get_engine("session-a", workspace=str(repo), agent="code")
+    engine_b = manager.get_engine("session-b", workspace=str(repo), agent="code")
+
+    assert engine_a is not None and engine_b is not None
+    assert engine_a.permissions.workspace_root != engine_b.permissions.workspace_root
+    assert engine_a.registry.execute("read_file", {"path": str(outside)}) == {
+        "error": "path escapes the workspace"
+    }
+    assert engine_a.registry.execute(
+        "read_file", {"path": str(engine_b.permissions.workspace_root / "README.md")}
+    ) == {"error": "path escapes the workspace"}
