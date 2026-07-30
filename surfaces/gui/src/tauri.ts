@@ -77,7 +77,6 @@ export const setKeepAwake = (enabled: boolean) => invoke<boolean>("set_keep_awak
 export type RemoteHostInfo = {
   name: string;
   base_url: string;
-  tls_verify: boolean;
   active: boolean;
 };
 
