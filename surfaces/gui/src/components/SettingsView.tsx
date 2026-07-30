@@ -149,6 +149,7 @@ function RemoteHostsSection() {
   const [hosts, setHosts] = useState<RemoteHostInfo[]>([]);
   const [name, setName] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
+  const [rvmUrl, setRvmUrl] = useState("");
   const [token, setToken] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -163,7 +164,7 @@ function RemoteHostsSection() {
     const runtimeHosts = sessionHosts();
     for (const host of listed || []) {
       const runtime = runtimeHosts.find((candidate) => candidate.id === host.name);
-      if (runtime?.token) void test(host.name, host.base_url, runtime.token);
+      if (runtime?.token) void test(host.name, host.base_url, runtime.token, host.rvm_url);
     }
   };
   useEffect(() => {
@@ -172,7 +173,7 @@ function RemoteHostsSection() {
   const save = async () => {
     setError(null);
     try {
-      await saveRemoteHost(name, baseUrl, token);
+      await saveRemoteHost(name, baseUrl, token, rvmUrl);
       setSavedTokens((current) => ({ ...current, [name]: token }));
       setToken("");
       setSaved(true);
@@ -187,14 +188,14 @@ function RemoteHostsSection() {
       );
     }
   };
-  const test = async (hostName: string, url: string, hostToken: string) => {
+  const test = async (hostName: string, url: string, hostToken: string, probeUrl?: string | null) => {
     setProbeState((current) => ({
       ...current,
       [hostName]: { status: "unknown", error: "Checking connection…" },
     }));
     setTesting(hostName);
     try {
-      const result = await testRemoteHost(url, hostToken);
+      const result = await testRemoteHost(url, hostToken, probeUrl);
       setProbeState((current) => ({ ...current, [hostName]: result }));
       const statuses = (globalThis as any).__COWORKER_HOST_STATUS__ || {};
       statuses[hostName] = result.status;
@@ -248,7 +249,15 @@ function RemoteHostsSection() {
                     : probeState[host.name].latency_ms != null
                       ? `${probeState[host.name].latency_ms} ms`
                       : ""}
-                  {probeState[host.name].health?.model && ` · model ${probeState[host.name].health?.model}`}
+                  {probeState[host.name]?.health?.platform && ` · ${probeState[host.name]?.health?.platform}`}
+                  {probeState[host.name]?.health?.host && ` · ${probeState[host.name]?.health?.host}`}
+                  {probeState[host.name]?.health?.version && ` · v${probeState[host.name]?.health?.version}`}
+                  {probeState[host.name]?.info?.hostname && ` · ${probeState[host.name]?.info?.hostname}`}
+                  {probeState[host.name]?.health?.vnc_port != null && " · VNC"}
+                  {probeState[host.name]?.health?.ide_port != null && " · IDE"}
+                  {probeState[host.name]?.info?.cpus != null && ` · ${probeState[host.name]?.info?.cpus} CPU`}
+                  {probeState[host.name]?.info?.memory_gb != null && ` · ${probeState[host.name]?.info?.memory_gb} GB`}
+                  {probeState[host.name]?.health?.capabilities?.length && ` · ${probeState[host.name]?.health?.capabilities?.join(", ")}`}
                   {probeState[host.name].error && probeState[host.name].error !== "Checking connection…" && ` · ${probeState[host.name].error}`}
                 </div>
               )}
@@ -257,7 +266,7 @@ function RemoteHostsSection() {
               className={BTN_BORDERED}
               disabled={testing === host.name || !savedTokens[host.name]}
               title={!savedTokens[host.name] ? "Enter the token below to test this host." : undefined}
-              onClick={() => test(host.name, host.base_url, savedTokens[host.name] || "")}
+              onClick={() => test(host.name, host.base_url, savedTokens[host.name] || "", host.rvm_url)}
             >
               {testing === host.name ? "Testing…" : "Test connection"}
             </button>
@@ -269,11 +278,12 @@ function RemoteHostsSection() {
         <div className="pt-2 text-[12px] font-medium">Add or update profile</div>
         <input className={INPUT} placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
         <input className={INPUT} placeholder="https://rvm-host:8765" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
+        <input className={INPUT} placeholder="RVM agent URL (optional, defaults to server URL)" value={rvmUrl} onChange={(e) => setRvmUrl(e.target.value)} />
         <input className={INPUT} type="password" placeholder="Server token" value={token} onChange={(e) => setToken(e.target.value)} />
         <button
           className={BTN_BORDERED}
           disabled={!name || !baseUrl || !token || testing === name}
-          onClick={() => test(name, baseUrl, token)}
+          onClick={() => test(name, baseUrl, token, rvmUrl || null)}
         >
           {testing === name ? "Testing…" : "Test connection"}
         </button>
@@ -281,7 +291,12 @@ function RemoteHostsSection() {
           <div role="status" className="text-[12px] text-muted">
             {statusLabel(currentFormResult.status)}
             {currentFormResult.latency_ms != null && ` · ${currentFormResult.latency_ms} ms`}
-            {currentFormResult.health?.model && ` · model ${currentFormResult.health.model}`}
+            {currentFormResult.health?.platform && ` · ${currentFormResult.health.platform}`}
+            {currentFormResult.health?.version && ` · v${currentFormResult.health.version}`}
+            {currentFormResult.info?.hostname && ` · ${currentFormResult.info.hostname}`}
+            {currentFormResult.health?.vnc_port != null && " · VNC"}
+            {currentFormResult.health?.ide_port != null && " · IDE"}
+            {currentFormResult.info?.cpus != null && ` · ${currentFormResult.info.cpus} CPU`}
             {currentFormResult.error && ` · ${currentFormResult.error}`}
           </div>
         )}

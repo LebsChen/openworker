@@ -77,23 +77,42 @@ export const setKeepAwake = (enabled: boolean) => invoke<boolean>("set_keep_awak
 export type RemoteHostInfo = {
   name: string;
   base_url: string;
+  rvm_url?: string | null;
 };
 
 export type RemoteHostProbeResult = {
-  status: "online" | "offline" | "auth_failed" | "unknown";
+  status: "online" | "offline" | "auth_failed" | "checking" | "unknown";
   latency_ms?: number;
-  health?: { status?: string; model?: string };
+  health?: {
+    status?: string;
+    service?: string;
+    version?: string;
+    platform?: string;
+    host?: string;
+    capabilities?: string[];
+    vnc_port?: number | null;
+    ide_port?: number | null;
+  };
+  info?: {
+    hostname?: string;
+    platform?: string;
+    arch?: string;
+    cpus?: number;
+    memory_gb?: number;
+    uptime_hours?: number;
+  };
   error?: string;
 };
 
 export async function testRemoteHost(
   baseUrl: string,
   token: string,
+  rvmUrl?: string | null,
 ): Promise<RemoteHostProbeResult> {
-  const base = baseUrl.replace(/\/+$/, "");
+  const base = (rvmUrl || baseUrl).replace(/\/+$/, "");
   const started = performance.now();
   try {
-    const health = await fetch(`${base}/v1/health`, { signal: AbortSignal.timeout(8_000) });
+    const health = await fetch(`${base}/api/health`, { signal: AbortSignal.timeout(8_000) });
     if (!health.ok) {
       return {
         status: health.status === 401 || health.status === 403 ? "auth_failed" : "offline",
@@ -103,35 +122,39 @@ export async function testRemoteHost(
             : `Server returned HTTP ${health.status}. Check the address.`,
       };
     }
-    const protectedResponse = await fetch(`${base}/v1/settings`, {
-      headers: { "X-OpenWorker-Token": token },
+    const healthPayload = (await health.json()) as RemoteHostProbeResult["health"];
+    const startedInfo = performance.now();
+    const infoResponse = await fetch(`${base}/api/info`, {
+      headers: { Authorization: `Bearer ${token}` },
       signal: AbortSignal.timeout(8_000),
     });
-    if (!protectedResponse.ok) {
+    if (!infoResponse.ok) {
       return {
         status:
-          protectedResponse.status === 401 || protectedResponse.status === 403
+          infoResponse.status === 401 || infoResponse.status === 403
             ? "auth_failed"
             : "offline",
         latency_ms: Math.round(performance.now() - started),
         error:
-          protectedResponse.status === 401 || protectedResponse.status === 403
+          infoResponse.status === 401 || infoResponse.status === 403
             ? "Authentication failed. Check the token."
-            : `Server returned HTTP ${protectedResponse.status}. Check the address.`,
+            : `Server returned HTTP ${infoResponse.status}. Check the address.`,
       };
     }
-    const payload = (await health.json()) as { status?: string; model?: string };
+    const infoPayload = (await infoResponse.json()) as RemoteHostProbeResult["info"];
     return {
       status: "online",
-      latency_ms: Math.round(performance.now() - started),
-      health: { status: payload.status, model: payload.model },
+      latency_ms: Math.round(performance.now() - startedInfo),
+      health: healthPayload,
+      info: infoPayload,
     };
   } catch (error) {
+    const errorText = error instanceof Error ? `${error.name} ${error.message}` : String(error);
     return {
       status: "offline",
       latency_ms: Math.round(performance.now() - started),
       error:
-        error instanceof Error && error.name === "AbortError"
+        /abort|timed out|timeout/i.test(errorText)
           ? "Connection timed out. Check the address and network connection."
           : "Host is unreachable. Check the address and network connection.",
     };
@@ -143,6 +166,7 @@ export type SessionHostInfo = RemoteHostInfo & {
   ws_url: string;
   token: string;
   local: boolean;
+  rvm_url?: string | null;
 };
 
 export const listRemoteHosts = () => invoke<RemoteHostInfo[]>("list_remote_hosts");
@@ -162,8 +186,8 @@ export const bindSessionHost = (sessionId: string, hostId: string) =>
   invokeStrict<void>("bind_session_host", { sessionId, hostId });
 export const getSessionHost = (sessionId: string) =>
   invoke<string | null>("session_host", { sessionId });
-export const saveRemoteHost = async (name: string, baseUrl: string, token: string) => {
-  await invokeStrict<void>("save_remote_host", { name, baseUrl, token });
+export const saveRemoteHost = async (name: string, baseUrl: string, token: string, rvmUrl?: string) => {
+  await invokeStrict<void>("save_remote_host", { name, baseUrl, token, rvmUrl: rvmUrl || null });
   const hosts = Array.isArray((globalThis as any).__COWORKER_HOSTS__)
     ? ((globalThis as any).__COWORKER_HOSTS__ as SessionHostInfo[])
     : [];
@@ -175,6 +199,7 @@ export const saveRemoteHost = async (name: string, baseUrl: string, token: strin
     ws_url: normalized.replace(/^https:/, "wss:").replace(/^http:/, "ws:"),
     token,
     local: false,
+    rvm_url: rvmUrl || null,
   };
   (globalThis as any).__COWORKER_HOSTS__ = [
     ...hosts.filter((host) => host.id !== name),

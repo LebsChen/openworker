@@ -25,6 +25,7 @@ export type SessionHost = {
   ws_url: string;
   token: string;
   local: boolean;
+  rvm_url?: string | null;
   status?: "online" | "offline" | "auth_failed" | "unknown";
 };
 

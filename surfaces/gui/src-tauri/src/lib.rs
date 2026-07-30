@@ -41,6 +41,8 @@ struct RemoteHostMeta {
     name: String,
     base_url: String,
     token: String,
+    #[serde(default)]
+    rvm_url: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -63,6 +65,7 @@ struct RemoteHostsFile {
 struct RemoteHostInfo {
     name: String,
     base_url: String,
+    rvm_url: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -73,6 +76,7 @@ struct SessionHostInfo {
     ws_url: String,
     token: String,
     local: bool,
+    rvm_url: Option<String>,
 }
 
 fn free_port() -> u16 {
@@ -253,6 +257,7 @@ fn list_remote_hosts() -> Vec<RemoteHostInfo> {
         .map(|host| RemoteHostInfo {
             name: host.name,
             base_url: host.base_url,
+            rvm_url: host.rvm_url,
         })
         .collect()
 }
@@ -272,6 +277,7 @@ fn list_session_hosts() -> Vec<SessionHostInfo> {
             base_url: host.base_url,
             token: host.token,
             local: false,
+            rvm_url: host.rvm_url,
         })
         .collect()
 }
@@ -295,7 +301,12 @@ fn session_host(session_id: String) -> Option<String> {
 }
 
 #[tauri::command]
-fn save_remote_host(name: String, base_url: String, token: String) -> Result<(), String> {
+fn save_remote_host(
+    name: String,
+    base_url: String,
+    token: String,
+    rvm_url: Option<String>,
+) -> Result<(), String> {
     let name = name.trim().to_owned();
     if name.is_empty() || name.len() > 128 || name.contains(['/', '\\']) {
         return Err("Remote host name must be 1-128 characters without path separators.".into());
@@ -305,15 +316,21 @@ fn save_remote_host(name: String, base_url: String, token: String) -> Result<(),
     if token.is_empty() {
         return Err("Remote host token cannot be empty.".into());
     }
+    let rvm_url = rvm_url
+        .filter(|url| !url.trim().is_empty())
+        .map(|url| validate_remote_url(&url))
+        .transpose()?;
     let mut hosts = read_remote_hosts();
     if let Some(existing) = hosts.hosts.iter_mut().find(|h| h.name == name) {
         existing.base_url = base_url;
         existing.token = token;
+        existing.rvm_url = rvm_url;
     } else {
         hosts.hosts.push(RemoteHostMeta {
             name,
             base_url,
             token,
+            rvm_url,
         });
     }
     write_remote_hosts(&hosts)
@@ -1059,6 +1076,7 @@ mod tests {
             "rvm".into(),
             "https://rvm.example.test:8765".into(),
             "test-token".into(),
+            None,
         )
         .unwrap();
 
