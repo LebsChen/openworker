@@ -17,7 +17,9 @@ from coworker.server import SessionManager, create_app
 class FakeUpstream:
     def __init__(self) -> None:
         self.sent: list[bytes | str] = []
+        self.history: list[bytes | str] = []
         self.ready = asyncio.Event()
+        self.yielded = False
 
     async def __aenter__(self):
         return self
@@ -27,14 +29,17 @@ class FakeUpstream:
 
     async def send(self, message):
         self.sent.append(message)
-        self.ready.set()
+        self.history.append(message)
+        if len(self.sent) >= 2:
+            self.ready.set()
 
     def __aiter__(self):
         return self
 
     async def __anext__(self):
         await self.ready.wait()
-        if self.sent:
+        if self.sent and not self.yielded:
+            self.yielded = True
             self.sent.clear()
             return b"remote-output"
         raise StopAsyncIteration
@@ -73,12 +78,14 @@ def test_pty_proxy_auth_and_transparent_framing(tmp_path, monkeypatch):
             subprotocols=["openworker", "browser-secret"],
         ) as socket:
             socket.send_bytes(b"stdin")
+            socket.send_text('{"type":"resize","cols":120,"rows":40}')
             assert socket.receive_bytes() == b"remote-output"
 
     query = parse_qs(urlsplit(observed["url"]).query)
     assert query == {"cols": ["120"], "rows": ["40"], "cwd": ["/workspace/session-1"]}
     assert observed["headers"] == {"Authorization": "Bearer rvm-secret"}
     assert "rvm-secret" not in observed["url"]
+    assert upstream.history == [b"stdin", '{"type":"resize","cols":120,"rows":40}']
 
 
 def test_pty_proxy_rejects_browser_auth(tmp_path, monkeypatch):
