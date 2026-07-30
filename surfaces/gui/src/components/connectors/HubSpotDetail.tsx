@@ -180,7 +180,7 @@ function PrivacyGroup({ c, onChanged }: Pick<DetailProps, "c" | "onChanged">) {
           </span>
         </div>
       </div>
-      <div className={FOOT}>{t("connectors.hubspot.strippedEveryRecordAgentsReadAcrossAllPortals")}</div>
+      <div className={FOOT}>{t("connectors.hubspot.stripAllRecords")}</div>
     </>
   );
 }

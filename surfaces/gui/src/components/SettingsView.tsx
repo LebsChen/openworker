@@ -324,7 +324,7 @@ function RemoteHostsSection() {
         {editing && <button className={BTN_BORDERED} onClick={() => {
           setEditing(null); setName(""); setUrl(""); setToken(""); setVncPassword("");
         }}>{t("settings.cancel")}</button>}
-        {saved && <div className="text-[12px] text-accent">{t("settings.savedSecurelyRemoteHostsAvailableWhenSelectingVmNewSession")}</div>}
+        {saved && <div className="text-[12px] text-accent">{t("settings.remoteHostsSaved")}</div>}
         {error && <div role="alert" className="text-[12px] text-danger">{error}</div>}
       </div>
     </section>
@@ -463,7 +463,7 @@ function VoiceInputSection() {
       />
 
       {!desktop ? (
-        <div className={CARD + " p-4 text-[13px] text-muted"}>{t("settings.voiceInputSetupAvailableOpenworkerDesktopApp")}</div>
+        <div className={CARD + " p-4 text-[13px] text-muted"}>{t("settings.voiceSetupAvailable")}</div>
       ) : (
         <div className="space-y-4">
           <div className="rounded-xl border border-green-200 bg-green-50/70 px-4 py-3 text-[12.5px] text-green-800">
@@ -651,14 +651,14 @@ function AppearanceSection() {
             <input type="checkbox" className="mt-0.5" checked={autostart} onChange={(e) => toggleAuto(e.target.checked)} />
             <span>
               <span className="block text-[13px] text-ink">{t("settings.openLogin")}</span>
-              <span className="block text-[12px] text-muted">{t("settings.launchOpenworkerAutomaticallyWhenYouSign")}</span>
+              <span className="block text-[12px] text-muted">{t("settings.launchOnSignIn")}</span>
             </span>
           </label>
           <label className="flex items-start gap-3 py-2">
             <input type="checkbox" className="mt-0.5" checked={keepAwake} onChange={(e) => toggleKeep(e.target.checked)} />
             <span>
               <span className="block text-[13px] text-ink">{t("settings.keepSystemAwake")}</span>
-              <span className="block text-[12px] text-muted">{t("settings.preventIdleSleepSoScheduledTasksFireTime")}</span>
+              <span className="block text-[12px] text-muted">{t("settings.preventIdleSleep")}</span>
             </span>
           </label>
         </div>
@@ -675,7 +675,7 @@ function AppearanceSection() {
           </button>
           {desktop && <UpdateInline />}
         </div>
-        <div className={FIELD_HELP}>{t("settings.replaysFirstRunSetupModelFirstAutomationTips")}</div>
+        <div className={FIELD_HELP}>{t("settings.replayFirstRunSetup")}</div>
       </div>
     </section>
   );

@@ -1908,7 +1908,7 @@ export function App() {
                 <div className="session-history-unavailable">
                   <h1>{t("app.canAposTLoadSessionAposSHistory")}</h1>
                   <p>Remote host &quot;{sessionHost.name}&quot; is offline.</p>
-                  <p>{t("app.historyRemainsThatHostWillReloadWhenAvailableAgain")}</p>
+                  <p>{t("app.historyReloadsWithHost")}</p>
                 </div>
               ) : idle ? (
                 agent === "cowork" ? (

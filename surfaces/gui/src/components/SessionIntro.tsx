@@ -120,7 +120,7 @@ export function SessionIntro({
           onClick={() => (ghSlackReady ? onPrefill(GH_SLACK_PROMPT) : onOpenSessionSettings())}
         >
           <span className="task-card-body">
-            <span className="task-card-title">{t("session.intro.automateWeeklyGithubProgressReportSlack")}</span>
+            <span className="task-card-title">{t("session.intro.weeklyGithubReport")}</span>
             <span className="task-card-sub">
               {dot("github", live.has("github"))}
               {dot("slack", live.has("slack"))}

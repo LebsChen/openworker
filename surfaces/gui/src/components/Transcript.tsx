@@ -181,7 +181,7 @@ function StepRow({ tool, approval }: { tool: ToolItem; approval?: ApprovalItem }
           <span
             className="text-[11px] text-warnInk shrink-0"
             data-testid="tool-hidden-count"
-            title={t("transcript.removedPrivacyFiltersBeforeAgentSawResultsAgentsGetNoTraceTh")}
+            title={t("transcript.privacyFiltersRemoved")}
           >
             {tool.hidden} hidden
           </span>

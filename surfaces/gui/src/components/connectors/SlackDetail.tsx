@@ -160,7 +160,7 @@ export function SlackDetail({ c, cloud, slack, onChanged }: DetailProps) {
 
       <ToolsDisclosure c={c} onChanged={onChanged} />
       {c.connected && (
-        <div className={FOOT + " mt-2"}>{t("connectors.slack.namesComeSlackAutomaticallyIdsShowHover")}</div>
+        <div className={FOOT + " mt-2"}>{t("connectors.slack.namesFromSlack")}</div>
       )}
 
       {adding && (
@@ -277,7 +277,7 @@ function DisconnectBtn({ teamId, busy, onClick }: { teamId: string; busy: boolea
     <button
       className="text-[12.5px] text-danger/80 hover:text-danger shrink-0"
       data-testid={`disconnect-workspace-${teamId}`}
-      title={t("connectors.slack.stopsRelayingWorkspaceComputerAppStaysInstalledSlack")}
+      title={t("connectors.slack.stopRelay")}
       onClick={onClick}
       disabled={busy}
     >
@@ -314,7 +314,7 @@ function PeopleRow({
       <span className={LABEL}>People</span>
       <span className="min-w-0 flex-1 flex flex-wrap items-center gap-1.5">
         {allowed.length === 0 && (
-          <span className="text-[12px] text-faint">{t("connectors.slack.nobodyYetPickNameApproveWaitingSenderBelow")}</span>
+          <span className="text-[12px] text-faint">{t("connectors.slack.approveOrNameSender")}</span>
         )}
         {allowed.map((u) => (
           <span
@@ -331,7 +331,7 @@ function PeopleRow({
             {protectedIds?.includes(u) ? (
               <span
                 className="text-[10.5px] text-faint"
-                title={t("connectors.slack.removeApprovalOwnerAccessBeforeRemovingPerson")}
+                title={t("connectors.slack.removeOwnerFirst")}
               >
                 · owner
               </span>

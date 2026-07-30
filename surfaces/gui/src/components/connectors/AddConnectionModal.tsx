@@ -353,7 +353,7 @@ function SlackManual({ onConnected }: { onConnected: () => void }) {
     <div className="px-5 py-4 space-y-3">
       <ol className="list-decimal pl-4 text-[13px] text-muted space-y-1">
         <li>{t("connectors.add.createAppApiSlackComApps")}</li>
-        <li>{t("connectors.add.enableSocketModeAddBotScopesInstallWorkspace")}</li>
+        <li>{t("connectors.add.socketModeSetup")}</li>
         <li>{t("connectors.add.pasteBothTokens")}</li>
       </ol>
       <input className={INPUT} type="password" placeholder={t("connectors.add.botTokenXoxb")} value={bot} spellCheck={false} onChange={(e) => setBot(e.target.value)} />

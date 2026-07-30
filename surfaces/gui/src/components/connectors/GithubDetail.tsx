@@ -229,7 +229,7 @@ function DisconnectBtn({ id, busy, onClick }: { id: string; busy: boolean; onCli
     <button
       className="text-[12.5px] text-danger/80 hover:text-danger shrink-0"
       data-testid={`disconnect-install-${id}`}
-      title={t("connectors.github.stopsRelayingInstallationComputerAppStaysInstalledGithub")}
+      title={t("connectors.github.stopRelay")}
       onClick={onClick}
       disabled={busy}
     >

@@ -347,7 +347,7 @@ function SceneThread({ meFirst, meInitial }: { meFirst: string; meInitial: strin
   return (
     <>
       <span className="hiw-spark" style={d("1.9s")} />
-      <Sticky d="3.2s" r pos={{ left: "52%", top: "10%" }}>{t("connectors.slack.help.chattingThreadContinuesSameConversation")}</Sticky>
+      <Sticky d="3.2s" r pos={{ left: "52%", top: "10%" }}>{t("connectors.slack.help.threadSameConversation")}</Sticky>
       <SlackWin>
         <SlackRail active="launch-room" />
         <div className="hiw-slmain">

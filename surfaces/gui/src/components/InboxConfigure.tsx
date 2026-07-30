@@ -277,7 +277,7 @@ function SubscriptionsCard() {
                   {s.collision && (
                     <span
                       className="ml-1.5 text-[11px] text-warnInk bg-warnSoft/70 border border-warnInk/15 rounded px-1.5 py-0.5"
-                      title={t("inbox.configure.channelAlsoInboxRoutingTargetInboundOutboundOneChannelConfla")}
+                      title={t("inbox.configure.channelConflict")}
                     >
                       ⚠ collides
                     </span>

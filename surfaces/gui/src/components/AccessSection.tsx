@@ -572,7 +572,7 @@ function ChannelsInline({
               {s.collision && (
                 <span
                   className="text-[10.5px] text-warnInk bg-warnSoft/70 border border-warnInk/15 rounded px-1 shrink-0"
-                  title={t("session.access.channelAlsoSessionSInboxRoutingTargetInboundOutboundCollide")}
+                  title={t("session.access.channelConflict")}
                 >
                   ⚠
                 </span>
