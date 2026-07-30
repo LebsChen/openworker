@@ -217,34 +217,35 @@ body {
   z-index: 6;
 }
 .main.rail-open .main-topbar { right: 380px; }
-/* Centered title column (§22, amended: the ⋯ menu removed — the nav row's hover cluster owns
-   pin/rename/archive/delete). Title + facts subtitle beneath.
-   ABSOLUTE centering (owner catch 2026-07-13: a long mention-spawned title painted over the
-   topbar icons): the flex sides can't guarantee clearance — the settings row's rest-state
-   glance occupies space by design, so every content-based flex floor over-reserves. Centering
-   on the BAR and capping against its width (100% here = the topbar, not the viewport — the
-   right rail sits outside it) makes the title ellipsize before it can reach either cluster:
-   332px ≈ 2 × (collapsed cluster + settings icon + gaps). */
+/* The title and subtitle occupy a centered, shrinkable column between the two topbar sides. */
 .main-title {
-  position: absolute; left: 50%; top: 0; height: 100%; transform: translateX(-50%);
-  max-width: max(96px, calc(100% - 332px));
+  position: static; flex: 0 1 460px; min-width: 96px; max-width: 460px; height: 100%;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
+  overflow: hidden;
   font-size: 13px; font-weight: 600; color: var(--ink);
 }
 /* The overlay build pads the collapsed cluster past the traffic lights — reserve that too. */
-.app.nav-collapsed.tauri-overlay .main-title { max-width: max(96px, calc(100% - 416px)); }
-.main-title-text { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: min(460px, 100%); }
+.app.nav-collapsed.tauri-overlay .main-title { max-width: 460px; }
+.main-title-text { display: block; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; text-align: center; }
 .title-ghost { color: var(--faint); font-weight: 400; }
 /* The facts subtitle — fixed facts, not controls (persona · model · folder); click → coworker page. */
 .title-sub {
   border: 0; background: none; padding: 0; font: inherit;
   font-size: 11px; font-weight: 400; line-height: 1.25; color: var(--faint);
-  max-width: min(460px, 100%); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;
+  width: 100%; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;
 }
 .title-sub:hover { color: var(--muted); }
 /* Equal-flex side regions keep the subtitle centered; they double as window-drag surfaces. */
 .main-topbar-side { align-self: stretch; flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 6px; }
-.main-topbar-actions { justify-content: flex-end; }
+.main-topbar-actions { justify-content: flex-end; min-width: 0; overflow: hidden; }
+.main-topbar-actions > * { min-width: 0; }
+.main-topbar-actions select { flex: 0 1 180px; }
+.main-topbar-actions label {
+  flex: 0 1 auto;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
 .topbar-icon-btn {
   width: 30px; height: 30px; display: grid; place-items: center;
   border: 0; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer;
@@ -623,6 +624,14 @@ button.btn.danger { color: var(--accent); }
   max-width: 180px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.main-topbar-actions .topbar-remote-status {
+  flex: 0 1 220px;
+  min-width: 0;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .main.rail-open:has(.right-panel-shell.artifact-mode) .main-chat { margin-right: var(--artifact-rail-w); }
 .main.rail-open:has(.right-panel-shell.artifact-mode) .main-topbar { right: var(--artifact-rail-w); }

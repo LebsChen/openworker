@@ -11,5 +11,9 @@
 | `surfaces/gui/src/tauri.ts` | 暴露远程 profile 管理命令的薄 frontend bridge。 | 连接 Settings UI 与 Rust 的安全存储/激活逻辑。 | rebase 后确认命令名和 snake_case 参数与 Rust `#[tauri::command]` 一致。 |
 | `surfaces/gui/src/components/SettingsView.tsx` | 增加 Remote host profile 管理卡片。 | 为多 profile 保存、选择和恢复本机模式提供用户入口。 | rebase 后确认 token 仅作为 password 输入传给 Rust，不写入 localStorage/普通前端配置。 |
 | `surfaces/gui/src/App.tsx` | 启动失败时展示远程连接错误和 no-fallback 说明；扩展 Settings deep-link 类型。 | 让远程错误保持在远程模式语义下，而不是落入本机 folder gate。 | rebase 后确认远程 health 失败不会调用任何本机启动逻辑。 |
+| `surfaces/gui/src/App.tsx` | 接入右侧 session panel、按绑定 host 加载面板数据；切换 session 时清空旧 transcript/usage，并用请求代次阻止旧消息响应覆盖当前 session。 | 保持右栏和消息历史遵循 session → host 绑定，避免远程 host 离线时串显上一个 session 的内容。 | rebase 后确认 panel 请求继续使用 `hostForSession(sessionId)`，session 切换和失败加载不会恢复旧 `items`。 |
+| `surfaces/gui/src/styles.css` | 增加 Cloud-Dev 风格 right-panel shell/drawer/icon rail 布局；同步 380px drawer 占位；为 topbar 标题、host picker 和 remote 状态提供可收缩 flex 与 ellipsis 约束。 | 让右栏展开时不覆盖顶栏，并保证长 session 标题、host picker、offline 提示互不重叠。 | rebase 后确认 `.main-topbar`、`.main-chat` 与 panel drawer 宽度同步，标题和右侧控件均可收缩。 |
+| `surfaces/gui/src/components/Icon.tsx` | 增加 `terminal` 与 `monitor` 图标。 | 为 Shell、Browser/Desktop 的 icon rail 入口提供不重复且语义对应的图标。 | rebase 后确认新增 path 与现有 stroke/fill 风格一致，IconName 联合类型同步更新。 |
+| `surfaces/gui/src/components/RightRail.tsx` | 将旧 inspector 改为常驻 icon rail + 左侧 drawer；增加 Info、Worklog、File changes 及 RVM-only 空态，pane 保持 mounted；Worklog 使用统一 selector，Artifacts 使用绑定 host。 | 对齐 Cloud-Dev right-shell 交互，同时保留 Progress/Access/Artifacts 和 Local/Remote host 语义。 | rebase 后确认切换 icon 不卸载 pane，Local 禁用 RVM 标签，所有 REST 请求使用 session 绑定 host。 |
 
 - `coworker/server/manager.py`, `coworker/server/app.py`: explicit `isolate` session option; user-selected workspaces remain unchanged unless isolation is requested. Session list exposes actual isolation/worktree metadata.

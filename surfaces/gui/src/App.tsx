@@ -208,6 +208,7 @@ export function App() {
   const [projects, setProjects] = useState<RecentWorkspace[]>([]);
   const [sessionId, setSessionId] = useState<string>(newId());
   const [sessionHost, setSessionHost] = useState<SessionHost>(() => sessionHosts()[0]);
+  const sessionLoadRef = useRef(0);
   const [isolateWorkspace, setIsolateWorkspace] = useState(false);
   // Automation-run context (§ owner ask 2026-07-04): which task an open __run__ session belongs
   // to, driving the banner + "Back to runs". Best-effort — a run session without context still
@@ -1070,7 +1071,10 @@ export function App() {
 
   const openSessionFromInbox = (sid: string, ws: string, ag: string) => selectSession(sid, ws, ag);
   const selectSession = async (id: string, ws: string, ag: string, hostId?: string) => {
+    const loadId = ++sessionLoadRef.current;
     setSurface("session"); // selecting a conversation always returns to the conversation view
+    setItems([]);
+    setUsage(emptyUsage());
     setTodo([]);
     setStreaming("");
     setRunning(false);
@@ -1090,9 +1094,13 @@ export function App() {
     setSessionId(id);
     try {
       const messages = await getSessionMessages(id, selectedHost);
+      if (loadId !== sessionLoadRef.current) return;
       setItems(itemsFromMessages(messages));
       setUsage(usageFromMessages(messages));
     } catch {
+      if (loadId !== sessionLoadRef.current) return;
+      setItems([]);
+      setUsage(emptyUsage());
       setSessionOffline(!selectedHost?.local);
     }
   };
@@ -1582,7 +1590,7 @@ export function App() {
               </select>
             )}
             {!sessionHost.local && (sessionHost.offline || sessionHost.status !== "online") && (
-              <div role="status" className="text-[11px] text-warnInk">
+              <div className="topbar-remote-status text-[11px] text-warnInk" role="status">
                 Remote host "{sessionHost.name}" is {sessionHost.status === "auth_failed" ? "authentication failed" : "offline or untested"}; this session will not fall back to Local.
               </div>
             )}
