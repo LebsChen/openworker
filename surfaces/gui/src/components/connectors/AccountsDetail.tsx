@@ -48,7 +48,7 @@ export function AccountsDetail({ c, cloud, slack: _slack, onChanged }: DetailPro
                 </span>
               </>
             ) : (
-              <span>{t("ui.AccountsDetail.8b02f3de39")}</span>
+              <span>{t("connectors.accounts.notConnected")}</span>
             )}
           </div>
         </div>
@@ -69,7 +69,7 @@ export function AccountsDetail({ c, cloud, slack: _slack, onChanged }: DetailPro
 
       {accounts.length > 0 && (
         <>
-          <div className={GRP_H + " !mt-0"}>{t("ui.AccountsDetail.36bae31694")}</div>
+          <div className={GRP_H + " !mt-0"}>{t("connectors.accounts.accounts")}</div>
           <div className={GRP} data-testid="accounts-group">
             {accounts.map((a) => (
               <Row key={a.account_id} connector={c.name} a={a} onChanged={onChanged} />
@@ -126,7 +126,7 @@ function Row({
             {a.account_id}
           </span>
         )}
-        {a.default && <span className={TAG_ACCENT}>{t("ui.AccountsDetail.808d7dca8a")}</span>}
+        {a.default && <span className={TAG_ACCENT}>{t("connectors.accounts.default")}</span>}
       </span>
       {!a.default && (
         <button
@@ -142,7 +142,7 @@ function Row({
       )}
       <button
         className={XBTN}
-        title={t("ui.AccountsDetail.dd8d964aa2")}
+        title={t("connectors.accounts.disconnectAccount")}
         data-testid={`account-disconnect-${a.account_id}`}
         disabled={busy}
         onClick={async () => {

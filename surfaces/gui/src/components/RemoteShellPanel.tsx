@@ -90,7 +90,7 @@ export function RemoteShellPanel({ active, sessionId, host }: Props) {
     return (
       <div className="right-panel-empty">
         <h3>Shell</h3>
-        <p>{t("ui.RemoteShellPanel.99ddc42edf")}</p>
+        <p>{t("shell.requiresRvmHostLocalSessionsDoNotProvidePty")}</p>
       </div>
     );
   }

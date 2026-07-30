@@ -145,7 +145,7 @@ export function ChannelPicker({
       <input
         ref={inputRef}
         className="chan-input w-full"
-        placeholder={t("ui.SubscriptionsChip.85538b9eee")}
+        placeholder={t("subscriptions.slackC0123ChannelLink")}
         value={display}
         title={value || undefined}
         onChange={(e) => {
@@ -290,23 +290,23 @@ export function SubscriptionsChip({
     <div className="sub-chip-wrap" ref={ref}>
       <button
         className={"wschip sub-chip" + (open ? " active" : "")}
-        title={t("ui.SubscriptionsChip.7e9b55e1cb")}
+        title={t("subscriptions.channelsSessionListens")}
         onClick={() => setOpen((v) => !v)}
       >
         <Icon name="plug" size={12} /> {channels.length || "+"}
       </button>
       {open && (
         <div className="sub-pop" onMouseDown={(e) => e.stopPropagation()}>
-          <div className="sub-pop-head">{t("ui.SubscriptionsChip.7e9b55e1cb")}</div>
+          <div className="sub-pop-head">{t("subscriptions.channelsSessionListens")}</div>
           {channels.length === 0 ? (
-            <div className="dim sub-pop-empty">{t("ui.SubscriptionsChip.eee37b8374")}</div>
+            <div className="dim sub-pop-empty">{t("subscriptions.notSubscribedAnyChannel")}</div>
           ) : (
             channels.map((c) => {
               const nm = recent.find((r) => r.channel === c)?.name;
               return (
               <div className="sub-pop-row" key={c}>
                 <span className="sub-pop-chan" title={c}>{nm ? `#${nm}` : c}</span>
-                <button className="sub-pop-x" title={t("ui.SubscriptionsChip.834cc0ee60")} onClick={() => remove(c)}>
+                <button className="sub-pop-x" title={t("subscriptions.unsubscribe")} onClick={() => remove(c)}>
                   ×
                 </button>
               </div>

@@ -28,7 +28,7 @@ function ArtifactChip({ path, title }: { path: string; title: string }) {
         <b>{title || file}</b>
         {title && title !== file && <span>{file}</span>}
       </span>
-      <span className="art-chip-open">{t("ui.Markdown.c6d750d47e")}</span>
+      <span className="art-chip-open">{t("artifacts.markdown.open")}</span>
     </button>
   );
 }

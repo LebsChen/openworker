@@ -36,7 +36,7 @@ function BubbleMeta({ text, ts, align }: { text: string; ts?: number; align: "le
         <button
           className="flex items-center cursor-pointer hover:text-muted"
           data-testid="bubble-copy"
-          title={t("ui.Transcript.26902efda3")}
+          title={t("transcript.copyMessage")}
           onClick={copy}
         >
           {copied ? "Copied" : <Icon name="copy" size={11} />}
@@ -135,7 +135,7 @@ function buildRows(items: TurnItem[]): TurnRow[] {
 
 function approvalChip(resolved: ApprovalDecision | undefined) {
   if (resolved === "deny")
-    return <span className="text-[10.5px] px-1.5 rounded-full bg-dangerSoft text-danger shrink-0">{t("ui.Transcript.dd6d4df76a")}</span>;
+    return <span className="text-[10.5px] px-1.5 rounded-full bg-dangerSoft text-danger shrink-0">{t("transcript.declined")}</span>;
   return (
     <span
       className="text-[10.5px] px-1.5 rounded-full bg-okSoft text-ok shrink-0"
@@ -181,7 +181,7 @@ function StepRow({ tool, approval }: { tool: ToolItem; approval?: ApprovalItem }
           <span
             className="text-[11px] text-warnInk shrink-0"
             data-testid="tool-hidden-count"
-            title={t("ui.Transcript.c601e992e3")}
+            title={t("transcript.removedPrivacyFiltersBeforeAgentSawResultsAgentsGetNoTraceTh")}
           >
             {tool.hidden} hidden
           </span>
@@ -414,7 +414,7 @@ export function Transcript({ items, running, streamingText, onRetry }: Props) {
               );
             return (
               <div className="group bubble-assistant" key={bi}>
-                <div className="who">{t("ui.Transcript.27a9612b32")}</div>
+                <div className="who">{t("transcript.assistant")}</div>
                 {item.reasoning && <ThinkingBlock text={item.reasoning} />}
                 <Markdown text={item.text} />
                 <BubbleMeta text={item.text} ts={item.ts} align="left" />
@@ -435,7 +435,7 @@ export function Transcript({ items, running, streamingText, onRetry }: Props) {
             if (!item.resolved) return null; // pending plan renders in the composer head
             return (
               <div className="bubble-assistant" key={bi}>
-                <div className="who">{t("ui.Transcript.31aebe5c0e")}</div>
+                <div className="who">{t("transcript.proposedPlan")}</div>
                 <Markdown text={item.plan} />
                 <div className="approval-inline">
                   <span className={"status " + (item.resolved === "approved" ? "ok" : "denied")}>

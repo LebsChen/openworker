@@ -42,7 +42,7 @@ export function InboxConfigure() {
       {/* Unrouted = delivery FAILURES ("messages that never reached you"), so it lives with
           the Inbox now (§28; previously with routing under Connectors, §26). */}
       <div className="mt-6" data-testid="unrouted-section">
-        <h3 className="text-[14px] font-semibold mb-1">{t("ui.InboxConfigure.518e1d13bf")}</h3>
+        <h3 className="text-[14px] font-semibold mb-1">{t("inbox.configure.unrouted")}</h3>
         <p className="text-[12.5px] text-muted mb-3">
           Inbound messages and background-turn failures nothing claimed — nothing vanishes
           silently.
@@ -125,7 +125,7 @@ function InboxRoutingCard() {
 
   return (
     <div className={CARD + " p-4"} data-testid="inbox-mirror-card">
-      <div className="font-semibold text-[13.5px] mb-1">{t("ui.InboxConfigure.c95244d1e0")}</div>
+      <div className="font-semibold text-[13.5px] mb-1">{t("inbox.configure.unattendedApprovals")}</div>
       <p className="text-[12px] text-muted mb-3">
         Channel where an Unattended session posts Approve/Deny buttons. Currently mirroring to{" "}
         <strong className="text-ink font-medium" title={target || undefined}>
@@ -185,7 +185,7 @@ function DmRouteCard() {
 
   return (
     <div className={CARD + " p-4"}>
-      <div className="font-semibold text-[13.5px] mb-1">{t("ui.InboxConfigure.e7596a0986")}</div>
+      <div className="font-semibold text-[13.5px] mb-1">{t("inbox.configure.directMessages")}</div>
       <p className="text-[12px] text-muted mb-3">
         Session that handles DMs to the bot. With none, DMs park under Unrouted below.
       </p>
@@ -194,7 +194,7 @@ function DmRouteCard() {
           <Icon name="chat" size={16} />
         </span>
         <select className={"flex-1 " + SELECT} value={dm} onChange={(e) => choose(e.target.value)}>
-          <option value="">{t("ui.InboxConfigure.7430c6454b")}</option>
+          <option value="">{t("inbox.configure.noSessionParkDms")}</option>
           {real.map((s) => (
             <option key={s.session_id} value={s.session_id}>
               {s.title || s.session_id}
@@ -244,17 +244,17 @@ function SubscriptionsCard() {
         <span className="text-muted shrink-0">
           <Icon name="plug" size={15} />
         </span>
-        <span className="font-semibold text-[13.5px]">{t("ui.InboxConfigure.9ea7f3c07e")}</span>
-        <span className="text-[12px] text-muted">{t("ui.InboxConfigure.567efc8ecc")}</span>
+        <span className="font-semibold text-[13.5px]">{t("inbox.configure.channelSubscriptions")}</span>
+        <span className="text-[12px] text-muted">{t("inbox.configure.sessionsThatListenChannelInbound")}</span>
       </div>
 
       {subs && subs.length > 0 ? (
         <table className="w-full text-[13px]">
           <thead className="text-[11px] uppercase tracking-[0.04em] text-faint">
             <tr className="text-left">
-              <th className="font-medium px-4 py-2">{t("ui.InboxConfigure.f7f1997c6c")}</th>
-              <th className="font-medium px-4 py-2">{t("ui.InboxConfigure.3dfb44775d")}</th>
-              <th className="font-medium px-4 py-2">{t("ui.InboxConfigure.e5fa84c5c2")}</th>
+              <th className="font-medium px-4 py-2">{t("inbox.configure.session")}</th>
+              <th className="font-medium px-4 py-2">{t("inbox.configure.listens")}</th>
+              <th className="font-medium px-4 py-2">{t("inbox.configure.inboxRoutes")}</th>
               <th className="px-4 py-2" />
             </tr>
           </thead>
@@ -277,7 +277,7 @@ function SubscriptionsCard() {
                   {s.collision && (
                     <span
                       className="ml-1.5 text-[11px] text-warnInk bg-warnSoft/70 border border-warnInk/15 rounded px-1.5 py-0.5"
-                      title={t("ui.InboxConfigure.7455b2fb14")}
+                      title={t("inbox.configure.channelAlsoInboxRoutingTargetInboundOutboundOneChannelConfla")}
                     >
                       ⚠ collides
                     </span>
@@ -287,7 +287,7 @@ function SubscriptionsCard() {
                 <td className="px-4 py-2.5 text-right">
                   <button
                     className="text-faint hover:text-danger"
-                    title={t("ui.InboxConfigure.834cc0ee60")}
+                    title={t("inbox.configure.unsubscribe")}
                     onClick={() => remove(s.session_id, s.channel)}
                   >
                     ×
@@ -309,7 +309,7 @@ function SubscriptionsCard() {
           value={addSession}
           onChange={(e) => setAddSession(e.target.value)}
         >
-          <option value="">{t("ui.InboxConfigure.8d7cb2398e")}</option>
+          <option value="">{t("inbox.configure.chooseSession")}</option>
           {real.map((s) => (
             <option key={s.session_id} value={s.session_id}>
               {s.title || s.session_id}
@@ -349,10 +349,10 @@ function UnroutedTable() {
       <table className="w-full text-[13px]">
         <thead className="text-[11px] uppercase tracking-[0.04em] text-faint">
           <tr className="text-left">
-            <th className="font-medium px-4 py-2">{t("ui.InboxConfigure.769bb19e61")}</th>
-            <th className="font-medium px-4 py-2">{t("ui.InboxConfigure.6da13addb0")}</th>
-            <th className="font-medium px-4 py-2">{t("ui.InboxConfigure.f219cc0614")}</th>
-            <th className="font-medium px-4 py-2">{t("ui.InboxConfigure.68f4145fee")}</th>
+            <th className="font-medium px-4 py-2">{t("inbox.configure.when")}</th>
+            <th className="font-medium px-4 py-2">{t("inbox.configure.source")}</th>
+            <th className="font-medium px-4 py-2">{t("inbox.configure.reason")}</th>
+            <th className="font-medium px-4 py-2">{t("inbox.configure.message")}</th>
           </tr>
         </thead>
         <tbody>

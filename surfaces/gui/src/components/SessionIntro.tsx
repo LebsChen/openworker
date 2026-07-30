@@ -78,10 +78,10 @@ export function SessionIntro({
       <div className="intro-tasks">
         <button className="task-card" data-testid="intro-task-folder" onClick={pickFolder}>
           <span className="task-card-body">
-            <span className="task-card-title">{t("ui.SessionIntro.842a3365ee")}</span>
-            <span className="task-card-sub">{t("ui.SessionIntro.4f938924ae")}</span>
+            <span className="task-card-title">{t("session.intro.analyzeFilesDirectory")}</span>
+            <span className="task-card-sub">{t("session.intro.iLlReadThemSummarizeWhatMatters")}</span>
           </span>
-          <span className="task-card-act">{t("ui.SessionIntro.ed4b21f0c2")}</span>
+          <span className="task-card-act">{t("session.intro.pickFolder")}</span>
         </button>
         {addingFolder && (
           <div className="intro-addfolder">
@@ -105,7 +105,7 @@ export function SessionIntro({
           onClick={() => (hubspotReady ? onPrefill(HUBSPOT_PROMPT) : onOpenSessionSettings())}
         >
           <span className="task-card-body">
-            <span className="task-card-title">{t("ui.SessionIntro.829fd9cbec")}</span>
+            <span className="task-card-title">{t("session.intro.createReportMyHubspotLeads")}</span>
             <span className="task-card-sub">
               {dot("hubspot", hubspotReady)}
               Sources, stages, and who needs follow-up
@@ -120,7 +120,7 @@ export function SessionIntro({
           onClick={() => (ghSlackReady ? onPrefill(GH_SLACK_PROMPT) : onOpenSessionSettings())}
         >
           <span className="task-card-body">
-            <span className="task-card-title">{t("ui.SessionIntro.5ed2618c6e")}</span>
+            <span className="task-card-title">{t("session.intro.automateWeeklyGithubProgressReportSlack")}</span>
             <span className="task-card-sub">
               {dot("github", live.has("github"))}
               {dot("slack", live.has("slack"))}

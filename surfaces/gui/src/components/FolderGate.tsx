@@ -50,13 +50,13 @@ export function FolderGate({ onChoose, onCancel, create }: Props) {
 
         <div className="gate-input">
           <input
-            placeholder={t("ui.FolderGate.456b30b4a6")}
+            placeholder={t("workspace.trust.pathProject")}
             value={path}
             onChange={(e) => setPath(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && open(path, create)}
             autoFocus
           />
-          <button className="btn" onClick={browse} title={t("ui.FolderGate.556e154dd8")}>
+          <button className="btn" onClick={browse} title={t("workspace.trust.pickFolder")}>
             Browse…
           </button>
           <button className="btn primary" onClick={() => open(path, create)} disabled={!path.trim()}>
@@ -67,7 +67,7 @@ export function FolderGate({ onChoose, onCancel, create }: Props) {
 
         {recents.length > 0 && (
           <>
-            <div className="gate-label">{t("ui.FolderGate.76eec760c9")}</div>
+            <div className="gate-label">{t("workspace.trust.recent")}</div>
             <div className="gate-recents">
               {recents.map((w) => (
                 <div className="gate-recent" key={w.path} onClick={() => open(w.path)} title={w.path}>

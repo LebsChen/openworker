@@ -28,7 +28,7 @@ export function WorkspaceTrustPrompt({
     <div className="gate-overlay" role="dialog" aria-modal="true" aria-labelledby="workspace-trust-title">
       <div className="gate max-w-[560px]">
         <div className="gate-mark">✦</div>
-        <h2 id="workspace-trust-title">{t("ui.WorkspaceTrustPrompt.771f7a1ba2")}</h2>
+        <h2 id="workspace-trust-title">{t("workspace.trust.trustWorkspaceRsquoSCommands")}</h2>
         <p className="gate-sub">
           This project asks OpenWorker to run the commands below without individual approval.
           Trust applies to future configuration changes at this exact folder until you revoke it

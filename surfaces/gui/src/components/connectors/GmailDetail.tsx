@@ -32,7 +32,7 @@ export function GmailDetail({ c, cloud, slack: _slack, onChanged }: DetailProps)
   return (
     <div data-testid="gmail-detail">
       <div className="flex items-center gap-3.5 mb-5">
-        <ConnectorBadge connector={c} size={44} title={t("ui.GmailDetail.eabdf94e13")} />
+        <ConnectorBadge connector={c} size={44} title={t("connectors.gmail.gmail")} />
         <div className="min-w-0 flex-1">
           <h2 className="text-[20px] font-semibold tracking-tight leading-tight">Gmail</h2>
           <div className="text-[12.5px] text-muted flex items-center gap-1.5">
@@ -44,7 +44,7 @@ export function GmailDetail({ c, cloud, slack: _slack, onChanged }: DetailProps)
                 </span>
               </>
             ) : (
-              <span>{t("ui.GmailDetail.8b02f3de39")}</span>
+              <span>{t("connectors.gmail.notConnected")}</span>
             )}
           </div>
         </div>
@@ -103,7 +103,7 @@ function AccountRow({ a, onChanged }: { a: GmailAccount; onChanged: () => void }
       <span className="min-w-0 flex-1 flex items-center gap-2">
         <span className="text-[13px] font-medium truncate">{a.email}</span>
         {a.default && <span className={TAG_ACCENT}>Default</span>}
-        {a.needs_reauth && <span className={TAG_WARN}>{t("ui.GmailDetail.2cdc3a5e71")}</span>}
+        {a.needs_reauth && <span className={TAG_WARN}>{t("connectors.gmail.signAgain")}</span>}
       </span>
       {!a.default && (
         <button
@@ -119,7 +119,7 @@ function AccountRow({ a, onChanged }: { a: GmailAccount; onChanged: () => void }
       )}
       <button
         className={XBTN}
-        title={t("ui.GmailDetail.bff8e59a81")}
+        title={t("connectors.gmail.disconnectMailbox")}
         data-testid={`gmail-disconnect-${a.email}`}
         disabled={busy}
         onClick={async () => {
@@ -139,12 +139,12 @@ function FiltersGroup({ c, onChanged }: Pick<DetailProps, "c" | "onChanged">) {
   const filters = c.filters ?? { senders: [], labels: [] };
   return (
     <>
-      <div className={GRP_H}>{t("ui.GmailDetail.bb07c046c2")}</div>
+      <div className={GRP_H}>{t("connectors.gmail.neverShowAgents")}</div>
       <div className={GRP} data-testid="gmail-filters">
         <ChipListRow
           label="Senders"
           testid="gmail-filter-senders"
-          placeholder={t("ui.GmailDetail.7f58dd2520")}
+          placeholder={t("connectors.gmail.nameExampleComDomainCom")}
           values={filters.senders}
           onSave={async (senders) => {
             await setGmailFilters({ senders });
@@ -154,7 +154,7 @@ function FiltersGroup({ c, onChanged }: Pick<DetailProps, "c" | "onChanged">) {
         <ChipListRow
           label="Labels"
           testid="gmail-filter-labels"
-          placeholder={t("ui.GmailDetail.867e8bbb74")}
+          placeholder={t("connectors.gmail.labelNameEGPersonal")}
           values={filters.labels}
           onSave={async (labels) => {
             await setGmailFilters({ labels });
@@ -201,7 +201,7 @@ function ChipListRow({
             {v}
             <button
               className={XBTN}
-              title={t("ui.GmailDetail.db99845855")}
+              title={t("connectors.gmail.remove")}
               onClick={() => onSave(values.filter((x) => x !== v))}
             >
               ×

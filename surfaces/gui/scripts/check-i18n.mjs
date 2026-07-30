@@ -10,9 +10,12 @@ const source = path.resolve(here, "../src");
 const text = collect(source);
 const keys = new Set([...text.matchAll(/\bt\("([^"]+)"/g)].map((match) => match[1]));
 const missingEn = [...keys].filter((key) => !(key in en));
+const invalid = Object.keys(en).filter(
+  (key) => key !== "test.englishFallback" && (/^ui\./.test(key) || /(?:^|\.)([0-9a-f]{8,})$/.test(key)),
+);
 const unused = Object.keys(en).filter((key) => !keys.has(key) && !key.startsWith("test."));
-if (missingEn.length || unused.length) {
-  console.error(JSON.stringify({ missingEn, unused }, null, 2));
+if (missingEn.length || invalid.length || unused.length) {
+  console.error(JSON.stringify({ missingEn, invalid, unused }, null, 2));
   process.exit(1);
 }
 console.log(`${keys.size} translation keys checked`);

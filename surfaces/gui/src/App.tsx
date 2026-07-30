@@ -1506,7 +1506,7 @@ export function App() {
         {overlay && (
           <div className="titlebar-drag" data-tauri-drag-region>
             <span className="titlebar-brand brand-wordmark">
-              <Icon name="logo" size={13} className="mark" /> OpenWorker<span className="beta-tag">{t("ui.App.28d6304dd6")}</span>
+              <Icon name="logo" size={13} className="mark" /> OpenWorker<span className="beta-tag">{t("app.beta")}</span>
             </span>
           </div>
         )}
@@ -1522,7 +1522,7 @@ export function App() {
         </div>
         <div className="boot-text">
           {remoteError || (resumedExisting ? "Restoring your session…" : "Starting OpenWorker…")}
-          <span className="beta-tag">{t("ui.App.28d6304dd6")}</span>
+          <span className="beta-tag">{t("app.beta")}</span>
         </div>
         {remoteError && (
           <div className="mt-4 max-w-md text-center text-[12px] text-danger" role="alert">
@@ -1578,7 +1578,7 @@ export function App() {
             <button
               className="text-[12px] text-faint px-0.5"
               data-testid="toast-dismiss"
-              title={t("ui.App.70afe9eff3")}
+              title={t("app.dismiss")}
               onClick={() => setRunToast(null)}
             >
               ✕
@@ -1605,8 +1605,8 @@ export function App() {
           className="nav-reveal-btn"
           onClick={toggleNav}
           onMouseEnter={() => setNavPeek(true)}
-          title={t("ui.App.460520ad32")}
-          aria-label={t("ui.App.5982a293c5")}
+          title={t("app.showSidebarB")}
+          aria-label={t("app.showSidebar")}
         >
           <Icon name="sidebar" size={16} />
         </button>
@@ -1710,24 +1710,24 @@ export function App() {
                 <button
                   className="topbar-icon-btn"
                   onClick={toggleNav}
-                  aria-label={t("ui.App.5982a293c5")}
-                  title={t("ui.App.460520ad32")}
+                  aria-label={t("app.showSidebar")}
+                  title={t("app.showSidebarB")}
                 >
                   <Icon name="sidebar" size={16} />
                 </button>
                 <button
                   className="topbar-icon-btn"
                   onClick={() => startNewSession()}
-                  aria-label={t("ui.App.5c881d23b5")}
-                  title={t("ui.App.5c881d23b5")}
+                  aria-label={t("app.newSession")}
+                  title={t("app.newSession")}
                 >
                   <Icon name="plus" size={16} />
                 </button>
                 <button
                   className="topbar-icon-btn"
                   onClick={() => setSearchOpen(true)}
-                  aria-label={t("ui.App.bce0641417")}
-                  title={t("ui.App.bce0641417")}
+                  aria-label={t("app.search")}
+                  title={t("app.search")}
                 >
                   <Icon name="search" size={16} />
                 </button>
@@ -1760,7 +1760,7 @@ export function App() {
           <div className="main-topbar-side main-topbar-actions" onPointerDown={beginWindowDrag}>
             {sessionHosts().length > 1 && hostStatusVersion >= 0 && (
               <select
-                aria-label={t("ui.App.ed725abe55")}
+                aria-label={t("app.sessionHost")}
                 value={sessionHost.id}
                 onChange={(e) => {
                   const host = sessionHosts().find((candidate) => candidate.id === e.target.value);
@@ -1782,7 +1782,7 @@ export function App() {
             )}
             {personas && personas.length > 1 && (
               <select
-                aria-label={t("ui.App.8c31611829")}
+                aria-label={t("app.sessionPersona")}
                 value={agent}
                 disabled={running}
                 onChange={(e) => changePersona(e.target.value)}
@@ -1810,7 +1810,7 @@ export function App() {
                 Remote host "{sessionHost.name}" is {sessionHost.status === "auth_failed" ? "authentication failed" : "offline or untested"}; this session will not fall back to Local.
               </div>
             )}
-            <label className="flex items-center gap-1 text-[11px] text-muted" title={t("ui.App.19713fca8b")}>
+            <label className="flex items-center gap-1 text-[11px] text-muted" title={t("app.createSessionIsolatedWorkspace")}>
               <input
                 type="checkbox"
                 checked={isolateWorkspace}
@@ -1823,10 +1823,10 @@ export function App() {
                 className="topbar-artifacts-btn"
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={() => setRailHidden(false)}
-                title={t("ui.App.b5ba672718")}
+                title={t("app.showFilesConversationProduced")}
               >
                 <Icon name="file" size={14} />
-                <span>{t("ui.App.a5b79f5961")}</span>
+                <span>{t("app.artifacts")}</span>
                 <span className="topbar-artifacts-count">{artifactCount}</span>
               </button>
             )}
@@ -1906,9 +1906,9 @@ export function App() {
             <div className="main-scroll" ref={scrollRef} onScroll={handleScroll}>
               {idle && sessionHistoryUnavailable && !sessionHost.local ? (
                 <div className="session-history-unavailable">
-                  <h1>{t("ui.App.a0b8ed022d")}</h1>
+                  <h1>{t("app.canAposTLoadSessionAposSHistory")}</h1>
                   <p>Remote host &quot;{sessionHost.name}&quot; is offline.</p>
-                  <p>{t("ui.App.dc863b5446")}</p>
+                  <p>{t("app.historyRemainsThatHostWillReloadWhenAvailableAgain")}</p>
                 </div>
               ) : idle ? (
                 agent === "cowork" ? (
@@ -1926,7 +1926,7 @@ export function App() {
                     </h1>
                     {needsWorkspace(agent) && (
                       <div className="suggestions">
-                        <div className="suggest-head">{t("ui.App.00d9a012da")}</div>
+                        <div className="suggest-head">{t("app.tryTask")}</div>
                         {SUGGESTIONS.map((s, i) => (
                           <div className="suggest" key={i} onClick={() => workspace && send(s.text)}>
                             <span className="ico">{s.ico}</span>
@@ -1964,7 +1964,7 @@ export function App() {
                   {streaming && streamMode(streaming, items, running) === "answer" && (
                     <div className="transcript">
                       <div className="bubble-assistant">
-                        <div className="who">{t("ui.App.27a9612b32")}</div>
+                        <div className="who">{t("app.assistant")}</div>
                         <Markdown text={streaming} />
                         <span className="stream-cursor">▍</span>
                       </div>
@@ -2130,7 +2130,7 @@ function WaitingForAgent() {
     <div className="waiting-transcript">
       <div className="waiting-row" aria-live="polite">
         <span className="waiting-spinner" />
-        <span>{t("ui.App.870a1648c4")}</span>
+        <span>{t("app.waitingAgent")}</span>
       </div>
     </div>
   );

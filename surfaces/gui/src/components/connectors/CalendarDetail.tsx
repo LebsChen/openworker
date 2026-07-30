@@ -28,7 +28,7 @@ export function CalendarDetail({ c, cloud, slack: _slack, onChanged }: DetailPro
   return (
     <div data-testid="gcal-detail">
       <div className="flex items-center gap-3.5 mb-5">
-        <ConnectorBadge connector={c} size={44} title={t("ui.CalendarDetail.570374e4e4")} />
+        <ConnectorBadge connector={c} size={44} title={t("connectors.calendar.googleCalendar")} />
         <div className="min-w-0 flex-1">
           <h2 className="text-[20px] font-semibold tracking-tight leading-tight">
             Google Calendar
@@ -42,7 +42,7 @@ export function CalendarDetail({ c, cloud, slack: _slack, onChanged }: DetailPro
                 </span>
               </>
             ) : (
-              <span>{t("ui.CalendarDetail.8b02f3de39")}</span>
+              <span>{t("connectors.calendar.notConnected")}</span>
             )}
           </div>
         </div>
@@ -74,7 +74,7 @@ export function CalendarDetail({ c, cloud, slack: _slack, onChanged }: DetailPro
 
       {accounts.length > 0 && (
         <>
-          <div className={GRP_H + " !mt-0"}>{t("ui.CalendarDetail.36bae31694")}</div>
+          <div className={GRP_H + " !mt-0"}>{t("connectors.calendar.accounts")}</div>
           <div className={GRP} data-testid="gcal-accounts">
             {accounts.map((a) => (
               <AccountRow key={a.email} a={a} onChanged={onChanged} />
@@ -98,8 +98,8 @@ function AccountRow({ a, onChanged }: { a: GmailAccount; onChanged: () => void }
     <div className={ROW} data-testid={`gcal-account-${a.email}`}>
       <span className="min-w-0 flex-1 flex items-center gap-2">
         <span className="text-[13px] font-medium truncate">{a.email}</span>
-        {a.default && <span className={TAG_ACCENT}>{t("ui.CalendarDetail.808d7dca8a")}</span>}
-        {a.needs_reauth && <span className={TAG_WARN}>{t("ui.CalendarDetail.2cdc3a5e71")}</span>}
+        {a.default && <span className={TAG_ACCENT}>{t("connectors.calendar.default")}</span>}
+        {a.needs_reauth && <span className={TAG_WARN}>{t("connectors.calendar.signAgain")}</span>}
       </span>
       {!a.default && (
         <button
@@ -115,7 +115,7 @@ function AccountRow({ a, onChanged }: { a: GmailAccount; onChanged: () => void }
       )}
       <button
         className={XBTN}
-        title={t("ui.CalendarDetail.dd8d964aa2")}
+        title={t("connectors.calendar.disconnectAccount")}
         data-testid={`gcal-disconnect-${a.email}`}
         disabled={busy}
         onClick={async () => {

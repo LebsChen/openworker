@@ -149,7 +149,7 @@ export function InboxView({
       <div className="flex-1 min-w-0 overflow-y-auto hairline-scroll">
         <div className="max-w-4xl mx-auto px-7 py-6">
           <PanelHead
-            title={t("ui.InboxView.44caf74675")}
+            title={t("inbox.inbox")}
             sub="Approvals, questions, and notifications from your coworkers — including sessions running unattended."
           />
 
@@ -200,7 +200,7 @@ export function InboxView({
                     — replies there resolve items here.{" "}
                   </span>
                 ) : slackConnected ? (
-                  <span>{t("ui.InboxView.735ccf7ead")}</span>
+                  <span>{t("inbox.deliveredHereOnly")}</span>
                 ) : (
                   <span>
                     Delivered here only. Connect Slack (Connectors page) to also get these in a

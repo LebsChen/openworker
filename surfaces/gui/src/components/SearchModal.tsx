@@ -120,7 +120,7 @@ export function SearchModal({
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={t("ui.SearchModal.9ad51deafc")}
+            placeholder={t("search.searchChats")}
             className="flex-1 bg-transparent outline-none text-[15px] text-ink placeholder:text-faint"
           />
           <kbd className="text-[10.5px] text-faint bg-paper border border-line rounded px-1.5 py-0.5 font-sans">
@@ -129,7 +129,7 @@ export function SearchModal({
         </div>
         <div className="max-h-[52vh] overflow-y-auto hairline-scroll py-2">
           {ordered.length === 0 ? (
-            <div className="px-4 py-8 text-center text-[13px] text-faint">{t("ui.SearchModal.9d34525851")}</div>
+            <div className="px-4 py-8 text-center text-[13px] text-faint">{t("search.noChatsFound")}</div>
           ) : (
             <>
               {pinned.length > 0 && (

@@ -70,7 +70,7 @@ export function IntegrationsView() {
           {tab === "connectors" ? (
             <section>
               <PanelHead
-                title={t("ui.IntegrationsView.4b1e9501b9")}
+                title={t("integrations.connectors")}
                 sub="Apps and tools your coworkers can use. Connected ones come first."
               />
               <ConnectorsSection />
@@ -78,7 +78,7 @@ export function IntegrationsView() {
           ) : (
             <section>
               <PanelHead
-                title={t("ui.IntegrationsView.8d9a304fd9")}
+                title={t("integrations.mcpServers")}
                 sub="External tool servers (stdio or HTTP), shared across all agents."
               />
               <McpTab />

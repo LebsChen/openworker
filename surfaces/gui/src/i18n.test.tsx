@@ -7,7 +7,7 @@ function Probe() {
   return (
     <>
       <output data-testid="locale">{locale}</output>
-      <output data-testid="label">{t("ui.SettingsView.language")}</output>
+      <output data-testid="label">{t("settings.language")}</output>
       <output data-testid="fallback">{t("test.englishFallback")}</output>
       <button onClick={() => void setLocale("zh-CN")}>switch</button>
     </>

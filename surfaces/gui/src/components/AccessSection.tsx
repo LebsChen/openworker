@@ -232,7 +232,7 @@ export function AccessSection({
       <div className="rail-section-head">
         <button className="rail-section-toggle" onClick={() => setOpen((v) => !v)} data-testid="access-toggle">
           <Icon name={open ? "chevronDown" : "chevronRight"} size={14} className="rail-chev" />
-          <span>{t("ui.AccessSection.2f81a22de0")}</span>
+          <span>{t("session.access.access")}</span>
           <span
             className="ml-auto min-w-0 truncate text-[11px] font-normal text-faint"
             data-testid="access-summary"
@@ -243,7 +243,7 @@ export function AccessSection({
         </button>
       </div>
       {open && (
-        <div className="rail-section-body" role="region" aria-label={t("ui.AccessSection.da8e485bf6")}>
+        <div className="rail-section-body" role="region" aria-label={t("session.access.sessionAccess")}>
           {connectFor ? (
             <ConnectInline
               c={connectFor}
@@ -286,7 +286,7 @@ export function AccessSection({
             <div className="space-y-4">
               {/* Sources — each toggle is a per-session override (mute for THIS session only). */}
               <div>
-                <div className={`${SEC_H} mb-1.5`}>{t("ui.AccessSection.2eb56be3c2")}</div>
+                <div className={`${SEC_H} mb-1.5`}>{t("session.access.sources")}</div>
                 {connected.length === 0 && (
                   <div className="text-[12px] text-faint py-0.5">
                     No connectors enabled for this session.
@@ -317,14 +317,14 @@ export function AccessSection({
                       <Toggle
                         checked={c.enabled}
                         onChange={(next) => toggleSession(c.connector, next)}
-                        title={t("ui.AccessSection.cdbdee275b")}
+                        title={t("session.access.enabledSessionTapMuteHere")}
                       />
                     </div>
                   ))}
                 </div>
                 {connected.length > 0 && (
                   <p className="text-[10.5px] text-faint mt-1 leading-snug">
-                    Off mutes it for <b>{t("ui.AccessSection.76f661226f")}</b> — the connector stays connected.
+                    Off mutes it for <b>{t("session.access.sessionOnly")}</b> — the connector stays connected.
                   </p>
                 )}
                 {/* §32 addendum (owner ask 2026-07-13; FB-012): the catalog's long tail,
@@ -334,7 +334,7 @@ export function AccessSection({
                   <div className="mt-1.5">
                     <input
                       className="w-full px-2.5 py-1.5 rounded-lg border border-line bg-panel text-[12.5px] outline-none focus:border-accent"
-                      placeholder={t("ui.AccessSection.99e1c593c2")}
+                      placeholder={t("session.access.searchConnectors")}
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
                       onKeyDown={(e) => {
@@ -391,7 +391,7 @@ export function AccessSection({
 
               {recommended.length > 0 && (
                 <div>
-                  <div className={`${SEC_H} mb-1.5`}>{t("ui.AccessSection.9ef937556e")}</div>
+                  <div className={`${SEC_H} mb-1.5`}>{t("session.access.recommended")}</div>
                   <div className="space-y-1">
                     {recommended.map((r) => (
                       <div className="flex items-center gap-2 py-1" key={r.connector}>
@@ -399,7 +399,7 @@ export function AccessSection({
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5 text-[12.5px] font-medium leading-tight">
                             <span className="truncate">{labelFor(r.connector, byName)}</span>
-                            {r.tier === "core" && <span className={TAG_CORE}>{t("ui.AccessSection.94a0426e8d")}</span>}
+                            {r.tier === "core" && <span className={TAG_CORE}>{t("session.access.core")}</span>}
                           </div>
                           <div className="text-[11px] text-faint truncate" title={r.reason}>
                             {r.reason}
@@ -427,7 +427,7 @@ export function AccessSection({
                   a quiet "+" link, structurally identical to Sources (owner ask 2026-07-13:
                   the old drawer's card wrapper read too heavy in the rail). */}
               <div data-testid="drawer-directories">
-                <div className={`${SEC_H} mb-1.5`}>{t("ui.AccessSection.19adc47be3")}</div>
+                <div className={`${SEC_H} mb-1.5`}>{t("session.access.folders")}</div>
                 <div className="-mx-1.5">
                   {roots.map((r) => (
                     <RootRow
@@ -506,7 +506,7 @@ function ConnectInline({
       <button
         className="inline-flex items-center gap-1 text-[12px] text-faint hover:text-ink mb-2"
         onClick={onBack}
-        aria-label={t("ui.AccessSection.939f67afab")}
+        aria-label={t("session.access.backSources")}
       >
         <Icon name="arrowLeft" size={13} /> Connect {c.title}
       </button>
@@ -552,7 +552,7 @@ function ChannelsInline({
       <button
         className="inline-flex items-center gap-1 text-[12px] text-faint hover:text-ink mb-2"
         onClick={onBack}
-        aria-label={t("ui.AccessSection.939f67afab")}
+        aria-label={t("session.access.backSources")}
       >
         <Icon name="arrowLeft" size={13} /> {label} channels
       </button>
@@ -572,14 +572,14 @@ function ChannelsInline({
               {s.collision && (
                 <span
                   className="text-[10.5px] text-warnInk bg-warnSoft/70 border border-warnInk/15 rounded px-1 shrink-0"
-                  title={t("ui.AccessSection.d40e1c567d")}
+                  title={t("session.access.channelAlsoSessionSInboxRoutingTargetInboundOutboundCollide")}
                 >
                   ⚠
                 </span>
               )}
               <button
                 className="w-5 h-5 grid place-items-center text-faint hover:text-danger shrink-0"
-                title={t("ui.AccessSection.e134211eed")}
+                title={t("session.access.stopListening")}
                 onClick={() => onRemove(s.channel)}
               >
                 ×
@@ -588,7 +588,7 @@ function ChannelsInline({
           ))}
         </div>
       )}
-      <div className={`${SEC_H} mt-3 mb-1.5`}>{t("ui.AccessSection.83445b6f0e")}</div>
+      <div className={`${SEC_H} mt-3 mb-1.5`}>{t("session.access.addChannel")}</div>
       <div className="flex items-center gap-1.5">
         <ChannelPicker value={draft} onChange={onDraft} recent={recent} onSubmit={onAdd} />
         <button className={BTN_ACCENT} disabled={!draft.trim()} onClick={onAdd}>

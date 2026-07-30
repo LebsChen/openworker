@@ -27,17 +27,17 @@ export function DirectoryRequestCard({
     <div className="dirreq-card">
       <div className="dirreq-head">
         <Icon name="folderPlus" size={16} className="ico" />
-        <span>{t("ui.DirectoryRequestCard.9bdda5f48b")}</span>
+        <span>{t("permissions.directory.agentRequestingAccessFolder")}</span>
       </div>
       {item.reason && <div className="dirreq-reason">“{item.reason}”</div>}
       <div className="dirreq-pathrow">
         <input
           className="dirreq-path"
-          placeholder={t("ui.DirectoryRequestCard.b86947c9f1")}
+          placeholder={t("permissions.directory.choosePasteFolderPath")}
           value={path}
           onChange={(e) => setPath(e.target.value)}
         />
-        <button className="btn icon-only" onClick={browse} title={t("ui.DirectoryRequestCard.f39a536228")} aria-label={t("ui.DirectoryRequestCard.f39a536228")}>
+        <button className="btn icon-only" onClick={browse} title={t("permissions.directory.chooseLocation")} aria-label={t("permissions.directory.chooseLocation")}>
           <Icon name="folder" size={15} />
         </button>
       </div>

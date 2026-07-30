@@ -53,7 +53,7 @@ export function RootRow({
         {root.writable ? "Read-write" : "Read-only"}
       </button>
       {!root.primary && (
-        <button className="root-x" onClick={() => onRemove(root.path)} disabled={busy} title={t("ui.RootRow.e963907dac")}>
+        <button className="root-x" onClick={() => onRemove(root.path)} disabled={busy} title={t("workspace.roots.remove")}>
           ×
         </button>
       )}

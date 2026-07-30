@@ -381,7 +381,7 @@ export function AutomationQuickstart({
                     <span className="block text-[11.5px] text-faint">{why}</span>
                   </span>
                   {c?.connected ? (
-                    <span className="text-[12.5px] text-ok">{t("ui.AutomationQuickstart.59234c087f")}</span>
+                    <span className="text-[12.5px] text-ok">{t("automations.connected")}</span>
                   ) : flow ? (
                     <span className="inline-flex items-center gap-2 text-[12px] text-muted">
                       <Spinner />
@@ -472,10 +472,10 @@ export function AutomationQuickstart({
             <div className={picked.conns.length ? "bg-paper rounded-xl px-4 py-3.5 mt-3" : ""} data-testid="ob-recipe">
               {picked.needsRepo && (
                 <>
-                  <label className={label}>{t("ui.AutomationQuickstart.3123868410")}</label>
+                  <label className={label}>{t("automations.repository")}</label>
                   <input
                     className={input}
-                    placeholder={t("ui.AutomationQuickstart.b0a93768b8")}
+                    placeholder={t("automations.ownerRepo")}
                     value={repo}
                     onChange={(e) => setRepo(e.target.value)}
                     data-testid="ob-repo"
@@ -484,7 +484,7 @@ export function AutomationQuickstart({
               )}
               {picked.needsChannel && (
                 <>
-                  <label className={label}>{t("ui.AutomationQuickstart.06ee87d088")}</label>
+                  <label className={label}>{t("automations.postChannel")}</label>
                   <div data-testid="ob-channel">
                     <ChannelPicker
                       value={channel}
@@ -500,7 +500,7 @@ export function AutomationQuickstart({
                   </p>
                 </>
               )}
-              <label className={label}>{t("ui.AutomationQuickstart.769bb19e61")}</label>
+              <label className={label}>{t("automations.when")}</label>
               <div className="flex gap-2">
                 <div className="flex-1 min-w-0">
                   <SelectMenu
@@ -513,14 +513,14 @@ export function AutomationQuickstart({
                 <input
                   className="w-28 px-3 py-2 rounded-lg border border-line bg-panel text-[13.5px] outline-none focus:border-accent"
                   type="time"
-                  aria-label={t("ui.AutomationQuickstart.6c82e6dd86")}
+                  aria-label={t("automations.time")}
                   value={time}
                   onChange={(e) => setTime(e.target.value)}
                 />
               </div>
               {picked.deliver && (
                 <>
-                  <label className={label}>{t("ui.AutomationQuickstart.c229c05af7")}</label>
+                  <label className={label}>{t("automations.deliver")}</label>
                   <SelectMenu
                     ariaLabel="Deliver to"
                     value={deliver}

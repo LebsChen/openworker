@@ -109,8 +109,8 @@ export function PersonasTab({ onOpenPersona }: { onOpenPersona?: (id: string) =>
             <div className="min-w-0 flex-1">
               <div className="text-[13.5px] font-medium flex items-center gap-1.5">
                 <span className="truncate">{p.name}</span>
-                {p.default && <span className="text-accent" title={t("ui.PersonasTab.eba29dc524")}>★</span>}
-                {p.builtin && <span className="text-[11px] text-faint font-normal">{t("ui.PersonasTab.b957f1fe47")}</span>}
+                {p.default && <span className="text-accent" title={t("settings.personas.defaultNewSessions")}>★</span>}
+                {p.builtin && <span className="text-[11px] text-faint font-normal">{t("settings.personas.built")}</span>}
               </div>
               <div className="text-[12px] text-muted truncate">{p.tagline}</div>
             </div>
@@ -168,7 +168,7 @@ export function PersonasTab({ onOpenPersona }: { onOpenPersona?: (id: string) =>
               ) : (
                 <button
                   className="text-faint hover:text-danger shrink-0 p-1"
-                  title={t("ui.PersonasTab.bab75a7cfe")}
+                  title={t("settings.personas.deletePersona")}
                   aria-label={`Delete ${p.name}`}
                   data-testid={`persona-delete-${p.id}`}
                   onClick={() => setConfirmDel(p.id)}
@@ -206,7 +206,7 @@ export function PersonasTab({ onOpenPersona }: { onOpenPersona?: (id: string) =>
         ))}
       </div>
 
-      <div className={SEC_H + " mb-1.5"}>{t("ui.PersonasTab.3cfc8eca1f")}</div>
+      <div className={SEC_H + " mb-1.5"}>{t("settings.personas.addPersonas")}</div>
       <p className="text-[12px] text-muted mb-3 leading-relaxed">
         Load from a local directory or a public GitHub repo. Files are copied into a managed area (a
         snapshot), so the persona stays stable even if the source changes. No code runs — a persona only
@@ -214,8 +214,8 @@ export function PersonasTab({ onOpenPersona }: { onOpenPersona?: (id: string) =>
       </p>
       <div className="flex items-center gap-2">
         <select className={SELECT} value={mode} onChange={(e) => setMode(e.target.value as "git" | "dir")}>
-          <option value="git">{t("ui.PersonasTab.7dc2b81a6b")}</option>
-          <option value="dir">{t("ui.PersonasTab.f638d2718f")}</option>
+          <option value="git">{t("settings.personas.githubUrl")}</option>
+          <option value="dir">{t("settings.personas.localDirectory")}</option>
         </select>
         <input
           className={INPUT}

@@ -230,10 +230,10 @@ export function useProviderSetup(opts?: { onSaved?: () => void }): ProviderSetup
     if (!p.needs_key)
       return (
         <span className="block text-[11.5px] text-faint truncate">
-          {keylessOk.has(p.name) ? <span className="text-ok font-medium">{t("ui.ProviderSetup.d5c5908fb6")}</span> : "No key needed"}
+          {keylessOk.has(p.name) ? <span className="text-ok font-medium">{t("settings.providers.running")}</span> : "No key needed"}
         </span>
       );
-    return <span className="block text-[11.5px] text-faint truncate">{t("ui.ProviderSetup.be8f2e94e7")}</span>;
+    return <span className="block text-[11.5px] text-faint truncate">{t("settings.providers.notSetUp")}</span>;
   };
 
   return {
@@ -390,7 +390,7 @@ export function ProviderForm({
               className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-medium text-ok bg-okSoft rounded-full px-2 py-0.5 pointer-events-none"
               data-testid={`${tp}-saved-pill`}
             >
-              {info?.needs_key ? <>{t("ui.ProviderSetup.510be0871f")}</> : <>{t("ui.ProviderSetup.d10b9b9750")}</>}
+              {info?.needs_key ? <>{t("settings.providers.testedAmpSaved")}</> : <>{t("settings.providers.detected")}</>}
             </span>
           )}
         </div>
@@ -476,7 +476,7 @@ export function ProviderForm({
               <button
                 className="mt-2.5 inline-flex items-center gap-2 rounded-lg border border-line bg-panel px-2.5 py-1.5 text-[12px] font-mono text-ink hover:border-lineStrong"
                 onClick={() => void navigator.clipboard?.writeText(selected.command || "")}
-                title={t("ui.ProviderSetup.a8e1047833")}
+                title={t("settings.providers.copyCommand")}
                 data-testid={`${tp}-cmd-copy`}
               >
                 {selected.command}
@@ -490,7 +490,7 @@ export function ProviderForm({
                   ✓ Tested &amp; saved
                 </span>
               ) : (
-                <span className="text-[11.5px] text-faint">{t("ui.ProviderSetup.2ff84987b3")}</span>
+                <span className="text-[11.5px] text-faint">{t("settings.providers.runsOneReadOnlyCheckThenSaves")}</span>
               )}
               <button
                 className="shrink-0 rounded-lg border border-accent bg-accent px-4 py-1.5 text-[13px] font-medium text-white hover:brightness-105 disabled:opacity-40"
@@ -498,7 +498,7 @@ export function ProviderForm({
                 disabled={ps.verify.state === "testing"}
                 data-testid={`${tp}-test`}
               >
-                {ps.verify.state === "testing" ? "…" : <>{t("ui.ProviderSetup.e21b189f7a")}</>}
+                {ps.verify.state === "testing" ? "…" : <>{t("settings.providers.testAmpSave")}</>}
               </button>
             </div>
           </div>
@@ -575,7 +575,7 @@ export function ProviderForm({
 
       {info?.name === "openai" && (
         <div className="mt-5 rounded-xl border border-line bg-paper/50 px-3.5 pb-3.5 pt-2.5">
-          <div className="text-[12px] font-semibold text-ink">{t("ui.ProviderSetup.aca426b9b2")}</div>
+          <div className="text-[12px] font-semibold text-ink">{t("settings.providers.extraRequestHeaders")}</div>
           <p className="mt-1 text-[11.5px] leading-relaxed text-faint">
             Optional gateway headers. Values are stored securely and never shown after saving.
           </p>
@@ -584,7 +584,7 @@ export function ProviderForm({
               <div className="flex gap-1.5" key={`${row.name}-${index}`}>
                 <input
                   className={input + " border-line"}
-                  placeholder={t("ui.ProviderSetup.b46f85a9b7")}
+                  placeholder={t("settings.providers.headerName")}
                   value={row.name}
                   onChange={(e) => setHeaderRows((rows) => rows.map((r, i) => i === index ? { ...r, name: e.target.value } : r))}
                 />
@@ -600,7 +600,7 @@ export function ProviderForm({
             ))}
           </div>
           <div className="mt-2 flex items-center gap-2">
-            <button className="text-[12px] text-muted hover:text-ink" onClick={() => setHeaderRows((rows) => [...rows, { name: "", value: "" }])}>{t("ui.ProviderSetup.5af5e3ce37")}</button>
+            <button className="text-[12px] text-muted hover:text-ink" onClick={() => setHeaderRows((rows) => [...rows, { name: "", value: "" }])}>{t("settings.providers.addHeader")}</button>
             <button
               className="rounded-lg border border-line px-3 py-1 text-[12px] disabled:opacity-40"
               disabled={headersState === "saving"}
@@ -625,7 +625,7 @@ export function ProviderForm({
 
       {info?.name === "openai" && (
         <div className="mt-5 rounded-xl border border-line bg-paper/50 px-3.5 pb-3.5 pt-2.5">
-          <div className="text-[12px] font-semibold text-ink">{t("ui.ProviderSetup.1d1e5e19c1")}</div>
+          <div className="text-[12px] font-semibold text-ink">{t("settings.providers.discoverEndpointModels")}</div>
           <p className="mt-1 text-[11.5px] leading-relaxed text-faint">
             Fetch raw IDs from this endpoint. Discovery is optional; manually added models remain supported.
           </p>

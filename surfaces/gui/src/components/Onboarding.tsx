@@ -120,7 +120,7 @@ export function Onboarding({ onDone }: { onDone: (next?: "work" | "gallery" | "a
         {step === 0 && (
           <section data-testid="ob-step-model" className="flex-1 min-h-0 flex flex-col">
             {/* Persistent header — stays put while the region below swaps (§39). */}
-            <h1 className="text-[19px] font-semibold">{t("ui.Onboarding.e5adfffb80")}<span className="beta-tag">{t("ui.Onboarding.28d6304dd6")}</span></h1>
+            <h1 className="text-[19px] font-semibold">{t("onboarding.welcomeOpenworker")}<span className="beta-tag">{t("onboarding.beta")}</span></h1>
             <p className="text-[13px] text-muted mt-0.5 mb-4">
               Pick a model provider to get started — OpenWorker runs on your own key, and your
               key and your data stay on this Mac.
@@ -174,7 +174,7 @@ export function Onboarding({ onDone }: { onDone: (next?: "work" | "gallery" | "a
              slot keeps its place but flips to a green congrats, and every row grows a quiet
              Connect pill. The gated Google pair is ONE combined grayed row. */
           <section data-testid="ob-step-tools" className="flex-1 min-h-0 flex flex-col">
-            <h1 className="text-[19px] font-semibold">{t("ui.Onboarding.03261814b5")}</h1>
+            <h1 className="text-[19px] font-semibold">{t("onboarding.connectEverydayTools")}</h1>
             <p className="text-[13px] text-muted mt-0.5 mb-3">
               Chat can only advise. Connected, your coworker does the actual work:
             </p>
@@ -196,9 +196,9 @@ export function Onboarding({ onDone }: { onDone: (next?: "work" | "gallery" | "a
                     </span>
                     {cloud?.signed_in &&
                       (c.connected ? (
-                        <span className="text-[12px] text-ok font-medium shrink-0">{t("ui.Onboarding.59234c087f")}</span>
+                        <span className="text-[12px] text-ok font-medium shrink-0">{t("onboarding.connected")}</span>
                       ) : pendingTool === name ? (
-                        <span className="text-[12px] text-muted shrink-0">{t("ui.Onboarding.c1d7b24293")}</span>
+                        <span className="text-[12px] text-muted shrink-0">{t("onboarding.checkBrowser")}</span>
                       ) : (
                         <button
                           className="shrink-0 rounded-full border border-line px-4 py-1.5 text-[12.5px] font-medium hover:border-lineStrong"
@@ -226,7 +226,7 @@ export function Onboarding({ onDone }: { onDone: (next?: "work" | "gallery" | "a
                     Coming soon — pending Google&rsquo;s app verification.
                   </span>
                 </span>
-                {cloud?.signed_in && <span className="text-[11.5px] text-faint shrink-0">{t("ui.Onboarding.e4115be258")}</span>}
+                {cloud?.signed_in && <span className="text-[11.5px] text-faint shrink-0">{t("onboarding.comingSoon")}</span>}
               </div>
             </div>
 
@@ -322,8 +322,8 @@ export function Onboarding({ onDone }: { onDone: (next?: "work" | "gallery" | "a
               <div className="w-12 h-12 rounded-full bg-okSoft text-ok grid place-items-center mx-auto mb-3 text-[22px]">
                 ✓
               </div>
-              <h1 className="text-[19px] font-semibold mb-1">{t("ui.Onboarding.e8612f18fa")}</h1>
-              <p className="text-[13px] text-muted mb-5">{t("ui.Onboarding.31286b0c8e")}</p>
+              <h1 className="text-[19px] font-semibold mb-1">{t("onboarding.youReSetUp")}</h1>
+              <p className="text-[13px] text-muted mb-5">{t("onboarding.twoGoodWaysStart")}</p>
             </div>
 
             <button
@@ -335,7 +335,7 @@ export function Onboarding({ onDone }: { onDone: (next?: "work" | "gallery" | "a
                 ◷
               </span>
               <span className="flex-1 min-w-0 text-left">
-                <b className="block text-[13.5px]">{t("ui.Onboarding.1b9b320374")}</b>
+                <b className="block text-[13.5px]">{t("onboarding.createFirstAutomation")}</b>
                 <span className="text-[12px] text-muted">
                   A weekly digest, a morning brief — pick a template, running in two minutes.
                 </span>
@@ -351,7 +351,7 @@ export function Onboarding({ onDone }: { onDone: (next?: "work" | "gallery" | "a
                 ✦
               </span>
               <span className="flex-1 min-w-0 text-left">
-                <b className="block text-[13.5px]">{t("ui.Onboarding.27b3189016")}</b>
+                <b className="block text-[13.5px]">{t("onboarding.startWorkingCoworker")}</b>
                 <span className="text-[12px] text-muted">
                   Open a session and just ask — analyze files, draft, research, build.
                 </span>

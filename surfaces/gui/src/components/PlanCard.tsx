@@ -23,7 +23,7 @@ export function PlanCard({
     <div className="dirreq-card plan-card">
       <div className="dirreq-head">
         <Icon name="sparkle" size={16} className="ico" />
-        <span>{t("ui.PlanCard.bec0113cca")}</span>
+        <span>{t("plan.agentProposedPlan")}</span>
       </div>
       <div className="plan-body">
         <Markdown text={item.plan} />
@@ -32,7 +32,7 @@ export function PlanCard({
         <div className="dirreq-actions">
           <input
             className="dirreq-path"
-            placeholder={t("ui.PlanCard.195026f55e")}
+            placeholder={t("plan.whatShouldChangeAboutPlan")}
             value={feedback}
             autoFocus
             onChange={(e) => setFeedback(e.target.value)}
