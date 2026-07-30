@@ -292,7 +292,7 @@ function InfoPanel({
       <div className="right-panel-host">
         <strong>{host.name}</strong>
         <span className={"right-panel-status " + (host.local ? "online" : (probe?.status || host.status || "unknown"))}>
-          {host.local ? "Local" : (probe?.status || host.status || "unknown").replace("_", " ")}
+          {host.local ? "online" : (probe?.status || host.status || "unknown").replace("_", " ")}
         </span>
       </div>
       {host.local ? (
