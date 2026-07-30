@@ -1,4 +1,4 @@
-import { useT } from "../i18n";
+import { t, useT } from "../i18n";
 import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Icon } from "./Icon";
@@ -28,7 +28,7 @@ function ArtifactChip({ path, title }: { path: string; title: string }) {
         <b>{title || file}</b>
         {title && title !== file && <span>{file}</span>}
       </span>
-      <span className="art-chip-open">{translate("artifacts.markdown.open")}</span>
+      <span className="art-chip-open">{t("artifacts.markdown.open")}</span>
     </button>
   );
 }
@@ -37,7 +37,7 @@ function ArtifactChip({ path, title }: { path: string; title: string }) {
 // links). Links open externally — never navigate the app shell — except artifact: links,
 // which open the session's artifact viewer.
 export function Markdown({ text }: { text: string }) {
-  const translate = useT();
+  useT();
   return (
     <div className="md">
       <ReactMarkdown

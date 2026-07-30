@@ -1,4 +1,4 @@
-import { useT } from "../i18n";
+import { t, useT } from "../i18n";
 import { useEffect, useRef, useState } from "react";
 import {
   cloudLogin,
@@ -161,7 +161,7 @@ export function AutomationQuickstart({
     permissions?: { tool: string; target: string; access: "read" | "write" }[];
   }) => void;
 }) {
-  const translate = useT();
+  useT();
   const [pickedKey, setPickedKey] = useState<string | null>(null);
   const picked = TEMPLATES.find((t) => t.key === pickedKey) || null;
 
@@ -382,7 +382,7 @@ export function AutomationQuickstart({
                     <span className="block text-[11.5px] text-faint">{why}</span>
                   </span>
                   {c?.connected ? (
-                    <span className="text-[12.5px] text-ok">{translate("automations.connected")}</span>
+                    <span className="text-[12.5px] text-ok">{t("automations.connected")}</span>
                   ) : flow ? (
                     <span className="inline-flex items-center gap-2 text-[12px] text-muted">
                       <Spinner />
@@ -473,10 +473,10 @@ export function AutomationQuickstart({
             <div className={picked.conns.length ? "bg-paper rounded-xl px-4 py-3.5 mt-3" : ""} data-testid="ob-recipe">
               {picked.needsRepo && (
                 <>
-                  <label className={label}>{translate("automations.repository")}</label>
+                  <label className={label}>{t("automations.repository")}</label>
                   <input
                     className={input}
-                    placeholder={translate("automations.ownerRepo")}
+                    placeholder={t("automations.ownerRepo")}
                     value={repo}
                     onChange={(e) => setRepo(e.target.value)}
                     data-testid="ob-repo"
@@ -485,7 +485,7 @@ export function AutomationQuickstart({
               )}
               {picked.needsChannel && (
                 <>
-                  <label className={label}>{translate("automations.postChannel")}</label>
+                  <label className={label}>{t("automations.postChannel")}</label>
                   <div data-testid="ob-channel">
                     <ChannelPicker
                       value={channel}
@@ -501,7 +501,7 @@ export function AutomationQuickstart({
                   </p>
                 </>
               )}
-              <label className={label}>{translate("automations.when")}</label>
+              <label className={label}>{t("automations.when")}</label>
               <div className="flex gap-2">
                 <div className="flex-1 min-w-0">
                   <SelectMenu
@@ -514,14 +514,14 @@ export function AutomationQuickstart({
                 <input
                   className="w-28 px-3 py-2 rounded-lg border border-line bg-panel text-[13.5px] outline-none focus:border-accent"
                   type="time"
-                  aria-label={translate("automations.time")}
+                  aria-label={t("automations.time")}
                   value={time}
                   onChange={(e) => setTime(e.target.value)}
                 />
               </div>
               {picked.deliver && (
                 <>
-                  <label className={label}>{translate("automations.deliver")}</label>
+                  <label className={label}>{t("automations.deliver")}</label>
                   <SelectMenu
                     ariaLabel="Deliver to"
                     value={deliver}

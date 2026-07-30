@@ -1,13 +1,13 @@
-import { useT } from "../i18n";
+import { t, useT } from "../i18n";
 import type { TodoItem } from "../types";
 
 export function TodoPanel({ items }: { items: TodoItem[] }) {
-  const translate = useT();
+  useT();
   if (!items || items.length === 0) return null;
   const box = (s: string) => (s === "done" ? "☑" : s === "in_progress" ? "◉" : "☐");
   return (
     <div className="todo">
-      <h4>{translate("tasks.tasks")}</h4>
+      <h4>{t("tasks.tasks")}</h4>
       {items.map((it, i) => (
         <div className="item" key={i}>
           <span className="box">{box(it.status)}</span>

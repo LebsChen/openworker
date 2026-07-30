@@ -1,4 +1,4 @@
-import { useT } from "../i18n";
+import { t, useT } from "../i18n";
 import { useEffect, useState } from "react";
 import {
   hostForSession,
@@ -85,7 +85,7 @@ export function ModelsTab() {
     refreshSettings();
   }, []);
 
-  if (!settings) return <div className="text-[13px] text-muted">{translate("settings.providers.loading")}</div>;
+  if (!settings) return <div className="text-[13px] text-muted">{t("settings.providers.loading")}</div>;
 
   const info = ps.info;
   const knownNames = ps.providers.map((p) => p.name);
@@ -128,7 +128,7 @@ export function ModelsTab() {
 
       {info?.configured ? (
         <div className="mt-6">
-          <div className={SEC_H + " mb-1.5"}>{translate("settings.providers.models")}</div>
+          <div className={SEC_H + " mb-1.5"}>{t("settings.providers.models")}</div>
           <p className="text-[12px] text-muted mb-2.5 leading-relaxed">
             Ticked models show in the composer's picker; the black badge marks the default for new
             sessions.
@@ -150,7 +150,7 @@ export function ModelsTab() {
         // key unlocks is part of deciding to get one at all (owner ask, 2026-07-04).
         (info?.suggested_models?.length || 0) > 0 && (
           <div className="mt-6" data-testid="model-preview">
-            <div className={SEC_H + " mb-1.5"}>{translate("settings.providers.includedModels")}</div>
+            <div className={SEC_H + " mb-1.5"}>{t("settings.providers.includedModels")}</div>
             <p className="text-[12px] text-muted mb-2.5 leading-relaxed">
               Curated, agent-capable models this provider serves — add your key above to enable them.
             </p>
@@ -187,7 +187,7 @@ function ComposerPickerCard({
   providers: ProviderInfo[];
   onChanged: () => void;
 }) {
-  const translate = useT();
+  useT();
   const names = providers.map((p) => p.name);
   const provOf = (id: string) => {
     const i = id.indexOf(":");
@@ -199,7 +199,7 @@ function ComposerPickerCard({
   };
   return (
     <div className="mt-6" data-testid="composer-picker">
-      <div className={SEC_H + " mb-1.5"}>{translate("settings.providers.composerSPicker")}</div>
+      <div className={SEC_H + " mb-1.5"}>{t("settings.providers.composerSPicker")}</div>
       <p className="text-[12px] text-muted mb-2.5 leading-relaxed">
         The models offered when starting a session; the black badge marks the default. Add more
         from a provider's card above.
@@ -223,7 +223,7 @@ function ComposerPickerCard({
               </label>
               <span className="text-[11px] text-faint mr-2 shrink-0">{tag(id)}</span>
               {isDefault ? (
-                <span className="mlist-default">{translate("settings.providers.default")}</span>
+                <span className="mlist-default">{t("settings.providers.default")}</span>
               ) : (
                 <button className="mlist-make" onClick={() => setDefaultModel(id).then(() => onChanged())}>
                   Make default
@@ -365,7 +365,7 @@ function McpRow({
   onRemove: () => void;
   onRefresh: () => void;
 }) {
-  const translate = useT();
+  useT();
   const [tools, setTools] = useState<{ name: string; description: string }[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [toolErr, setToolErr] = useState<string | null>(null);
@@ -397,7 +397,7 @@ function McpRow({
   return (
     <div className={CARD + " p-3.5"}>
       <div className="flex items-center gap-3">
-        <Toggle checked={server.enabled} onChange={onToggle} title={translate("settings.providers.enableServer")} />
+        <Toggle checked={server.enabled} onChange={onToggle} title={t("settings.providers.enableServer")} />
         <div className="flex-1 min-w-0">
           <div className="text-[14px] font-medium">{server.name}</div>
           <div className="text-[11.5px] text-faint">
@@ -413,7 +413,7 @@ function McpRow({
               Sign in
             </button>
           ) : authorizing ? (
-            <span className="text-[12px] text-muted shrink-0">{translate("settings.providers.waitingBrowser")}</span>
+            <span className="text-[12px] text-muted shrink-0">{t("settings.providers.waitingBrowser")}</span>
           ) : server.status === "connected" ? (
             <button
               className="text-[12px] text-muted hover:text-ink shrink-0"
@@ -440,7 +440,7 @@ function McpRow({
       {toolErr && <div className="text-[12.5px] text-danger mt-1.5">{toolErr}</div>}
       {tools && (
         <div className="mt-2.5 pt-2.5 border-t border-line flex flex-wrap gap-1.5">
-          {tools.length === 0 && <div className="text-[12px] text-faint">{translate("settings.providers.noTools")}</div>}
+          {tools.length === 0 && <div className="text-[12px] text-faint">{t("settings.providers.noTools")}</div>}
           {tools.map((t) => (
             <span
               key={t.name}
@@ -494,7 +494,7 @@ function AddForm({
 
   return (
     <div className="space-y-2">
-      <div className="text-[12.5px] text-muted">{translate("settings.providers.pasteServerJsonNameConfig")}</div>
+      <div className="text-[12.5px] text-muted">{t("settings.providers.pasteServerJsonNameConfig")}</div>
       <textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
@@ -534,7 +534,7 @@ export function UnauthorizedBlock({
   onChanged: () => void;
   teamId?: string;
 }) {
-  const translate = useT();
+  useT();
   const items = (c.unauthorized ?? []).filter(
     (m) => teamId === undefined || m.team_id === teamId,
   );
@@ -564,7 +564,7 @@ export function UnauthorizedBlock({
               <button
                 className="text-[11.5px] px-2 py-1 rounded-md bg-accent text-white"
                 data-testid={`parked-allow-deliver-${m.id}`}
-                title={translate("settings.providers.addSenderAllowListDeliverMessageNow")}
+                title={t("settings.providers.addSenderAllowListDeliverMessageNow")}
                 onClick={() => act(m.id, "allow_deliver")}
               >
                 Allow & deliver
@@ -572,7 +572,7 @@ export function UnauthorizedBlock({
               <button
                 className={BTN_BORDERED}
                 data-testid={`parked-allow-${m.id}`}
-                title={translate("settings.providers.addSenderAllowListMessageDiscarded")}
+                title={t("settings.providers.addSenderAllowListMessageDiscarded")}
                 onClick={() => act(m.id, "allow")}
               >
                 Allow only
@@ -580,7 +580,7 @@ export function UnauthorizedBlock({
               <button
                 className="text-[11.5px] px-2 py-1 rounded-md text-faint hover:text-danger"
                 data-testid={`parked-dismiss-${m.id}`}
-                title={translate("settings.providers.throwMessageAway")}
+                title={t("settings.providers.throwMessageAway")}
                 onClick={() => act(m.id, "dismiss")}
               >
                 Dismiss
@@ -597,7 +597,7 @@ export function UnauthorizedBlock({
 // Channel-subscriptions table (Integrations ▸ Messaging routing). Subscribing happens from a
 // session's Sources ▸ Channels panel; here the owner can see and revoke.
 export function ListeningSessionsBlock({ c }: { c: Connector }) {
-  const translate = useT();
+  useT();
   const [subs, setSubs] = useState<Subscription[] | null>(null);
   const load = () => getSubscriptions().then(setSubs).catch(() => setSubs([]));
   useEffect(() => {
@@ -626,7 +626,7 @@ export function ListeningSessionsBlock({ c }: { c: Connector }) {
               </span>
               <button
                 className="ml-auto text-faint hover:text-danger shrink-0"
-                title={translate("settings.providers.unsubscribeSession")}
+                title={t("settings.providers.unsubscribeSession")}
                 onClick={async () => {
                   await unsubscribeChannel(s.session_id, hostForSession(s.session_id), s.channel);
                   load();
@@ -659,7 +659,7 @@ export function AllowlistBlock({
   allowed?: string[];
   allowedNames?: Record<string, string | null>;
 }) {
-  const translate = useT();
+  useT();
   const allowedUsers = allowed ?? c.allowed_users;
   const names = allowedNames ?? c.allowed_user_names;
   const recent = (c.recent ?? []).filter(
@@ -670,10 +670,10 @@ export function AllowlistBlock({
   return (
     <div className="border-t border-line px-3.5 py-3 grid grid-cols-2 gap-5">
       <div>
-        <div className={SEC_H + " mb-2"}>{translate("settings.providers.allowedMessage")}</div>
+        <div className={SEC_H + " mb-2"}>{t("settings.providers.allowedMessage")}</div>
         <div className="flex flex-wrap gap-1.5">
           {allowedUsers.length === 0 && (
-            <span className="text-[12px] text-faint">{translate("settings.providers.nobodyYetAllowRecentSender")}</span>
+            <span className="text-[12px] text-faint">{t("settings.providers.nobodyYetAllowRecentSender")}</span>
           )}
           {allowedUsers.map((u) => (
             <span
@@ -687,7 +687,7 @@ export function AllowlistBlock({
               {names?.[u] || u}
               <button
                 className="w-4 h-4 grid place-items-center text-faint hover:text-danger"
-                title={translate("settings.providers.remove")}
+                title={t("settings.providers.remove")}
                 onClick={async () => {
                   await disallowUser(c.name, u, teamId);
                   onChanged();
@@ -700,9 +700,9 @@ export function AllowlistBlock({
         </div>
       </div>
       <div>
-        <div className={SEC_H + " mb-2"}>{translate("settings.providers.recentSenders")}</div>
+        <div className={SEC_H + " mb-2"}>{t("settings.providers.recentSenders")}</div>
         {unknownRecent.length === 0 ? (
-          <div className="text-[12px] text-faint">{translate("settings.providers.noneYetMessageBotOnceLlShowHere")}</div>
+          <div className="text-[12px] text-faint">{t("settings.providers.noneYetMessageBotOnceLlShowHere")}</div>
         ) : (
           <div className="space-y-1.5">
             {unknownRecent.map((r) => (
@@ -732,7 +732,7 @@ export function AllowlistBlock({
 }
 
 export function ConnectorTools({ c, onChanged }: { c: Connector; onChanged: () => void }) {
-  const translate = useT();
+  useT();
   const toggle = async (toolName: string, enabled: boolean) => {
     await updateConnectorTools(c.name, { [toolName]: enabled });
     onChanged();
@@ -745,7 +745,7 @@ export function ConnectorTools({ c, onChanged }: { c: Connector; onChanged: () =
     );
   return (
     <div className="border-t border-line px-3.5 py-3">
-      <div className={SEC_H + " mb-2"}>{translate("settings.providers.toolsExposedOpenworker")}</div>
+      <div className={SEC_H + " mb-2"}>{t("settings.providers.toolsExposedOpenworker")}</div>
       <div className="space-y-1.5">
         {c.tools.map((tool) => (
           <label
@@ -787,7 +787,7 @@ export function ConnectSetup({
   // pill, so don't render the managed block again here.
   manualOnly?: boolean;
 }) {
-  const translate = useT();
+  useT();
   const [values, setValues] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [waiting, setWaiting] = useState(false); // managed flow: browser is open
@@ -829,7 +829,7 @@ export function ConnectSetup({
             {waiting ? "Check your browser…" : `Connect ${c.title} with one click`}
           </button>
           {c.fields.length > 0 && (
-            <div className="text-[11.5px] text-faint">{translate("settings.providers.connectManually")}</div>
+            <div className="text-[11.5px] text-faint">{t("settings.providers.connectManually")}</div>
           )}
         </div>
       )}
@@ -863,7 +863,7 @@ export function ConnectSetup({
             <CloudStatusPending />
           )}
           {!c.managed_paused && cloud?.signed_in && (
-            <div className="text-[11.5px] text-faint">{translate("settings.providers.connectManually")}</div>
+            <div className="text-[11.5px] text-faint">{t("settings.providers.connectManually")}</div>
           )}
         </div>
       )}
@@ -878,7 +878,7 @@ export function ConnectSetup({
         <label className="conn-field" key={f.key}>
           <span className="conn-field-label">
             {f.label}
-            {!f.required && <em>{translate("settings.providers.optional")}</em>}
+            {!f.required && <em>{t("settings.providers.optional")}</em>}
           </span>
           <input
             type={f.secret ? "password" : "text"}

@@ -1,4 +1,4 @@
-import { useT } from "../i18n";
+import { t, useT } from "../i18n";
 import { useState } from "react";
 import type { Item } from "../types";
 import { Icon } from "./Icon";
@@ -16,7 +16,7 @@ export function PlanCard({
   item: PlanItem;
   onRespond: (approved: boolean, mode?: string, feedback?: string) => void;
 }) {
-  const translate = useT();
+  useT();
   const [rejecting, setRejecting] = useState(false);
   const [feedback, setFeedback] = useState("");
 
@@ -24,7 +24,7 @@ export function PlanCard({
     <div className="dirreq-card plan-card">
       <div className="dirreq-head">
         <Icon name="sparkle" size={16} className="ico" />
-        <span>{translate("plan.agentProposedPlan")}</span>
+        <span>{t("plan.agentProposedPlan")}</span>
       </div>
       <div className="plan-body">
         <Markdown text={item.plan} />
@@ -33,7 +33,7 @@ export function PlanCard({
         <div className="dirreq-actions">
           <input
             className="dirreq-path"
-            placeholder={translate("plan.whatShouldChangeAboutPlan")}
+            placeholder={t("plan.whatShouldChangeAboutPlan")}
             value={feedback}
             autoFocus
             onChange={(e) => setFeedback(e.target.value)}

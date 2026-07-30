@@ -1,4 +1,4 @@
-import { useT } from "../i18n";
+import { t, useT } from "../i18n";
 import { useEffect, useState } from "react";
 import { getAudit, type AuditEvent } from "../api";
 import { PanelHead } from "./IntegrationsView";
@@ -35,21 +35,21 @@ export function AuditView() {
       <div className="flex-1 min-w-0 overflow-y-auto hairline-scroll">
         <div className="max-w-4xl mx-auto px-7 py-6">
           <PanelHead
-            title={translate("audit.activity")}
+            title={t("audit.activity")}
             sub="Recent connector and browser tool activity. Arguments are sanitized before storage."
           />
 
           <div className="flex items-center gap-2 flex-wrap mb-4">
-            <input className={INPUT} placeholder={translate("audit.sessionId")} value={sessionFilter} onChange={(e) => setSessionFilter(e.target.value)} />
-            <input className={INPUT} placeholder={translate("audit.connector")} value={connectorFilter} onChange={(e) => setConnectorFilter(e.target.value)} />
-            <input className={INPUT} placeholder={translate("audit.tool")} value={toolFilter} onChange={(e) => setToolFilter(e.target.value)} />
+            <input className={INPUT} placeholder={t("audit.sessionId")} value={sessionFilter} onChange={(e) => setSessionFilter(e.target.value)} />
+            <input className={INPUT} placeholder={t("audit.connector")} value={connectorFilter} onChange={(e) => setConnectorFilter(e.target.value)} />
+            <input className={INPUT} placeholder={t("audit.tool")} value={toolFilter} onChange={(e) => setToolFilter(e.target.value)} />
             <button className={BTN_ACCENT} onClick={refresh}>
               Filter
             </button>
           </div>
 
           {events.length === 0 ? (
-            <div className={CARD + " p-4 text-[13px] text-muted"}>{translate("audit.noAuditEventsYet")}</div>
+            <div className={CARD + " p-4 text-[13px] text-muted"}>{t("audit.noAuditEventsYet")}</div>
           ) : (
             <div className="space-y-2">
               {events.map((ev) => (
@@ -64,7 +64,7 @@ export function AuditView() {
 }
 
 function AuditRow({ ev }: { ev: AuditEvent }) {
-  const translate = useT();
+  useT();
   return (
     <div className={CARD + " p-3.5"}>
       <div className="flex items-center gap-2 flex-wrap">

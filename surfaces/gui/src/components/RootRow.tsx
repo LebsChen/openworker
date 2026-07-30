@@ -1,4 +1,4 @@
-import { useT } from "../i18n";
+import { t, useT } from "../i18n";
 import type { RootInfo } from "../api";
 import { Icon } from "./Icon";
 import { baseName } from "../paths";
@@ -22,7 +22,7 @@ export function RootRow({
   onToggle: (r: RootInfo) => void;
   onRemove: (path: string) => void;
 }) {
-  const translate = useT();
+  useT();
   const label = root.primary
     ? scratchPrimary
       ? "Temporary space"
@@ -54,7 +54,7 @@ export function RootRow({
         {root.writable ? "Read-write" : "Read-only"}
       </button>
       {!root.primary && (
-        <button className="root-x" onClick={() => onRemove(root.path)} disabled={busy} title={translate("workspace.roots.remove")}>
+        <button className="root-x" onClick={() => onRemove(root.path)} disabled={busy} title={t("workspace.roots.remove")}>
           ×
         </button>
       )}

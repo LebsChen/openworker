@@ -1,4 +1,4 @@
-import { useT } from "../i18n";
+import { t, useT } from "../i18n";
 import { useEffect, useState } from "react";
 import {
   getConnectors,
@@ -32,7 +32,7 @@ const SELECT = "px-2.5 py-1.5 rounded-lg border border-line bg-paper text-[13px]
 const BTN_ACCENT_SM = "text-[12px] px-2.5 py-1 rounded-md bg-accent text-white disabled:opacity-50";
 
 export function InboxConfigure() {
-  const translate = useT();
+  useT();
   return (
     <div data-testid="inbox-configure">
       <div className="grid grid-cols-2 gap-4 mb-4">
@@ -43,7 +43,7 @@ export function InboxConfigure() {
       {/* Unrouted = delivery FAILURES ("messages that never reached you"), so it lives with
           the Inbox now (§28; previously with routing under Connectors, §26). */}
       <div className="mt-6" data-testid="unrouted-section">
-        <h3 className="text-[14px] font-semibold mb-1">{translate("inbox.configure.unrouted")}</h3>
+        <h3 className="text-[14px] font-semibold mb-1">{t("inbox.configure.unrouted")}</h3>
         <p className="text-[12.5px] text-muted mb-3">
           Inbound messages and background-turn failures nothing claimed — nothing vanishes
           silently.
@@ -126,7 +126,7 @@ function InboxRoutingCard() {
 
   return (
     <div className={CARD + " p-4"} data-testid="inbox-mirror-card">
-      <div className="font-semibold text-[13.5px] mb-1">{translate("inbox.configure.unattendedApprovals")}</div>
+      <div className="font-semibold text-[13.5px] mb-1">{t("inbox.configure.unattendedApprovals")}</div>
       <p className="text-[12px] text-muted mb-3">
         Channel where an Unattended session posts Approve/Deny buttons. Currently mirroring to{" "}
         <strong className="text-ink font-medium" title={target || undefined}>
@@ -186,7 +186,7 @@ function DmRouteCard() {
 
   return (
     <div className={CARD + " p-4"}>
-      <div className="font-semibold text-[13.5px] mb-1">{translate("inbox.configure.directMessages")}</div>
+      <div className="font-semibold text-[13.5px] mb-1">{t("inbox.configure.directMessages")}</div>
       <p className="text-[12px] text-muted mb-3">
         Session that handles DMs to the bot. With none, DMs park under Unrouted below.
       </p>
@@ -195,7 +195,7 @@ function DmRouteCard() {
           <Icon name="chat" size={16} />
         </span>
         <select className={"flex-1 " + SELECT} value={dm} onChange={(e) => choose(e.target.value)}>
-          <option value="">{translate("inbox.configure.noSessionParkDms")}</option>
+          <option value="">{t("inbox.configure.noSessionParkDms")}</option>
           {real.map((s) => (
             <option key={s.session_id} value={s.session_id}>
               {s.title || s.session_id}
@@ -245,17 +245,17 @@ function SubscriptionsCard() {
         <span className="text-muted shrink-0">
           <Icon name="plug" size={15} />
         </span>
-        <span className="font-semibold text-[13.5px]">{translate("inbox.configure.channelSubscriptions")}</span>
-        <span className="text-[12px] text-muted">{translate("inbox.configure.sessionsThatListenChannelInbound")}</span>
+        <span className="font-semibold text-[13.5px]">{t("inbox.configure.channelSubscriptions")}</span>
+        <span className="text-[12px] text-muted">{t("inbox.configure.sessionsThatListenChannelInbound")}</span>
       </div>
 
       {subs && subs.length > 0 ? (
         <table className="w-full text-[13px]">
           <thead className="text-[11px] uppercase tracking-[0.04em] text-faint">
             <tr className="text-left">
-              <th className="font-medium px-4 py-2">{translate("inbox.configure.session")}</th>
-              <th className="font-medium px-4 py-2">{translate("inbox.configure.listens")}</th>
-              <th className="font-medium px-4 py-2">{translate("inbox.configure.inboxRoutes")}</th>
+              <th className="font-medium px-4 py-2">{t("inbox.configure.session")}</th>
+              <th className="font-medium px-4 py-2">{t("inbox.configure.listens")}</th>
+              <th className="font-medium px-4 py-2">{t("inbox.configure.inboxRoutes")}</th>
               <th className="px-4 py-2" />
             </tr>
           </thead>
@@ -278,7 +278,7 @@ function SubscriptionsCard() {
                   {s.collision && (
                     <span
                       className="ml-1.5 text-[11px] text-warnInk bg-warnSoft/70 border border-warnInk/15 rounded px-1.5 py-0.5"
-                      title={translate("inbox.configure.channelConflict")}
+                      title={t("inbox.configure.channelConflict")}
                     >
                       ⚠ collides
                     </span>
@@ -288,7 +288,7 @@ function SubscriptionsCard() {
                 <td className="px-4 py-2.5 text-right">
                   <button
                     className="text-faint hover:text-danger"
-                    title={translate("inbox.configure.unsubscribe")}
+                    title={t("inbox.configure.unsubscribe")}
                     onClick={() => remove(s.session_id, s.channel)}
                   >
                     ×
@@ -310,7 +310,7 @@ function SubscriptionsCard() {
           value={addSession}
           onChange={(e) => setAddSession(e.target.value)}
         >
-          <option value="">{translate("inbox.configure.chooseSession")}</option>
+          <option value="">{t("inbox.configure.chooseSession")}</option>
           {real.map((s) => (
             <option key={s.session_id} value={s.session_id}>
               {s.title || s.session_id}
@@ -350,10 +350,10 @@ function UnroutedTable() {
       <table className="w-full text-[13px]">
         <thead className="text-[11px] uppercase tracking-[0.04em] text-faint">
           <tr className="text-left">
-            <th className="font-medium px-4 py-2">{translate("inbox.configure.when")}</th>
-            <th className="font-medium px-4 py-2">{translate("inbox.configure.source")}</th>
-            <th className="font-medium px-4 py-2">{translate("inbox.configure.reason")}</th>
-            <th className="font-medium px-4 py-2">{translate("inbox.configure.message")}</th>
+            <th className="font-medium px-4 py-2">{t("inbox.configure.when")}</th>
+            <th className="font-medium px-4 py-2">{t("inbox.configure.source")}</th>
+            <th className="font-medium px-4 py-2">{t("inbox.configure.reason")}</th>
+            <th className="font-medium px-4 py-2">{t("inbox.configure.message")}</th>
           </tr>
         </thead>
         <tbody>

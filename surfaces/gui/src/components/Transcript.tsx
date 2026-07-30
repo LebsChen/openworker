@@ -1,4 +1,4 @@
-import { useT } from "../i18n";
+import { t, useT } from "../i18n";
 import { useState } from "react";
 import type { ApprovalDecision, Item } from "../types";
 import { shortArgs } from "./ApprovalCard";
@@ -36,7 +36,7 @@ function BubbleMeta({ text, ts, align }: { text: string; ts?: number; align: "le
         <button
           className="flex items-center cursor-pointer hover:text-muted"
           data-testid="bubble-copy"
-          title={translate("transcript.copyMessage")}
+          title={t("transcript.copyMessage")}
           onClick={copy}
         >
           {copied ? "Copied" : <Icon name="copy" size={11} />}
@@ -55,7 +55,7 @@ function BubbleMeta({ text, ts, align }: { text: string; ts?: number; align: "le
 // collapsed by default, the trace one click away. `live` = still streaming (pulsing label);
 // App renders that variant above the transcript, this one rides a finalized assistant item.
 export function ThinkingBlock({ text, live }: { text: string; live?: boolean }) {
-  const translate = useT();
+  useT();
   const [open, setOpen] = useState(false);
   return (
     <div className="thinking">
@@ -136,7 +136,7 @@ function buildRows(items: TurnItem[]): TurnRow[] {
 
 function approvalChip(resolved: ApprovalDecision | undefined) {
   if (resolved === "deny")
-    return <span className="text-[10.5px] px-1.5 rounded-full bg-dangerSoft text-danger shrink-0">{translate("transcript.declined")}</span>;
+    return <span className="text-[10.5px] px-1.5 rounded-full bg-dangerSoft text-danger shrink-0">{t("transcript.declined")}</span>;
   return (
     <span
       className="text-[10.5px] px-1.5 rounded-full bg-okSoft text-ok shrink-0"
@@ -182,7 +182,7 @@ function StepRow({ tool, approval }: { tool: ToolItem; approval?: ApprovalItem }
           <span
             className="text-[11px] text-warnInk shrink-0"
             data-testid="tool-hidden-count"
-            title={translate("transcript.privacyFiltersRemoved")}
+            title={t("transcript.privacyFiltersRemoved")}
           >
             {tool.hidden} hidden
           </span>
@@ -320,7 +320,7 @@ interface Props {
 // models and THEN retrying is the intended recovery path). -1 when the tail is anything else.
 export function retryAnchor(items: Item[]): number {
   for (let i = items.length - 1; i >= 0; i--) {
-  const translate = useT();
+  useT();
     const it = items[i];
     if (it.kind !== "notice") return -1;
     if (it.retriable) return i;
@@ -330,7 +330,7 @@ export function retryAnchor(items: Item[]): number {
 }
 
 export function Transcript({ items, running, streamingText, onRetry }: Props) {
-  const translate = useT();
+  useT();
   // §33 grouping: a turn = the maximal run of assistant/tool/resolved-approval items between
   // breakers (user, connector, notices, plan/dir requests…). Trailing assistant texts are the
   // ANSWER and render as bubbles after the group; interior assistant texts are narration and
@@ -417,7 +417,7 @@ export function Transcript({ items, running, streamingText, onRetry }: Props) {
               );
             return (
               <div className="group bubble-assistant" key={bi}>
-                <div className="who">{translate("transcript.assistant")}</div>
+                <div className="who">{t("transcript.assistant")}</div>
                 {item.reasoning && <ThinkingBlock text={item.reasoning} />}
                 <Markdown text={item.text} />
                 <BubbleMeta text={item.text} ts={item.ts} align="left" />
@@ -438,7 +438,7 @@ export function Transcript({ items, running, streamingText, onRetry }: Props) {
             if (!item.resolved) return null; // pending plan renders in the composer head
             return (
               <div className="bubble-assistant" key={bi}>
-                <div className="who">{translate("transcript.proposedPlan")}</div>
+                <div className="who">{t("transcript.proposedPlan")}</div>
                 <Markdown text={item.plan} />
                 <div className="approval-inline">
                   <span className={"status " + (item.resolved === "approved" ? "ok" : "denied")}>
