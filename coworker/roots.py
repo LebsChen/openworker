@@ -12,19 +12,21 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Optional
 
 
 @dataclass
 class RootDir:
-    path: Path
+    path: Any
     writable: bool = False
     label: str = ""  # display name; defaults to the dir's basename
+    remote_style: Optional[Any] = None
 
     def __post_init__(self) -> None:
-        self.path = Path(self.path).expanduser().resolve()
+        if self.remote_style is None:
+            self.path = Path(self.path).expanduser().resolve()
         if not self.label:
-            self.label = self.path.name or str(self.path)
+            self.label = (self.remote_style.basename(str(self.path)) if self.remote_style else self.path.name) or str(self.path)
 
     def to_dict(self) -> dict[str, Any]:
         return {"path": str(self.path), "writable": self.writable, "label": self.label}

@@ -40,6 +40,9 @@ from ..conversations import ConversationStore, title_from
 from ..engine import ApprovalOutcome, Approver, TurnEngine
 from ..roots import RootDir
 from ..workspace_trust import WorkspaceTrustStore
+from ..remote.hosts import RvmHostStore
+from ..remote.tools import RemoteTarget
+from ..remote.executor import RvmExecutor
 from ..automation import Schedule, ScheduledTask, Scheduler, TaskRun, TaskStore
 from ..connectors import (
     Gateway,
@@ -149,6 +152,7 @@ class SessionManager:
         self._autotitle_attempts: dict[str, int] = {}
         self.workspace_trust = WorkspaceTrustStore()
         self.secrets = SecretStore()
+        self.rvm_hosts = RvmHostStore(secrets=self.secrets)
         # No explicit provider injected → route by the model's `provider:` prefix (OpenAI default,
         # Ollama, …). Tests inject a provider directly and bypass the router. The same router is
         # shared by every engine and the `/v1/chat/completions` proxy.
@@ -392,11 +396,40 @@ class SessionManager:
         is_new_session = record is None
         agent_name = (record.agent if record else agent) or "code"
         ag = get_agent(agent_name)
+        bound_host_id = record.host_id if record else self.host_id
+        remote_target = None
+        if bound_host_id and bound_host_id != "local":
+            host = self.rvm_hosts.get(bound_host_id)
+            if host is None:
+                raise ValueError(f"unknown RVM host for session {session_id}: {bound_host_id}")
+            client = self.rvm_hosts.client(bound_host_id)
+            style = self.rvm_hosts.path_style_for(host)
+            explicit_remote_workspace = (
+                record.workspace if record and record.workspace else workspace
+            )
+            remote_workspace = explicit_remote_workspace
+            if not remote_workspace:
+                if not host.workspace:
+                    raise ValueError(
+                        f"RVM host {bound_host_id} has no workspace for session {session_id}"
+                    )
+                remote_workspace = style.join(
+                    host.workspace, f".coworker/sessions/{session_id}"
+                )
+                client.mkdir(remote_workspace)
+            remote_target = RemoteTarget(
+                host=host,
+                client=client,
+                style=style,
+                workspace=remote_workspace,
+            )
         managed_workspace = False
 
         if record:
             ws = record.workspace or None
-            if ws:
+            if remote_target is not None:
+                ws = remote_target.workspace or None
+            if ws and remote_target is None:
                 try:
                     managed = self.session_workspaces.attach(session_id)
                     if managed.path == Path(ws).resolve():
@@ -409,6 +442,8 @@ class SessionManager:
             model, mode, messages = record.model, Mode(record.mode), record.messages
         else:
             ws = self.resolve_workspace(workspace) if ag.needs_workspace else None
+            if remote_target is not None:
+                ws = remote_target.workspace or ws
             if ag.needs_workspace and (isolate or ag.family == "knowledge"):
                 try:
                     repository = (
@@ -431,7 +466,7 @@ class SessionManager:
                         ) from exc
             model, mode, messages = self.model, self.mode, None
 
-        if ag.needs_workspace and (not ws or not Path(ws).is_dir()):
+        if remote_target is None and ag.needs_workspace and (not ws or not Path(ws).is_dir()):
             # Knowledge surfaces (Cowork, Ops, …) start "orphan": no folder picked →
             # auto-provision a per-conversation scratch directory (generalizes MyHelper's
             # auto-workspace). Code-family surfaces still require a real repo; Chat needs none.
@@ -440,7 +475,7 @@ class SessionManager:
             else:
                 return None
 
-        if ws:
+        if ws and remote_target is None:
             if managed_workspace:
                 # Validate the authoritative workspace through the same
                 # containment helper used by lifecycle operations before it
@@ -450,7 +485,7 @@ class SessionManager:
         # Orphan surfaces are multi-root: the scratch (ws) is the primary writable root, plus any
         # folders the user added (persisted per session). Code/Chat stay single-root (roots=None).
         roots = None
-        if ag.family == "knowledge" and ws:
+        if ag.family == "knowledge" and ws and remote_target is None:
             extra = [
                 r
                 for r in ((record.extra_roots if record else []) or [])
@@ -487,6 +522,7 @@ class SessionManager:
             routing_targets=self._routing_targets(session_id, agent),
             # Per-session connection hierarchy: expose only effective-enabled connectors' tools.
             connector_filter=self.effective_connectors(session_id, agent_name),
+            remote_target=remote_target,
         )
         # An automation run rebuilt here (manual "Run now" over WS, durable resume) still
         # carries its task's standing allowances — the rules live on the task record.
@@ -3345,14 +3381,18 @@ class SessionManager:
 
     def save(self, session_id: str, engine: TurnEngine) -> None:
         executor = getattr(engine, "executor", None)
-        workspace = os.path.realpath(str(executor.cwd)) if executor else ""
+        if isinstance(executor, RvmExecutor):
+            workspace = str(executor.cwd)
+        else:
+            workspace = os.path.realpath(str(executor.cwd)) if executor else ""
+        remote_target = getattr(engine, "remote_target", None)
         self.session_store.save(
             SessionRecord(
                 session_id=session_id,
                 workspace=workspace,
                 model=engine.model,
                 mode=engine.permissions.mode.value,
-                host_id=self.host_id,
+                host_id=(remote_target.host.id if remote_target is not None else self.host_id),
                 messages=engine.messages,
                 title=title_from(engine.messages),
                 agent=getattr(engine, "agent_name", "code"),

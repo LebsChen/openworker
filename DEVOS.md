@@ -61,7 +61,7 @@ git push origin devos/main
 - 远程 token/server 模式：功能分支 `devos/1785422207-remote-token`，为 server 增加显式 token、token file、非回环绑定安全约束和常数时间鉴权。
 - 客户端远程主机模式：功能分支 `devos/1785423280-remote-host`。Tauri 客户端可保存多个远程 profile，profile 保存在独立的 `remote-hosts.json`（权限 `0600`，临时文件写入后原子替换），Rust 不读取或改写 Python SecretStore 的 `secrets.json`。本机 Local 始终是默认主机，登记远程 profile 后新建会话 picker 才提供远程选项；切换会话主机不需要重启客户端。
 - token 环境优先级：`COWORKER_API_TOKEN` 高于 `OPENWORKER_TOKEN`，因为前者是 Tauri 按会话显式注入的 token；两者都低于 CLI/token-file。
-- RVM 执行 VM 的首选方向：让整个 OpenWorker server 运行在 RVM 主机上，使现有 `LocalExecutor` 就地执行；只有确实需要客户端本机 server 时才考虑 `RvmExecutor`。
+- RVM 执行 VM 支持 client-side execution：LLM/agent loop、permissions 和 session state stay in the Python client while batch-1 shell/file/search/git calls use `coworker.remote.RvmExecutor` and the Cloud-Dev HTTP agent. Do not silently fall back to Local when a bound host is offline or unauthorized.
 - 当前增量的每个上游接缝见 `UPSTREAM_PATCHES.md`。
 
 ## 远程主机模式

@@ -26,6 +26,7 @@ from .tools.git import git_tools
 from .tools.search import search_tools
 from .tools.shell import shell_tools
 from .tools.todo import todo_tools
+from .remote.tools import remote_file_tools, remote_git_tools, remote_search_tools
 
 # Context prerequisites a capability may require, mapped to a predicate over AgentContext.
 _REQUIREMENTS: dict[str, Callable[[AgentContext], bool]] = {
@@ -56,6 +57,8 @@ def _code_files(context: AgentContext) -> list:
     """Repo-oriented files: single-root, line-numbered/windowed `read_file`. Our `grep` and
     windowed `read_file` replace aisuite's slower `search_files` / `read_file`/`read_file_lines`.
     """
+    if context.remote_target:
+        return remote_file_tools(context.remote_target, repo_oriented=True)
     ws = str(context.workspace)
     replaced = {"search_files", "read_file", "read_file_lines"}
     files = [
@@ -70,6 +73,8 @@ def _files(context: AgentContext) -> list:
     """Knowledge-work files: multi-root aware (reads/writes across the session's roots), keeps
     aisuite's `read_file`/`read_file_lines`. Only our `grep` replaces the slow `search_files`.
     """
+    if context.remote_target:
+        return remote_file_tools(context.remote_target, repo_oriented=False)
     ws = str(context.workspace)
     file_kwargs = (
         {"roots": context.roots} if context.roots else {"root": ws, "allow_write": True}
@@ -82,11 +87,15 @@ def _files(context: AgentContext) -> list:
 
 
 def _git(context: AgentContext) -> list:
+    if context.remote_target:
+        return remote_git_tools(context.remote_target)
     ws = str(context.workspace)
     return [*ai.toolkits.git(root=ws), *git_tools(ws)]  # git_status, git_diff, git_log
 
 
 def _search(context: AgentContext) -> list:
+    if context.remote_target:
+        return remote_search_tools(context.remote_target)
     return search_tools(str(context.workspace))  # grep (ripgrep, .gitignore-aware)
 
 

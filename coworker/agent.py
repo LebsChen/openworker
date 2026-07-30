@@ -39,6 +39,8 @@ from .tools.subagent import explorer_tools
 from .web import make_web_fetch_tool, make_web_search_tool
 from .workspace_trust import WorkspaceTrustStore
 from .tools.shell import LocalExecutor
+from .remote.executor import RvmExecutor
+from .remote.tools import RemoteTarget, remote_environment_context
 from .tools.todo import TodoList
 
 # Appended each turn while discuss mode is active: enforcement-only read-only, with no
@@ -133,8 +135,13 @@ def build_engine(
     channel_buffer: Optional[Any] = None,
     routing_targets: Optional[list[str]] = None,
     connector_filter: Optional[set[str]] = None,
+    remote_target: Optional[RemoteTarget] = None,
 ) -> TurnEngine:
-    ws = Path(workspace).expanduser().resolve() if workspace else None
+    ws = (
+        remote_target.workspace
+        if remote_target is not None
+        else (Path(workspace).expanduser().resolve() if workspace else None)
+    )
     if agent.needs_workspace and ws is None:
         raise ValueError(f"agent '{agent.name}' requires a workspace")
 
@@ -144,18 +151,45 @@ def build_engine(
     if roots:
         root_list: list[RootDir] = normalize_roots(roots)
     elif ws is not None:
-        root_list = [RootDir(path=ws, writable=True)]
+        root_list = [
+            RootDir(
+                path=ws,
+                writable=True,
+                remote_style=remote_target.style if remote_target else None,
+            )
+        ]
     else:
         root_list = []
 
-    workspace_trusted = bool(ws and WorkspaceTrustStore().is_trusted(ws))
-    config = load_config(ws, workspace_trusted=workspace_trusted)
+    workspace_trusted = bool(
+        ws and not remote_target and WorkspaceTrustStore().is_trusted(ws)
+    )
+    config = (
+        load_config(ws, workspace_trusted=workspace_trusted)
+        if not remote_target
+        else load_config(None)
+    )
     executor = (
-        LocalExecutor(cwd=ws) if (agent.needs_workspace and ws is not None) else None
+        (
+            RvmExecutor(
+                client=remote_target.client,
+                cwd=str(ws),
+                style=remote_target.style,
+                session_id=session_id,
+            )
+            if remote_target is not None and agent.needs_workspace and ws is not None
+            else LocalExecutor(cwd=ws)
+        )
+        if (agent.needs_workspace and ws is not None)
+        else None
     )
     todo = TodoList()
     context = AgentContext(
-        workspace=ws, executor=executor, todo=todo, roots=root_list or None
+        workspace=ws,
+        executor=executor,
+        todo=todo,
+        roots=root_list or None,
+        remote_target=remote_target,
     )
 
     registry = ToolRegistry()
@@ -171,7 +205,11 @@ def build_engine(
         # send_file (§34): hand deliverables into the chat — same targets, but its OWN
         # approval surface (a thread's standing send_message grant never covers uploads).
         registry.register(
-            make_send_file_tool(secrets, workspace=ws, roots=root_list or None)
+            make_send_file_tool(
+                secrets,
+                workspace=ws if remote_target is None else None,
+                roots=root_list or None,
+            )
         )
         # Channel subscriptions (inbound): listen to a channel, catch up, (un)subscribe. The agent
         # obtains a channel via ask_user or from a channel message it's reacting to.
@@ -214,7 +252,7 @@ def build_engine(
     provider = provider or ProviderRouter(secrets, default_provider="openai")
     # Code-family personas can fan broad research out to read-only explorer subagents, keeping
     # their own context for the actual change.
-    if agent.family == "code" and ws is not None:
+    if agent.family == "code" and ws is not None and remote_target is None:
         registry.register_all(
             explorer_tools(
                 workspace=ws,
@@ -225,7 +263,7 @@ def build_engine(
         )
     # Scheduling: knowledge surfaces with a workspace can set up scheduled tasks (origin = this
     # session). Code stays out (it fans out to explorers instead).
-    if task_store is not None and ws is not None and agent.family == "knowledge":
+    if task_store is not None and ws is not None and agent.family == "knowledge" and remote_target is None:
         origin = {
             "surface": agent.name,
             "session_id": session_id or "",
@@ -242,10 +280,13 @@ def build_engine(
 
     instructions = f"{agent.system_prompt}\n\n{_NARRATION_GUIDANCE}"
     if ws is not None:
-        instructions = f"{instructions}\n\n{environment_context(ws)}"
-        conventions = load_agents_md(ws)
-        if conventions:
-            instructions = f"{instructions}\n\n{conventions}"
+        if remote_target is None:
+            instructions = f"{instructions}\n\n{environment_context(ws)}"
+            conventions = load_agents_md(ws)
+            if conventions:
+                instructions = f"{instructions}\n\n{conventions}"
+        else:
+            instructions = f"{instructions}\n\n{remote_environment_context(remote_target)}"
 
     if memory_store is not None:
         registry.register_all(
@@ -259,7 +300,7 @@ def build_engine(
         if block:
             instructions = f"{instructions}\n\n{block}"
 
-    skill_loader = SkillLoader(_skill_dirs(ws))
+    skill_loader = SkillLoader(_skill_dirs(ws) if remote_target is None else [state_dir() / "skills"])
     registry.register_all(skill_tools(skill_loader))
     catalog = skill_catalog_text(skill_loader)
     if catalog:
@@ -277,6 +318,7 @@ def build_engine(
         ),
         auto_allow_tools=set(config.auto_allow),
         roots=root_list or None,
+        path_style=remote_target.style if remote_target else None,
         risk_overrides=risk_overrides,
     )
     # The plan-mode exit door. Always registered (surfaces can flip a live session into
@@ -327,6 +369,7 @@ def build_engine(
         question_asker=question_asker,
     )
     engine.executor = executor  # type: ignore[attr-defined]
+    engine.remote_target = remote_target  # type: ignore[attr-defined]
     engine.todo = todo  # type: ignore[attr-defined]
     engine.agent_name = agent.name  # type: ignore[attr-defined]
     engine.roots = root_list  # type: ignore[attr-defined]  # shared list; Slice C mutates in place
