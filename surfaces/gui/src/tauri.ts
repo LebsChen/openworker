@@ -76,8 +76,8 @@ export const setKeepAwake = (enabled: boolean) => invoke<boolean>("set_keep_awak
 
 export type RemoteHostInfo = {
   name: string;
-  base_url: string;
-  rvm_url?: string | null;
+  url: string;
+  vnc_password?: string | null;
 };
 
 export type RemoteHostProbeResult = {
@@ -105,11 +105,10 @@ export type RemoteHostProbeResult = {
 };
 
 export async function testRemoteHost(
-  baseUrl: string,
+  url: string,
   token: string,
-  rvmUrl?: string | null,
 ): Promise<RemoteHostProbeResult> {
-  const base = (rvmUrl || baseUrl).replace(/\/+$/, "");
+  const base = url.replace(/\/+$/, "");
   const started = performance.now();
   try {
     const health = await fetch(`${base}/api/health`, { signal: AbortSignal.timeout(8_000) });
@@ -163,10 +162,10 @@ export async function testRemoteHost(
 
 export type SessionHostInfo = RemoteHostInfo & {
   id: string;
+  base_url: string;
   ws_url: string;
   token: string;
   local: boolean;
-  rvm_url?: string | null;
 };
 
 export const listRemoteHosts = () => invoke<RemoteHostInfo[]>("list_remote_hosts");
@@ -186,20 +185,21 @@ export const bindSessionHost = (sessionId: string, hostId: string) =>
   invokeStrict<void>("bind_session_host", { sessionId, hostId });
 export const getSessionHost = (sessionId: string) =>
   invoke<string | null>("session_host", { sessionId });
-export const saveRemoteHost = async (name: string, baseUrl: string, token: string, rvmUrl?: string) => {
-  await invokeStrict<void>("save_remote_host", { name, baseUrl, token, rvmUrl: rvmUrl || null });
+export const saveRemoteHost = async (name: string, url: string, token: string, vncPassword?: string) => {
+  await invokeStrict<void>("save_remote_host", { name, url, token, vncPassword: vncPassword || null });
   const hosts = Array.isArray((globalThis as any).__COWORKER_HOSTS__)
     ? ((globalThis as any).__COWORKER_HOSTS__ as SessionHostInfo[])
     : [];
-  const normalized = baseUrl.replace(/\/+$/, "");
+  const normalized = url.replace(/\/+$/, "");
   const next: SessionHostInfo = {
     id: name,
     name,
     base_url: normalized,
+    url: normalized,
     ws_url: normalized.replace(/^https:/, "wss:").replace(/^http:/, "ws:"),
     token,
     local: false,
-    rvm_url: rvmUrl || null,
+    vnc_password: vncPassword || null,
   };
   (globalThis as any).__COWORKER_HOSTS__ = [
     ...hosts.filter((host) => host.id !== name),

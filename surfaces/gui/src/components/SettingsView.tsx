@@ -148,8 +148,8 @@ export function SettingsView({
 function RemoteHostsSection() {
   const [hosts, setHosts] = useState<RemoteHostInfo[]>([]);
   const [name, setName] = useState("");
-  const [baseUrl, setBaseUrl] = useState("");
-  const [rvmUrl, setRvmUrl] = useState("");
+  const [url, setUrl] = useState("");
+  const [vncPassword, setVncPassword] = useState("");
   const [token, setToken] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -164,7 +164,7 @@ function RemoteHostsSection() {
     const runtimeHosts = sessionHosts();
     for (const host of listed || []) {
       const runtime = runtimeHosts.find((candidate) => candidate.id === host.name);
-      if (runtime?.token) void test(host.name, host.base_url, runtime.token, host.rvm_url);
+      if (runtime?.token) void test(host.name, host.url, runtime.token);
     }
   };
   useEffect(() => {
@@ -173,7 +173,7 @@ function RemoteHostsSection() {
   const save = async () => {
     setError(null);
     try {
-      await saveRemoteHost(name, baseUrl, token, rvmUrl);
+      await saveRemoteHost(name, url, token, vncPassword);
       setSavedTokens((current) => ({ ...current, [name]: token }));
       setToken("");
       setSaved(true);
@@ -188,14 +188,14 @@ function RemoteHostsSection() {
       );
     }
   };
-  const test = async (hostName: string, url: string, hostToken: string, probeUrl?: string | null) => {
+  const test = async (hostName: string, url: string, hostToken: string) => {
     setProbeState((current) => ({
       ...current,
       [hostName]: { status: "unknown", error: "Checking connection…" },
     }));
     setTesting(hostName);
     try {
-      const result = await testRemoteHost(url, hostToken, probeUrl);
+      const result = await testRemoteHost(url, hostToken);
       setProbeState((current) => ({ ...current, [hostName]: result }));
       const statuses = (globalThis as any).__COWORKER_HOST_STATUS__ || {};
       statuses[hostName] = result.status;
@@ -221,8 +221,8 @@ function RemoteHostsSection() {
   return (
     <section>
       <PanelHead
-        title="Remote host"
-        sub="Connect the desktop client to an OpenWorker server running on an RVM host. HTTPS certificate verification remains enabled."
+        title="RVM (Remote Virtual Machines)"
+        sub="Connect a remote host for shared development. Run node agent.js on the remote machine to start the agent."
       />
       <div className={`${CARD} p-4 space-y-3`}>
         {configError && (
@@ -241,7 +241,7 @@ function RemoteHostsSection() {
                     : statusLabel(probeState[host.name]?.status || "unknown")}
                 </span>
               </div>
-              <div className="text-[12px] text-muted truncate">{host.base_url}</div>
+              <div className="text-[12px] text-muted truncate">{host.url}</div>
               {probeState[host.name] && (
                 <div className="text-[11px] text-muted">
                   {probeState[host.name].error === "Checking connection…"
@@ -266,7 +266,7 @@ function RemoteHostsSection() {
               className={BTN_BORDERED}
               disabled={testing === host.name || !savedTokens[host.name]}
               title={!savedTokens[host.name] ? "Enter the token below to test this host." : undefined}
-              onClick={() => test(host.name, host.base_url, savedTokens[host.name] || "", host.rvm_url)}
+              onClick={() => test(host.name, host.url, savedTokens[host.name] || "")}
             >
               {testing === host.name ? "Testing…" : "Test connection"}
             </button>
@@ -275,15 +275,15 @@ function RemoteHostsSection() {
             </button>
           </div>
         ))}
-        <div className="pt-2 text-[12px] font-medium">Add or update profile</div>
-        <input className={INPUT} placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
-        <input className={INPUT} placeholder="https://rvm-host:8765" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
-        <input className={INPUT} placeholder="RVM agent URL (optional, defaults to server URL)" value={rvmUrl} onChange={(e) => setRvmUrl(e.target.value)} />
-        <input className={INPUT} type="password" placeholder="Server token" value={token} onChange={(e) => setToken(e.target.value)} />
+        <div className="pt-2 text-[12px] font-medium">Add or update host</div>
+        <input className={INPUT} placeholder="例: Linux 开发服务器" value={name} onChange={(e) => setName(e.target.value)} />
+        <input className={INPUT} placeholder="http://192.168.1.100:9920 或 https://xxx.trycloudflare.com" value={url} onChange={(e) => setUrl(e.target.value)} />
+        <input className={INPUT} type="password" placeholder="agent.js 启动时显示的 token" value={token} onChange={(e) => setToken(e.target.value)} />
+        <input className={INPUT} type="password" placeholder="留空则使用 Token" value={vncPassword} onChange={(e) => setVncPassword(e.target.value)} />
         <button
           className={BTN_BORDERED}
-          disabled={!name || !baseUrl || !token || testing === name}
-          onClick={() => test(name, baseUrl, token, rvmUrl || null)}
+          disabled={!name || !url || !token || testing === name}
+          onClick={() => test(name, url, token)}
         >
           {testing === name ? "Testing…" : "Test connection"}
         </button>
@@ -300,7 +300,7 @@ function RemoteHostsSection() {
             {currentFormResult.error && ` · ${currentFormResult.error}`}
           </div>
         )}
-        <button className={BTN_ACCENT} disabled={!name || !baseUrl || !token} onClick={save}>Save profile</button>
+        <button className={BTN_ACCENT} disabled={!name || !url || !token} onClick={save}>添加</button>
         {saved && <div className="text-[12px] text-accent">Saved securely. Remote hosts are available when selecting a VM for a new session.</div>}
         {error && <div role="alert" className="text-[12px] text-danger">{error}</div>}
       </div>

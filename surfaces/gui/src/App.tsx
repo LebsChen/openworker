@@ -245,7 +245,7 @@ export function App() {
           if (selected) setSessionHost(selected);
           for (const host of hosts) {
             if (!host.local) {
-                void testRemoteHost(host.base_url, host.token, host.rvm_url).then((result) => {
+                void testRemoteHost(host.base_url, host.token).then((result) => {
                 const statuses = (globalThis as any).__COWORKER_HOST_STATUS__ || {};
                 statuses[host.id] = result.status;
                 (globalThis as any).__COWORKER_HOST_STATUS__ = statuses;

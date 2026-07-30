@@ -22,9 +22,9 @@ it("passes camelCase arguments to Tauri commands", async () => {
   await saveRemoteHost("rvm-a", "http://172.16.0.2:18773", "remote-token");
   expect(invoke).toHaveBeenNthCalledWith(1, "save_remote_host", {
     name: "rvm-a",
-    baseUrl: "http://172.16.0.2:18773",
+    url: "http://172.16.0.2:18773",
     token: "remote-token",
-    rvmUrl: null,
+    vncPassword: null,
   });
 
   await bindSessionHost("session-a", "rvm-a");
