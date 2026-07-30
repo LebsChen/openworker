@@ -84,14 +84,18 @@ class RvmHostStore:
             raise KeyError(f"no token configured for RVM host: {host_id}")
         return RvmClient(host.base_url, token, host_label=f"{host.name} ({host.id})")
 
-    def path_style_for(self, host: RvmHost) -> RemotePathStyle:
+    def path_style_for(
+        self, host: RvmHost, *, health: dict[str, Any] | None = None
+    ) -> RemotePathStyle:
         if host.platform:
             return _style(host.platform)
-        client = self.client(host.id)
-        try:
-            host.platform = str(client.health().get("platform") or "posix")
-        finally:
-            client.close()
+        if health is None:
+            client = self.client(host.id)
+            try:
+                health = client.health()
+            finally:
+                client.close()
+        host.platform = str(health.get("platform") or "posix")
         with self._lock:
             self._hosts[host.id] = host
             self._save()

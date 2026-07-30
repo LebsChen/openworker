@@ -8,6 +8,7 @@ from coworker.agents.base import AgentContext
 from coworker.catalog import expand
 from coworker.permissions import Mode, PermissionEngine
 from coworker.remote.hosts import RvmHost, RvmHostStore
+from coworker.remote.client import RvmUnauthorizedError, RvmUnreachableError
 from coworker.remote.paths import RemotePathStyle
 from coworker.remote.tools import RemoteTarget
 from coworker.secrets import SecretStore
@@ -114,3 +115,51 @@ def test_unknown_host_is_hard_failure_without_local_fallback(tmp_path, monkeypat
         assert "unknown RVM host" in str(exc)
     else:
         raise AssertionError("unknown host unexpectedly fell back to Local")
+
+
+class FailingHealthClient:
+    def __init__(self, error):
+        self.error = error
+        self.closed = False
+
+    def health(self):
+        raise self.error
+
+    def close(self):
+        self.closed = True
+
+
+def test_bound_offline_host_is_clear_session_build_error(tmp_path, monkeypatch):
+    monkeypatch.setenv("COWORKER_STATE_DIR", str(tmp_path / "state"))
+    from coworker.server.manager import SessionManager
+
+    manager = SessionManager(data_dir=tmp_path, host_id="offline")
+    manager.rvm_hosts.put(RvmHost("offline", "Offline VM", "http://rvm"), "token")
+    client = FailingHealthClient(RvmUnreachableError("offline"))
+    monkeypatch.setattr(manager.rvm_hosts, "client", lambda _host_id: client)
+    try:
+        manager.get_engine("offline-session", agent="code")
+    except ValueError as exc:
+        assert "Offline VM" in str(exc)
+        assert "offline or unreachable" in str(exc)
+    else:
+        raise AssertionError("offline host unexpectedly built a session")
+    assert client.closed
+
+
+def test_bound_unauthorized_host_is_clear_session_build_error(tmp_path, monkeypatch):
+    monkeypatch.setenv("COWORKER_STATE_DIR", str(tmp_path / "state"))
+    from coworker.server.manager import SessionManager
+
+    manager = SessionManager(data_dir=tmp_path, host_id="unauthorized")
+    manager.rvm_hosts.put(RvmHost("unauthorized", "Unauthorized VM", "http://rvm"), "token")
+    client = FailingHealthClient(RvmUnauthorizedError("unauthorized"))
+    monkeypatch.setattr(manager.rvm_hosts, "client", lambda _host_id: client)
+    try:
+        manager.get_engine("unauthorized-session", agent="code")
+    except ValueError as exc:
+        assert "Unauthorized VM" in str(exc)
+        assert "unauthorized" in str(exc)
+    else:
+        raise AssertionError("unauthorized host unexpectedly built a session")
+    assert client.closed

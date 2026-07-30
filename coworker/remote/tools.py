@@ -435,9 +435,9 @@ def _computer_schema() -> dict[str, Any]:
                 "use a logical 1024x768 screen with top-left origin; take a fresh screenshot or "
                 "zoom before acting because the RVM rescales coordinates to that space. The "
                 "zoom action is misnamed upstream: it crops a region and returns an image, it "
-                "does not zoom the desktop. On Windows, type uses SendKeys and Microsoft Pinyin "
-                "IME can eat spaces; use clipboard paste as a recovery when needed. Pass one "
-                "action or an actions array for sequential batched actions."
+                "does not zoom the desktop. On Windows, type uses SendKeys; Microsoft Pinyin "
+                "can remove spaces or alter typed text, so use clipboard paste to recover when "
+                "that happens. Pass one action or an actions array for sequential batched actions."
             ),
             "parameters": {
                 "type": "object",
@@ -469,6 +469,7 @@ def remote_computer_tools(target: RemoteTarget) -> list:
             capabilities = set(target.client.health().get("capabilities") or [])
         except RvmError:
             return []
+
     def screenshot() -> dict[str, Any]:
         try:
             return target.client.screenshot()
@@ -514,6 +515,7 @@ def remote_computer_tools(target: RemoteTarget) -> list:
     if "computer_use" in capabilities:
         tools.append(computer)
     return tools
+
 
 def remote_git_tools(target: RemoteTarget) -> list:
     def git_status() -> dict[str, Any]:

@@ -39,6 +39,8 @@ RiskOverrides = Callable[[str], Optional["RiskClass"]]
 _COMPUTER_READ_ACTIONS = frozenset(
     {"cursor_position", "resolution", "read_dom", "perception", "zoom"}
 )
+
+
 def computer_risk(arguments: Any) -> "RiskClass":
     """Classify one computer call from its action(s), including batched actions."""
     values = arguments.get("actions") if isinstance(arguments, dict) else None

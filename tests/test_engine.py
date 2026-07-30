@@ -7,7 +7,12 @@ import threading
 import time
 
 import aisuite as ai
-from coworker.engine import ApprovalOutcome, PermissionRequest, TurnEngine
+from coworker.engine import (
+    ApprovalOutcome,
+    PermissionRequest,
+    TurnEngine,
+    _screenshot_content,
+)
 from coworker.events import EventType
 from coworker.permissions import PermissionEngine
 from coworker.providers import (
@@ -18,6 +23,23 @@ from coworker.providers import (
     ToolCall,
 )
 from coworker.tools import ToolRegistry
+
+
+def test_screenshot_content_uses_png_dimensions_and_rejects_invalid_payloads():
+    import base64
+    import struct
+
+    png_header = (
+        b"\x89PNG\r\n\x1a\n"
+        + b"\x00\x00\x00\rIHDR"
+        + struct.pack(">II", 37, 19)
+    )
+    encoded = base64.b64encode(png_header).decode()
+    content = _screenshot_content({"image": encoded, "format": "png"})
+    assert content[0]["text"] == "screenshot 37x19 png"
+    non_png = base64.b64encode(b"not a png").decode()
+    assert _screenshot_content({"image": non_png, "format": "png"})[0]["text"] == "screenshot png"
+    assert _screenshot_content({"image": "not-png", "format": "png"}) is None
 
 
 def _text_turn(text):

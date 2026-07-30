@@ -13,7 +13,10 @@ engine says `needs_user`, the engine emits `PERMISSION_REQUIRED` and awaits the 
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
 import json
+import struct
 import time
 from dataclasses import dataclass
 from enum import Enum
@@ -48,13 +51,26 @@ def _screenshot_content(result: Any) -> Optional[list[dict[str, Any]]]:
     image_format = str(result.get("format") or "png").lower()
     if not isinstance(image, str) or not image:
         return None
+    try:
+        image_bytes = base64.b64decode(
+            image.split(",", 1)[1] if image.startswith("data:image/") else image
+        )
+    except (ValueError, IndexError, binascii.Error):
+        return None
+    dimensions = ""
+    if image_bytes[:8] == b"\x89PNG\r\n\x1a\n" and len(image_bytes) >= 24:
+        try:
+            width, height = struct.unpack(">II", image_bytes[16:24])
+            dimensions = f" {width}x{height}"
+        except struct.error:
+            pass
     data_url = (
         image
         if image.startswith("data:image/")
         else f"data:image/{image_format};base64,{image}"
     )
     return [
-        {"type": "text", "text": f"screenshot 1024x768 {image_format}"},
+        {"type": "text", "text": f"screenshot{dimensions} {image_format}"},
         {"type": "image_url", "image_url": {"url": data_url}},
     ]
 

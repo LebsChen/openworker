@@ -41,6 +41,7 @@ from ..engine import ApprovalOutcome, Approver, TurnEngine
 from ..roots import RootDir
 from ..workspace_trust import WorkspaceTrustStore
 from ..remote.hosts import RvmHostStore
+from ..remote.client import RvmError, RvmUnauthorizedError, RvmUnreachableError
 from ..remote.tools import RemoteTarget
 from ..remote.executor import RvmExecutor
 from ..automation import Schedule, ScheduledTask, Scheduler, TaskRun, TaskStore
@@ -403,8 +404,24 @@ class SessionManager:
             if host is None:
                 raise ValueError(f"unknown RVM host for session {session_id}: {bound_host_id}")
             client = self.rvm_hosts.client(bound_host_id)
-            style = self.rvm_hosts.path_style_for(host)
-            health = client.health()
+            try:
+                health = client.health()
+            except RvmUnauthorizedError as exc:
+                client.close()
+                raise ValueError(
+                    f"RVM host {host.name} ({bound_host_id}) is unauthorized"
+                ) from exc
+            except RvmUnreachableError as exc:
+                client.close()
+                raise ValueError(
+                    f"RVM host {host.name} ({bound_host_id}) is offline or unreachable"
+                ) from exc
+            except RvmError as exc:
+                client.close()
+                raise ValueError(
+                    f"RVM host {host.name} ({bound_host_id}) health check failed: {exc}"
+                ) from exc
+            style = self.rvm_hosts.path_style_for(host, health=health)
             explicit_remote_workspace = (
                 record.workspace if record and record.workspace else workspace
             )
