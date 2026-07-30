@@ -9,6 +9,8 @@ def test_session_workspaces_are_root_scoped(tmp_path: Path):
     manager = SessionWorkspaceManager(tmp_path / "host")
     first = manager.create("session-a")
     second = manager.create("session-b")
+    assert manager.get("session-a") == first
+    assert manager.get("missing") is None
     (first.path / "a.txt").write_text("a", encoding="utf-8")
     (second.path / "b.txt").write_text("b", encoding="utf-8")
 

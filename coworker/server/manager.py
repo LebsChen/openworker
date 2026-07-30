@@ -3737,7 +3737,7 @@ class SessionManager:
         for r in self.session_store.list(workspace=ws):
             if r.session_id.startswith("__"):
                 continue
-            managed = self.session_workspaces._state.get(r.session_id)
+            managed = self.session_workspaces.get(r.session_id)
             out.append({
                 "session_id": r.session_id,
                 "title": r.title or "New session",

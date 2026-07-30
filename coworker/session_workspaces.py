@@ -171,6 +171,10 @@ class SessionWorkspaceManager:
     def path_for(self, session_id: str) -> Path:
         return self.attach(session_id).path
 
+    def get(self, session_id: str) -> Optional[SessionWorkspace]:
+        """Return managed workspace metadata without exposing internal state."""
+        return self._state.get(str(session_id))
+
     def assert_owned(self, session_id: str, path: str | Path) -> Path:
         workspace = self.attach(session_id)
         candidate = Path(path)
