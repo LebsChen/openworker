@@ -25,11 +25,16 @@ export type SessionHost = {
   ws_url: string;
   token: string;
   local: boolean;
+  status?: "online" | "offline" | "auth_failed" | "unknown";
 };
 
 export const sessionHosts = (): SessionHost[] => {
   const hosts = (globalThis as any).__COWORKER_HOSTS__;
-  return Array.isArray(hosts) ? hosts : [{
+  const statuses = (globalThis as any).__COWORKER_HOST_STATUS__ || {};
+  return Array.isArray(hosts) ? hosts.map((host: SessionHost) => ({
+    ...host,
+    ...(host.local ? {} : { status: statuses[host.id] || "unknown" }),
+  })) : [{
     id: "local",
     name: "Local",
     base_url: httpBase(),

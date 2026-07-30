@@ -920,10 +920,12 @@ export function App() {
 
   const send = (text: string, attachments?: Attachment[]) => {
     if (!connected) {
+      if (!sessionHost.local) {
+        setSessionOffline(true);
+        return;
+      }
       setActionError(
-        sessionHost.local
-          ? "Local agent is not connected."
-          : `Remote host "${sessionHost.name}" is offline. This session remains bound to that host and will not fall back to Local.`,
+        "Local agent is not connected.",
       );
       return;
     }
@@ -1542,9 +1544,16 @@ export function App() {
                 className="text-[12px] bg-transparent border border-line rounded px-1.5 py-1 text-muted"
               >
                 {sessionHosts().map((host) => (
-                  <option key={host.id} value={host.id}>{host.name}</option>
+                  <option key={host.id} value={host.id}>
+                    {host.name} · {host.local ? "online" : host.status || "unknown"}
+                  </option>
                 ))}
               </select>
+            )}
+            {!sessionHost.local && sessionHost.status !== "online" && (
+              <div role="status" className="text-[11px] text-warnInk">
+                Remote host "{sessionHost.name}" is {sessionHost.status === "auth_failed" ? "authentication failed" : "offline or untested"}; this session will not fall back to Local.
+              </div>
             )}
             <label className="flex items-center gap-1 text-[11px] text-muted" title="Create this session in an isolated workspace">
               <input

@@ -79,6 +79,62 @@ export type RemoteHostInfo = {
   base_url: string;
 };
 
+export type RemoteHostProbeResult = {
+  status: "online" | "offline" | "auth_failed" | "unknown";
+  latency_ms?: number;
+  health?: { status?: string; model?: string };
+  error?: string;
+};
+
+export async function testRemoteHost(
+  baseUrl: string,
+  token: string,
+): Promise<RemoteHostProbeResult> {
+  const base = baseUrl.replace(/\/+$/, "");
+  const started = performance.now();
+  try {
+    const health = await fetch(`${base}/v1/health`, { signal: AbortSignal.timeout(8_000) });
+    if (!health.ok) {
+      return {
+        status: health.status === 401 || health.status === 403 ? "auth_failed" : "offline",
+        error:
+          health.status === 401 || health.status === 403
+            ? "Authentication failed. Check the token."
+            : `Server returned HTTP ${health.status}. Check the address.`,
+      };
+    }
+    const protectedResponse = await fetch(`${base}/v1/settings`, {
+      headers: { "X-OpenWorker-Token": token },
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!protectedResponse.ok) {
+      return {
+        status:
+          protectedResponse.status === 401 || protectedResponse.status === 403
+            ? "auth_failed"
+            : "offline",
+        latency_ms: Math.round(performance.now() - started),
+        error:
+          protectedResponse.status === 401 || protectedResponse.status === 403
+            ? "Authentication failed. Check the token."
+            : `Server returned HTTP ${protectedResponse.status}. Check the address.`,
+      };
+    }
+    const payload = (await health.json()) as { status?: string; model?: string };
+    return {
+      status: "online",
+      latency_ms: Math.round(performance.now() - started),
+      health: { status: payload.status, model: payload.model },
+    };
+  } catch {
+    return {
+      status: "offline",
+      latency_ms: Math.round(performance.now() - started),
+      error: "Host is unreachable. Check the address and network connection.",
+    };
+  }
+}
+
 export type SessionHostInfo = RemoteHostInfo & {
   id: string;
   ws_url: string;

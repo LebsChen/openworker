@@ -31,8 +31,10 @@ import {
   deleteRemoteHost,
   listRemoteHosts,
   saveRemoteHost,
+  testRemoteHost,
   remoteHostConfigError,
   type RemoteHostInfo,
+  type RemoteHostProbeResult,
   startDictation,
   stopDictation,
   verifyDictationModel,
@@ -150,6 +152,9 @@ function RemoteHostsSection() {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [configError, setConfigError] = useState<string | null>(null);
+  const [probeState, setProbeState] = useState<Record<string, RemoteHostProbeResult>>({});
+  const [savedTokens, setSavedTokens] = useState<Record<string, string>>({});
+  const [testing, setTesting] = useState<string | null>(null);
   const refresh = () => {
     listRemoteHosts().then((v) => setHosts(v || [])).catch(() => setHosts([]));
     remoteHostConfigError().then(setConfigError).catch(() => setConfigError(null));
@@ -161,6 +166,7 @@ function RemoteHostsSection() {
     setError(null);
     try {
       await saveRemoteHost(name, baseUrl, token);
+      setSavedTokens((current) => ({ ...current, [name]: token }));
       setToken("");
       setSaved(true);
       refresh();
@@ -174,6 +180,20 @@ function RemoteHostsSection() {
       );
     }
   };
+  const test = async (hostName: string, url: string, hostToken: string) => {
+    setTesting(hostName);
+    const result = await testRemoteHost(url, hostToken);
+    setProbeState((current) => ({ ...current, [hostName]: result }));
+    const statuses = (globalThis as any).__COWORKER_HOST_STATUS__ || {};
+    statuses[hostName] = result.status;
+    (globalThis as any).__COWORKER_HOST_STATUS__ = statuses;
+    setTesting(null);
+  };
+  const statusLabel = (status: RemoteHostProbeResult["status"]) =>
+    status === "online" ? "online" :
+    status === "auth_failed" ? "auth failed" :
+    status === "offline" ? "offline" : "unknown";
+  const currentFormResult = probeState[name];
   return (
     <section>
       <PanelHead
@@ -189,9 +209,31 @@ function RemoteHostsSection() {
         {hosts.map((host) => (
           <div key={host.name} className="flex items-center gap-3 border-b border-line pb-3">
             <div className="min-w-0 flex-1">
-              <div className="text-[13px] font-medium">{host.name}</div>
+              <div className="text-[13px] font-medium">
+                {host.name}
+                {probeState[host.name] && (
+                  <span className="ml-2 text-[11px] text-muted">
+                    {statusLabel(probeState[host.name].status)}
+                  </span>
+                )}
+              </div>
               <div className="text-[12px] text-muted truncate">{host.base_url}</div>
+              {probeState[host.name] && (
+                <div className="text-[11px] text-muted">
+                  {probeState[host.name].latency_ms != null && `${probeState[host.name].latency_ms} ms`}
+                  {probeState[host.name].health?.model && ` · model ${probeState[host.name].health?.model}`}
+                  {probeState[host.name].error && ` · ${probeState[host.name].error}`}
+                </div>
+              )}
             </div>
+            <button
+              className={BTN_BORDERED}
+              disabled={testing === host.name || !savedTokens[host.name]}
+              title={!savedTokens[host.name] ? "Enter the token below to test this host." : undefined}
+              onClick={() => test(host.name, host.base_url, savedTokens[host.name] || "")}
+            >
+              {testing === host.name ? "Testing…" : "Test connection"}
+            </button>
             <button className="text-[12px] text-danger" onClick={() => deleteRemoteHost(host.name).then(refresh)}>
               Remove
             </button>
@@ -201,6 +243,21 @@ function RemoteHostsSection() {
         <input className={INPUT} placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
         <input className={INPUT} placeholder="https://rvm-host:8765" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
         <input className={INPUT} type="password" placeholder="Server token" value={token} onChange={(e) => setToken(e.target.value)} />
+        <button
+          className={BTN_BORDERED}
+          disabled={!name || !baseUrl || !token || testing === name}
+          onClick={() => test(name, baseUrl, token)}
+        >
+          {testing === name ? "Testing…" : "Test connection"}
+        </button>
+        {currentFormResult && (
+          <div role="status" className="text-[12px] text-muted">
+            {statusLabel(currentFormResult.status)}
+            {currentFormResult.latency_ms != null && ` · ${currentFormResult.latency_ms} ms`}
+            {currentFormResult.health?.model && ` · model ${currentFormResult.health.model}`}
+            {currentFormResult.error && ` · ${currentFormResult.error}`}
+          </div>
+        )}
         <button className={BTN_ACCENT} disabled={!name || !baseUrl || !token} onClick={save}>Save profile</button>
         {saved && <div className="text-[12px] text-accent">Saved securely. Remote hosts are available when selecting a VM for a new session.</div>}
         {error && <div role="alert" className="text-[12px] text-danger">{error}</div>}
