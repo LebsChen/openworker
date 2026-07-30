@@ -821,7 +821,8 @@ pub fn run() {
     let session_hosts = serde_json::Value::Array(session_host_values);
     // Debug-format yields a quoted JS string literal.
     let inject = format!(
-        "window.__COWORKER_HTTP__={http:?};window.__COWORKER_WS__={ws:?};window.__COWORKER_API_TOKEN__={api_token:?};window.__COWORKER_REMOTE_MODE__=false;window.__COWORKER_REMOTE_NAME__=null;window.__COWORKER_HOSTS__={};window.__OCW_PLATFORM__={:?};",
+        "window.__COWORKER_HTTP__={http:?};window.__COWORKER_WS__={ws:?};window.__COWORKER_API_TOKEN__={api_token:?};window.__COWORKER_STATE_DIR__={:?};window.__COWORKER_REMOTE_MODE__=false;window.__COWORKER_REMOTE_NAME__=null;window.__COWORKER_HOSTS__={};window.__OCW_PLATFORM__={:?};",
+        state_dir(),
         session_hosts,
         std::env::consts::OS
     );

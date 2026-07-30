@@ -39,6 +39,19 @@ export const sessionHosts = (): SessionHost[] => {
   }];
 };
 
+const sessionHostBindings = new Map<string, string>();
+
+export const rememberSessionHost = (sessionId: string, host: SessionHost): void => {
+  sessionHostBindings.set(sessionId, host.id);
+};
+
+export const hostForSession = (sessionId: string): SessionHost => {
+  const hostId = sessionHostBindings.get(sessionId);
+  const host = sessionHosts().find((candidate) => candidate.id === hostId);
+  if (!host) throw new Error(`No host binding found for session ${sessionId}.`);
+  return host;
+};
+
 // All local REST calls pass through this module, so a module-local wrapper applies launch
 // authentication without asking every endpoint helper to remember the security header.
 const fetch = (
@@ -189,6 +202,7 @@ export async function getSessions(workspace?: string): Promise<SessionInfo[]> {
           host_id: host.id,
           host_status: "online" as const,
         }));
+        tagged.forEach((session: SessionInfo) => sessionHostBindings.set(session.session_id, host.id));
         try {
           localStorage.setItem(`openworker:sessions:${host.id}`, JSON.stringify(tagged));
         } catch {}
@@ -237,16 +251,14 @@ export interface ConversationMessage {
 
 export async function getSessionMessages(
   sessionId: string,
-  host?: SessionHost,
+  host: SessionHost,
 ): Promise<ConversationMessage[]> {
-  const res = host
-    ? await hostFetch(host, `${host.base_url}/v1/sessions/${sessionId}/messages`)
-    : await fetch(`${httpBase()}/v1/sessions/${sessionId}/messages`);
+  const res = await hostFetch(host, `${host.base_url}/v1/sessions/${sessionId}/messages`);
   return (await res.json()).messages ?? [];
 }
 
-export async function renameSession(sessionId: string, title: string): Promise<{ ok: boolean; error?: string }> {
-  const res = await fetch(`${httpBase()}/v1/sessions/${encodeURIComponent(sessionId)}`, {
+export async function renameSession(sessionId: string, title: string, host: SessionHost): Promise<{ ok: boolean; error?: string }> {
+  const res = await hostFetch(host, `${host.base_url}/v1/sessions/${encodeURIComponent(sessionId)}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ title }),
@@ -257,8 +269,9 @@ export async function renameSession(sessionId: string, title: string): Promise<{
 export async function setSessionFlags(
   sessionId: string,
   flags: { pinned?: boolean; archived?: boolean },
+  host: SessionHost,
 ): Promise<{ ok: boolean; error?: string }> {
-  const res = await fetch(`${httpBase()}/v1/sessions/${encodeURIComponent(sessionId)}`, {
+  const res = await hostFetch(host, `${host.base_url}/v1/sessions/${encodeURIComponent(sessionId)}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(flags),
@@ -266,8 +279,8 @@ export async function setSessionFlags(
   return res.json();
 }
 
-export async function deleteSession(sessionId: string): Promise<{ ok: boolean; error?: string }> {
-  const res = await fetch(`${httpBase()}/v1/sessions/${encodeURIComponent(sessionId)}`, { method: "DELETE" });
+export async function deleteSession(sessionId: string, host: SessionHost): Promise<{ ok: boolean; error?: string }> {
+  const res = await hostFetch(host, `${host.base_url}/v1/sessions/${encodeURIComponent(sessionId)}`, { method: "DELETE" });
   return res.json();
 }
 
@@ -290,14 +303,14 @@ export interface ArtifactContent {
   truncated?: boolean;
 }
 
-export async function getArtifacts(sessionId: string): Promise<ArtifactInfo[]> {
-  const res = await fetch(`${httpBase()}/v1/sessions/${encodeURIComponent(sessionId)}/artifacts`);
+export async function getArtifacts(sessionId: string, host: SessionHost): Promise<ArtifactInfo[]> {
+  const res = await hostFetch(host, `${host.base_url}/v1/sessions/${encodeURIComponent(sessionId)}/artifacts`);
   return (await res.json()).artifacts ?? [];
 }
 
-export async function readArtifact(sessionId: string, path: string): Promise<ArtifactContent> {
+export async function readArtifact(sessionId: string, path: string, host: SessionHost): Promise<ArtifactContent> {
   const q = new URLSearchParams({ path });
-  const res = await fetch(`${httpBase()}/v1/sessions/${encodeURIComponent(sessionId)}/artifacts/read?${q.toString()}`);
+  const res = await hostFetch(host, `${host.base_url}/v1/sessions/${encodeURIComponent(sessionId)}/artifacts/read?${q.toString()}`);
   return res.json();
 }
 
@@ -305,9 +318,10 @@ export async function readArtifact(sessionId: string, path: string): Promise<Art
 export async function revealArtifact(
   sessionId: string,
   path: string,
+  host: SessionHost,
   mode: "reveal" | "open" = "reveal",
 ): Promise<{ ok: boolean; error?: string }> {
-  const res = await fetch(`${httpBase()}/v1/sessions/${encodeURIComponent(sessionId)}/artifacts/reveal`, {
+  const res = await hostFetch(host, `${host.base_url}/v1/sessions/${encodeURIComponent(sessionId)}/artifacts/reveal`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ path, mode }),
@@ -1193,19 +1207,22 @@ export interface InboxItem {
   session_exists?: boolean;
 }
 
-export async function getInbox(sessionId?: string, state?: string): Promise<InboxItem[]> {
+export async function getInbox(sessionId: string | undefined, state: string | undefined, host?: SessionHost): Promise<InboxItem[]> {
   const q = new URLSearchParams();
   if (sessionId) q.set("session_id", sessionId);
   if (state) q.set("state", state);
-  const res = await fetch(`${httpBase()}/v1/inbox?${q.toString()}`);
+  const res = host
+    ? await hostFetch(host, `${host.base_url}/v1/inbox?${q.toString()}`)
+    : await fetch(`${httpBase()}/v1/inbox?${q.toString()}`);
   return (await res.json()).items;
 }
 
 export async function resolveInboxItem(
   id: string,
   resolution: string,
+  host: SessionHost,
 ): Promise<{ ok: boolean }> {
-  const res = await fetch(`${httpBase()}/v1/inbox/${encodeURIComponent(id)}/resolve`, {
+  const res = await hostFetch(host, `${host.base_url}/v1/inbox/${encodeURIComponent(id)}/resolve`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ resolution }),
@@ -1303,9 +1320,10 @@ export async function unsubscribeChannel(
   return res.json();
 }
 
-export async function getUnattended(sessionId: string): Promise<boolean> {
-  const res = await fetch(
-    `${httpBase()}/v1/sessions/${encodeURIComponent(sessionId)}/unattended`,
+export async function getUnattended(sessionId: string, host: SessionHost): Promise<boolean> {
+  const res = await hostFetch(
+    host,
+    `${host.base_url}/v1/sessions/${encodeURIComponent(sessionId)}/unattended`,
   );
   return (await res.json()).unattended;
 }
@@ -1313,9 +1331,11 @@ export async function getUnattended(sessionId: string): Promise<boolean> {
 export async function setUnattended(
   sessionId: string,
   unattended: boolean,
+  host: SessionHost,
 ): Promise<{ ok: boolean; unattended: boolean }> {
-  const res = await fetch(
-    `${httpBase()}/v1/sessions/${encodeURIComponent(sessionId)}/unattended`,
+  const res = await hostFetch(
+    host,
+    `${host.base_url}/v1/sessions/${encodeURIComponent(sessionId)}/unattended`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },

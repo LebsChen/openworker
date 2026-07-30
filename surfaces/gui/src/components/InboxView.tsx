@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   getConnectors,
   getInbox,
+  hostForSession,
   getInboxRouting,
   getPersonas,
   getRecentChannels,
@@ -93,7 +94,9 @@ export function InboxView({
   }, []);
 
   const resolve = async (id: string, resolution: string) => {
-    await resolveInboxItem(id, resolution);
+    const item = items.find((candidate) => candidate.id === id);
+    if (!item) return;
+    await resolveInboxItem(id, resolution, hostForSession(item.session_id));
     load();
   };
 

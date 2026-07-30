@@ -13,6 +13,7 @@ import {
   getPersonas,
   getInbox,
   getUnattended,
+  rememberSessionHost,
   isRemoteMode,
   PERSONAS_CHANGED,
   resolveInboxItem,
@@ -174,6 +175,7 @@ export function App() {
   const [surfaces, setSurfaces] = useState<SurfaceVisibility>({ cowork: true, chat: false, code: false });
   const [mode, setMode] = useState("interactive");
   const [connected, setConnected] = useState(false);
+  const [sessionOffline, setSessionOffline] = useState(false);
   const [running, setRunning] = useState(false);
   const [items, setItems] = useState<Item[]>([]);
   const [streaming, setStreamingState] = useState("");
@@ -344,14 +346,14 @@ export function App() {
   }, []);
   // The Mode menu's "Send approvals to Inbox" toggle (§22 — the old InboxControl, folded in).
   const toggleUnattended = async (on: boolean) => {
-    await setUnattended(sessionId, on);
+    await setUnattended(sessionId, on, sessionHost);
     markUnattended(on);
     // First Unattended enable = Inbox machinery engaged → the account row's chip unlocks (§26).
     if (on) announceInboxUnlock();
   };
   const resolveSessionInbox = async (id: string, resolution: string) => {
-    await resolveInboxItem(id, resolution);
-    getInbox(sessionId, "pending").then(setSessionInbox).catch(() => setSessionInbox([]));
+    await resolveInboxItem(id, resolution, sessionHost);
+    getInbox(sessionId, "pending", sessionHost).then(setSessionInbox).catch(() => setSessionInbox([]));
     refreshSessions(); // attention badge should drop right away
   };
   // Shows a working-area chip / project grouping. Persona's needs_workspace; fallback before load.
@@ -398,6 +400,7 @@ export function App() {
   // server may not answer for a second or two. Only fall back to the gate once it's truly up.
   const [booting, setBooting] = useState(true);
   const [remoteError, setRemoteError] = useState<string | null>(null);
+  const [localServerError, setLocalServerError] = useState<string | null>(null);
   const [onboarding, setOnboarding] = useState(false);
   // True once we've resumed a prior conversation on boot (drives the splash wording).
   const [resumedExisting, setResumedExisting] = useState(false);
@@ -418,13 +421,20 @@ export function App() {
       const last = [...sess].sort((a, b) => ts(b) - ts(a))[0];
       if (last) {
         setResumedExisting(true);
+        const restoredHost =
+          sessionHosts().find((host) => host.id === last.host_id) || sessionHosts()[0];
+        if (restoredHost) {
+          setSessionHost(restoredHost);
+          rememberSessionHost(last.session_id, restoredHost);
+          setSessionOffline(last.host_status === "offline");
+        }
         if (last.agent) setAgent(last.agent);
         if (last.workspace) {
           setWorkspace(last.workspace);
           setBranch(null);
         }
         try {
-          const messages = await getSessionMessages(last.session_id, sessionHost);
+          const messages = await getSessionMessages(last.session_id, restoredHost || sessionHosts()[0]);
           setItems(itemsFromMessages(messages));
           setUsage(usageFromMessages(messages));
         } catch {
@@ -491,6 +501,15 @@ export function App() {
                   ? error.message
                   : "Remote host connection failed. Check the selected profile address and token.",
               );
+            } else {
+              const stateDir = (globalThis as any).__COWORKER_STATE_DIR__;
+              setLocalServerError(
+                `Local server failed to start. Check ${
+                  stateDir
+                    ? `${stateDir}/logs/openworker-server.log`
+                    : "the state directory's logs/openworker-server.log"
+                }.`,
+              );
             }
             setBooting(false);
             setShowGate(true);
@@ -504,6 +523,28 @@ export function App() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (booting || isRemoteMode()) return;
+    const check = () => {
+      getHealth()
+        .then(() => setLocalServerError(null))
+        .catch(() => {
+          const stateDir = (globalThis as any).__COWORKER_STATE_DIR__;
+          setLocalServerError(
+            `Local server stopped responding. Check ${
+              stateDir
+                ? `${stateDir}/logs/openworker-server.log`
+                : "the state directory's logs/openworker-server.log"
+            }.`,
+          );
+          setConnected(false);
+        });
+    };
+    check();
+    const timer = window.setInterval(check, 3000);
+    return () => window.clearInterval(timer);
+  }, [booting]);
 
   // Reveal the UI once boot has settled AND the restored session is connected (or we're showing
   // the folder gate). Latched, so later reconnects never flash the splash again.
@@ -777,6 +818,7 @@ export function App() {
       onEvent: handleEvent,
       onOpen: () => {
         setConnected(true);
+        setSessionOffline(false);
         // Auto-send the task prompt once a "Run now" session connects.
         const p = pendingPromptRef.current;
         if (p) {
@@ -785,7 +827,10 @@ export function App() {
           sessionRef.current?.userMessage(p);
         }
       },
-      onClose: () => setConnected(false),
+      onClose: () => {
+        setConnected(false);
+        if (!sessionHost.local) setSessionOffline(true);
+      },
     }, sessionHost, isolateWorkspace);
     sessionRef.current = session;
     return () => session.close();
@@ -855,21 +900,21 @@ export function App() {
       setArtifactCount(0);
       return;
     }
-    getArtifacts(sessionId).then((a) => setArtifactCount(a.length)).catch(() => {});
-  }, [agent, surface, sessionId, browserRefreshKey]);
+    getArtifacts(sessionId, sessionHost).then((a) => setArtifactCount(a.length)).catch(() => {});
+  }, [agent, surface, sessionId, sessionHost.id, browserRefreshKey]);
 
   // Keep the active session's pending Inbox items fresh (answer-in-context card). Loads on session
   // change + after each turn, plus a slow poll so an unattended agent's new question surfaces.
   useEffect(() => {
     if (surface !== "session") return;
     const load = () => {
-      getInbox(sessionId, "pending").then(setSessionInbox).catch(() => setSessionInbox([]));
-      getUnattended(sessionId).then(markUnattended).catch(() => markUnattended(false));
+      getInbox(sessionId, "pending", sessionHost).then(setSessionInbox).catch(() => setSessionInbox([]));
+      getUnattended(sessionId, sessionHost).then(markUnattended).catch(() => markUnattended(false));
     };
     load();
     const t = setInterval(load, 4000);
     return () => clearInterval(t);
-  }, [surface, sessionId, browserRefreshKey, markUnattended]);
+  }, [surface, sessionId, sessionHost.id, browserRefreshKey, markUnattended]);
 
   const send = (text: string, attachments?: Attachment[]) => {
     setItems((p) => [...p, { kind: "user", text, attachments, ts: Date.now() / 1000 }]);
@@ -948,6 +993,7 @@ export function App() {
     if (!gatesWorkspace(target)) setWorkspace(null);
     const id = newId();
     setSessionId(id);
+    rememberSessionHost(id, sessionHost);
     if (isTauri()) bindSessionHost(id, sessionHost.id).catch(() => {});
   };
   // Inbox → session: the item carries its session's workspace/agent, so open it directly.
@@ -987,7 +1033,9 @@ export function App() {
     if (ag) setAgent(ag);
     const selectedHost = sessionHosts().find((host) => host.id === hostId) || sessionHosts()[0];
     if (selectedHost) setSessionHost(selectedHost);
+    if (selectedHost) rememberSessionHost(id, selectedHost);
     const selectedInfo = sessions.find((item) => item.session_id === id);
+    setSessionOffline(selectedInfo?.host_status === "offline");
     setIsolateWorkspace(Boolean(selectedInfo?.workspace_isolated));
     if (isTauri()) bindSessionHost(id, selectedHost?.id || "local").catch(() => {});
     if (!gatesWorkspace(ag)) setShowGate(false);
@@ -1001,8 +1049,7 @@ export function App() {
       setItems(itemsFromMessages(messages));
       setUsage(usageFromMessages(messages));
     } catch {
-      setItems([]);
-      setUsage(emptyUsage());
+      setSessionOffline(!selectedHost?.local);
     }
   };
   const switchAgent = async (name: string) => {
@@ -1098,15 +1145,18 @@ export function App() {
     setShowGate(true);
   };
   const renameConversation = async (id: string, title: string) => {
-    const res = await renameSession(id, title);
+    const host = sessionHosts().find((candidate) => candidate.id === sessions.find((s) => s.session_id === id)?.host_id) || sessionHost;
+    const res = await renameSession(id, title, host);
     if (res.ok) refreshSessions();
   };
   const togglePinned = async (id: string, pinned: boolean) => {
-    await setSessionFlags(id, { pinned });
+    const host = sessionHosts().find((candidate) => candidate.id === sessions.find((s) => s.session_id === id)?.host_id) || sessionHost;
+    await setSessionFlags(id, { pinned }, host);
     refreshSessions();
   };
   const toggleArchived = async (id: string, archived: boolean) => {
-    await setSessionFlags(id, { archived });
+    const host = sessionHosts().find((candidate) => candidate.id === sessions.find((s) => s.session_id === id)?.host_id) || sessionHost;
+    await setSessionFlags(id, { archived }, host);
     refreshSessions();
     // Archiving the open chat: leave it and start fresh (it moves to the Archived section).
     if (archived && id === sessionId) {
@@ -1119,7 +1169,8 @@ export function App() {
     }
   };
   const deleteConversation = async (id: string) => {
-    const res = await deleteSession(id);
+    const host = sessionHosts().find((candidate) => candidate.id === sessions.find((s) => s.session_id === id)?.host_id) || sessionHost;
+    const res = await deleteSession(id, host);
     if (!res.ok) return;
     refreshSessions();
     if (id === sessionId) {
@@ -1531,6 +1582,23 @@ export function App() {
                 </button>
               </div>
             )}
+            {sessionOffline && !sessionHost.local && (
+              <div
+                role="alert"
+                className="mx-4 mb-2 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-[12px] text-danger"
+              >
+                Remote host "{sessionHost.name}" is offline. This session remains bound to that
+                host and will not fall back to Local.
+              </div>
+            )}
+            {localServerError && (
+              <div
+                role="alert"
+                className="mx-4 mb-2 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-[12px] text-danger"
+              >
+                {localServerError}
+              </div>
+            )}
             <div className="main-scroll" ref={scrollRef} onScroll={handleScroll}>
               {idle ? (
                 agent === "cowork" ? (
@@ -1679,6 +1747,7 @@ export function App() {
           <RightRail
             active={surface === "session" && agent !== "chat" && !railHidden}
             sessionId={sessionId}
+            host={sessionHost}
             refreshKey={browserRefreshKey}
             toolNames={items.filter((i) => i.kind === "tool").map((i: any) => i.name)}
             todo={todo}
