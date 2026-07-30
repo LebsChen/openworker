@@ -1,4 +1,4 @@
-import { t, useT } from "../../i18n";
+import { useT } from "../../i18n";
 import { useEffect, useState } from "react";
 import {
   disconnectConnector,
@@ -82,7 +82,7 @@ export function ConnectorsSection() {
           ‹ Connectors
         </button>
         {!c ? (
-          <div className="text-[13px] text-muted">{t("connectors.loading")}</div>
+          <div className="text-[13px] text-muted">{translate("connectors.loading")}</div>
         ) : !c.connected ? (
           /* Pre-connect page (§38). When a connect completes, the poll flips
              c.connected and this same route re-renders as the connected page. */
@@ -123,7 +123,7 @@ function GenericDetail({
   onChanged,
   onGone,
 }: DetailProps & { onGone: () => void }) {
-  useT();
+  const translate = useT();
   return (
     <div>
       <div className="flex items-center gap-3.5 mb-5">

@@ -1,4 +1,4 @@
-import { t, useT } from "../i18n";
+import { useT } from "../i18n";
 import { useState } from "react";
 import type { Item } from "../types";
 import { chooseFolder } from "../tauri";
@@ -15,7 +15,7 @@ export function DirectoryRequestCard({
   item: DirReqItem;
   onRespond: (granted: boolean, path?: string, writable?: boolean) => void;
 }) {
-  useT();
+  const translate = useT();
   const [path, setPath] = useState(item.path || "");
   const [writable, setWritable] = useState(!!item.writable);
 
@@ -28,17 +28,17 @@ export function DirectoryRequestCard({
     <div className="dirreq-card">
       <div className="dirreq-head">
         <Icon name="folderPlus" size={16} className="ico" />
-        <span>{t("permissions.directory.agentRequestingAccessFolder")}</span>
+        <span>{translate("permissions.directory.agentRequestingAccessFolder")}</span>
       </div>
       {item.reason && <div className="dirreq-reason">“{item.reason}”</div>}
       <div className="dirreq-pathrow">
         <input
           className="dirreq-path"
-          placeholder={t("permissions.directory.choosePasteFolderPath")}
+          placeholder={translate("permissions.directory.choosePasteFolderPath")}
           value={path}
           onChange={(e) => setPath(e.target.value)}
         />
-        <button className="btn icon-only" onClick={browse} title={t("permissions.directory.chooseLocation")} aria-label={t("permissions.directory.chooseLocation")}>
+        <button className="btn icon-only" onClick={browse} title={translate("permissions.directory.chooseLocation")} aria-label={translate("permissions.directory.chooseLocation")}>
           <Icon name="folder" size={15} />
         </button>
       </div>

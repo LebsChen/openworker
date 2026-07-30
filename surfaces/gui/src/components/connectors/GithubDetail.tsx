@@ -1,4 +1,4 @@
-import { t, useT } from "../../i18n";
+import { useT } from "../../i18n";
 import { useEffect, useState } from "react";
 import {
   hostForSession,
@@ -64,7 +64,7 @@ export function GithubDetail({ c, cloud, onChanged }: DetailProps) {
   return (
     <div data-testid="github-installations">
       <div className="flex items-center gap-3.5 mb-5">
-        <ConnectorBadge connector={c} size={44} title={t("connectors.github.github")} />
+        <ConnectorBadge connector={c} size={44} title={translate("connectors.github.github")} />
         <div className="min-w-0 flex-1">
           <h2 className="text-[20px] font-semibold tracking-tight leading-tight">GitHub</h2>
           <div className="text-[12.5px] text-muted flex items-center gap-1.5">
@@ -82,7 +82,7 @@ export function GithubDetail({ c, cloud, onChanged }: DetailProps) {
                 </span>
               </>
             ) : (
-              <span>{t("connectors.github.notConnected")}</span>
+              <span>{translate("connectors.github.notConnected")}</span>
             )}
           </div>
         </div>
@@ -130,7 +130,7 @@ export function GithubDetail({ c, cloud, onChanged }: DetailProps) {
 
       {relay && listening.length > 0 && (
         <>
-          <div className={GRP_H}>{t("connectors.github.listening")}</div>
+          <div className={GRP_H}>{translate("connectors.github.listening")}</div>
           <div className={GRP}>
             <ListeningRows subs={listening} onChanged={changed} />
           </div>
@@ -149,7 +149,7 @@ export function GithubDetail({ c, cloud, onChanged }: DetailProps) {
         <AddConnectionModal
           c={c}
           cloud={cloud}
-          title={t("connectors.github.addInstallation")}
+          title={translate("connectors.github.addInstallation")}
           onClose={() => setAdding(false)}
           onChanged={changed}
         />
@@ -169,7 +169,7 @@ function InstallationGroup({
   tokenOk: boolean;
   onChanged: () => void;
 }) {
-  useT();
+  const translate = useT();
   const [busy, setBusy] = useState(false);
   const parked = (c.unauthorized ?? []).filter((m) => m.team_id === inst.installation_id);
   const empty = inst.allowed_users.length === 0 && parked.length === 0;
@@ -230,7 +230,7 @@ function DisconnectBtn({ id, busy, onClick }: { id: string; busy: boolean; onCli
     <button
       className="text-[12.5px] text-danger/80 hover:text-danger shrink-0"
       data-testid={`disconnect-install-${id}`}
-      title={t("connectors.github.stopRelay")}
+      title={translate("connectors.github.stopRelay")}
       onClick={onClick}
       disabled={busy}
     >
@@ -250,10 +250,10 @@ function PeopleRow({
 }) {
   return (
     <div className={ROW}>
-      <span className={LABEL}>{t("connectors.github.people")}</span>
+      <span className={LABEL}>{translate("connectors.github.people")}</span>
       <span className="min-w-0 flex-1 flex flex-wrap items-center gap-1.5">
         {allowed.length === 0 && (
-          <span className="text-[12px] text-faint">{t("connectors.github.nobodyYetApproveWaitingSenderBelow")}</span>
+          <span className="text-[12px] text-faint">{translate("connectors.github.nobodyYetApproveWaitingSenderBelow")}</span>
         )}
         {allowed.map((login) => (
           <span
@@ -264,7 +264,7 @@ function PeopleRow({
             @{login}
             <button
               className={XBTN}
-              title={t("connectors.github.remove")}
+              title={translate("connectors.github.remove")}
               onClick={() => disallowUser("github", login, installationId).then(onChanged)}
             >
               ×
@@ -292,7 +292,7 @@ function WaitingRow({ m, onChanged }: { m: ParkedMessage; onChanged: () => void 
       <button
         className={PILL_ACCENT + " !py-1"}
         data-testid={`parked-allow-deliver-${m.id}`}
-        title={t("connectors.github.allowSenderDeliverMentionNow")}
+        title={translate("connectors.github.allowSenderDeliverMentionNow")}
         onClick={() => act("allow_deliver")}
       >
         Allow & deliver
@@ -300,12 +300,12 @@ function WaitingRow({ m, onChanged }: { m: ParkedMessage; onChanged: () => void 
       <button
         className={PILL_LINE + " !py-1"}
         data-testid={`parked-allow-${m.id}`}
-        title={t("connectors.github.allowSenderMentionDiscarded")}
+        title={translate("connectors.github.allowSenderMentionDiscarded")}
         onClick={() => act("allow")}
       >
         Allow
       </button>
-      <button className={XBTN + " px-1"} data-testid={`parked-dismiss-${m.id}`} title={t("connectors.github.dismiss")} onClick={() => act("dismiss")}>
+      <button className={XBTN + " px-1"} data-testid={`parked-dismiss-${m.id}`} title={translate("connectors.github.dismiss")} onClick={() => act("dismiss")}>
         ×
       </button>
     </div>
@@ -315,7 +315,7 @@ function WaitingRow({ m, onChanged }: { m: ParkedMessage; onChanged: () => void 
 function ListeningRows({ subs, onChanged }: { subs: Subscription[]; onChanged: () => void }) {
   return (
     <div className={ROW} data-testid="listening-github">
-      <span className={LABEL}>{t("connectors.github.listening")}</span>
+      <span className={LABEL}>{translate("connectors.github.listening")}</span>
       <span className="min-w-0 flex-1 space-y-1">
         {subs.map((s) => (
           <span key={s.session_id + s.channel} className="flex items-center gap-2 text-[12.5px]">
@@ -328,7 +328,7 @@ function ListeningRows({ subs, onChanged }: { subs: Subscription[]; onChanged: (
             </span>
             <button
               className={XBTN + " ml-auto"}
-              title={t("connectors.github.unsubscribeSession")}
+              title={translate("connectors.github.unsubscribeSession")}
               onClick={async () => {
                 await unsubscribeChannel(s.session_id, hostForSession(s.session_id), s.channel);
                 onChanged();

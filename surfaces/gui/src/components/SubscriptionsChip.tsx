@@ -1,4 +1,4 @@
-import { t, useT } from "../i18n";
+import { useT } from "../i18n";
 import { useEffect, useRef, useState } from "react";
 import {
   getConnectors,
@@ -40,7 +40,7 @@ export function ChannelPicker({
   // human name (+ workspace) wherever they show the target (§25 consent line, summaries).
   onPickName?: (address: string, name: string, workspace?: string) => void;
 }) {
-  useT();
+  const translate = useT();
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -146,7 +146,7 @@ export function ChannelPicker({
       <input
         ref={inputRef}
         className="chan-input w-full"
-        placeholder={t("subscriptions.slackC0123ChannelLink")}
+        placeholder={translate("subscriptions.slackC0123ChannelLink")}
         value={display}
         title={value || undefined}
         onChange={(e) => {
@@ -260,7 +260,7 @@ export function SubscriptionsChip({
   channels: string[];
   onChanged: () => void;
 }) {
-  useT();
+  const translate = useT();
   const [open, setOpen] = useState(false);
   const [recent, setRecent] = useState<RecentChannel[]>([]);
   const [draft, setDraft] = useState("");
@@ -292,23 +292,23 @@ export function SubscriptionsChip({
     <div className="sub-chip-wrap" ref={ref}>
       <button
         className={"wschip sub-chip" + (open ? " active" : "")}
-        title={t("subscriptions.channelsSessionListens")}
+        title={translate("subscriptions.channelsSessionListens")}
         onClick={() => setOpen((v) => !v)}
       >
         <Icon name="plug" size={12} /> {channels.length || "+"}
       </button>
       {open && (
         <div className="sub-pop" onMouseDown={(e) => e.stopPropagation()}>
-          <div className="sub-pop-head">{t("subscriptions.channelsSessionListens")}</div>
+          <div className="sub-pop-head">{translate("subscriptions.channelsSessionListens")}</div>
           {channels.length === 0 ? (
-            <div className="dim sub-pop-empty">{t("subscriptions.notSubscribedAnyChannel")}</div>
+            <div className="dim sub-pop-empty">{translate("subscriptions.notSubscribedAnyChannel")}</div>
           ) : (
             channels.map((c) => {
               const nm = recent.find((r) => r.channel === c)?.name;
               return (
               <div className="sub-pop-row" key={c}>
                 <span className="sub-pop-chan" title={c}>{nm ? `#${nm}` : c}</span>
-                <button className="sub-pop-x" title={t("subscriptions.unsubscribe")} onClick={() => remove(c)}>
+                <button className="sub-pop-x" title={translate("subscriptions.unsubscribe")} onClick={() => remove(c)}>
                   ×
                 </button>
               </div>

@@ -1,4 +1,4 @@
-import { t, useT } from "../i18n";
+import { useT } from "../i18n";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 // Emits the asset URL only; the worker itself loads lazily with the pdfjs chunk.
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -236,7 +236,7 @@ export function RightRail({
         />
       )}
       </div>
-      <nav className="right-panel-icon-rail" aria-label={t("session.rail.sessionPanel")}>
+      <nav className="right-panel-icon-rail" aria-label={translate("session.rail.sessionPanel")}>
         {PANEL_TABS.map((entry) => {
           const disabled = isRvmPanelTab(entry.id) && host.local;
           return (
@@ -292,7 +292,7 @@ function InfoPanel({
   openAccessKey: number;
   onOpenIntegrations?: () => void;
 }) {
-  useT();
+  const translate = useT();
   return (
     <div className="right-panel-section">
       <h3 className="right-panel-heading">Info</h3>
@@ -303,7 +303,7 @@ function InfoPanel({
         </span>
       </div>
       {host.local ? (
-        <div className="rail-muted">{t("session.rail.localSidecarUsedSession")}</div>
+        <div className="rail-muted">{translate("session.rail.localSidecarUsedSession")}</div>
       ) : probe ? (
         <>
           {probe.error && <div className="rail-error">{probe.error}</div>}
@@ -316,9 +316,9 @@ function InfoPanel({
           {probe.health?.ide_port != null && <FieldRow label="IDE" value="Available" />}
         </>
       ) : (
-        <div className="rail-muted">{t("session.rail.noRvmProbeResultYet")}</div>
+        <div className="rail-muted">{translate("session.rail.noRvmProbeResultYet")}</div>
       )}
-      <RailSection title={t("session.rail.progress")} open onToggle={() => undefined}>
+      <RailSection title={translate("session.rail.progress")} open onToggle={() => undefined}>
         <ProgressSummary running={running} toolNames={toolNames} todo={todo} />
       </RailSection>
       <AccessSection
@@ -345,7 +345,7 @@ function WorklogPanel({ entries }: { entries: WorklogEntry[] }) {
   return (
     <div className="right-panel-section">
       <h3 className="right-panel-heading">Worklog</h3>
-      {!entries.length && <div className="rail-muted">{t("session.rail.noEventsYet")}</div>}
+      {!entries.length && <div className="rail-muted">{translate("session.rail.noEventsYet")}</div>}
       <div className="right-panel-worklog">
         {entries.map((entry) => (
           <div className="right-panel-worklog-row" key={entry.id}>
@@ -379,17 +379,17 @@ function FileChangesPanel({
   return (
     <div className="right-panel-section">
       <div className="right-panel-heading-row">
-        <h3 className="right-panel-heading">{t("session.rail.fileChanges")}</h3>
+        <h3 className="right-panel-heading">{translate("session.rail.fileChanges")}</h3>
         <div>
-          <button className="rail-mini-btn" onClick={onRefresh} title={t("session.rail.refreshArtifacts")}><Icon name="refresh" size={13} /></button>
-          {artifacts.length > 0 && <button className="rail-mini-btn" onClick={onReveal} title={t("session.rail.showArtifactFolder")}><Icon name="folder" size={13} /></button>}
+          <button className="rail-mini-btn" onClick={onRefresh} title={translate("session.rail.refreshArtifacts")}><Icon name="refresh" size={13} /></button>
+          {artifacts.length > 0 && <button className="rail-mini-btn" onClick={onReveal} title={translate("session.rail.showArtifactFolder")}><Icon name="folder" size={13} /></button>}
         </div>
       </div>
-      <h4 className="right-panel-subheading">{t("session.rail.workspaceChanges")}</h4>
-      <div className="rail-muted">{t("session.rail.noWorkspaceDiffDataAvailableYet")}</div>
+      <h4 className="right-panel-subheading">{translate("session.rail.workspaceChanges")}</h4>
+      <div className="rail-muted">{translate("session.rail.noWorkspaceDiffDataAvailableYet")}</div>
       <h4 className="right-panel-subheading">Artifacts</h4>
       {!showArtifacts || !artifacts.length ? (
-        <div className="rail-muted">{t("session.rail.noPreviewableFilesYet")}</div>
+        <div className="rail-muted">{translate("session.rail.noPreviewableFilesYet")}</div>
       ) : (
         <div className="artifact-list">
           {artifacts.slice(0, 16).map((a) => (
@@ -500,7 +500,7 @@ function ArtifactViewer({
   return (
     <div className="artifact-viewer">
       <div className="artifact-head">
-        <button className="artifact-icon-btn" onClick={onBack} aria-label={t("session.rail.backArtifacts")} title={t("session.rail.back")}>
+        <button className="artifact-icon-btn" onClick={onBack} aria-label={translate("session.rail.backArtifacts")} title={translate("session.rail.back")}>
           <Icon name="arrowLeft" size={16} />
         </button>
         <div className="artifact-heading">
@@ -515,8 +515,8 @@ function ArtifactViewer({
                 await onReload();
                 setReloadKey((k) => k + 1);
               }}
-              aria-label={t("session.rail.reloadPreview")}
-              title={t("session.rail.reload")}
+              aria-label={translate("session.rail.reloadPreview")}
+              title={translate("session.rail.reload")}
             >
               <Icon name="refresh" size={16} />
             </button>
@@ -525,8 +525,8 @@ function ArtifactViewer({
             <button
               className="artifact-icon-btn"
               onClick={() => revealArtifact(sessionId, artifact.path, host, "open")}
-              aria-label={t("session.rail.openDefaultApp")}
-              title={t("session.rail.openDefaultApp")}
+              aria-label={translate("session.rail.openDefaultApp")}
+              title={translate("session.rail.openDefaultApp")}
             >
               <Icon name="panelOpen" size={16} />
             </button>
@@ -536,16 +536,16 @@ function ArtifactViewer({
           <button
             className="artifact-icon-btn"
             onClick={() => navigator.clipboard?.writeText(artifact.abs_path || artifact.path)}
-            aria-label={t("session.rail.copyPath")}
-            title={t("session.rail.copyFullPath")}
+            aria-label={translate("session.rail.copyPath")}
+            title={translate("session.rail.copyFullPath")}
           >
             <Icon name="copy" size={16} />
           </button>
           <button
             className="artifact-icon-btn"
             onClick={() => revealArtifact(sessionId, artifact.path, host, "reveal")}
-            aria-label={t("session.rail.showFolder")}
-            title={t("session.rail.showFolder")}
+            aria-label={translate("session.rail.showFolder")}
+            title={translate("session.rail.showFolder")}
           >
             <Icon name="folder" size={16} />
           </button>
@@ -656,7 +656,7 @@ function parseCsv(text: string): string[][] {
 
 function CsvTable({ text }: { text: string }) {
   const rows = parseCsv(text);
-  if (!rows.length) return <div className="rail-muted artifact-table-note">{t("session.rail.emptyFile")}</div>;
+  if (!rows.length) return <div className="rail-muted artifact-table-note">{translate("session.rail.emptyFile")}</div>;
   return <GridTable rows={rows} />;
 }
 
@@ -707,7 +707,7 @@ function PdfViewer({ dataUrl }: { dataUrl: string }) {
   if (error) return <div className="rail-error artifact-table-note">Could not render PDF: {error}</div>;
   return (
     <div className="artifact-pdfjs">
-      {loading && <div className="rail-muted artifact-table-note">{t("session.rail.renderingPdf")}</div>}
+      {loading && <div className="rail-muted artifact-table-note">{translate("session.rail.renderingPdf")}</div>}
       <div ref={holder} />
     </div>
   );
@@ -742,7 +742,7 @@ function SheetViewer({ dataUrl }: { dataUrl: string }) {
   }, [dataUrl]);
 
   if (error) return <div className="rail-error artifact-table-note">Could not parse spreadsheet: {error}</div>;
-  if (!sheets) return <div className="rail-muted artifact-table-note">{t("session.rail.parsingSpreadsheet")}</div>;
+  if (!sheets) return <div className="rail-muted artifact-table-note">{translate("session.rail.parsingSpreadsheet")}</div>;
   const sheet = sheets[active];
   return (
     <div className="sheet-viewer">
@@ -755,7 +755,7 @@ function SheetViewer({ dataUrl }: { dataUrl: string }) {
           ))}
         </div>
       )}
-      {sheet.rows.length ? <GridTable rows={sheet.rows} /> : <div className="rail-muted artifact-table-note">{t("session.rail.emptySheet")}</div>}
+      {sheet.rows.length ? <GridTable rows={sheet.rows} /> : <div className="rail-muted artifact-table-note">{translate("session.rail.emptySheet")}</div>}
     </div>
   );
 }

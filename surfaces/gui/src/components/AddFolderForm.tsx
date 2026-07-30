@@ -1,4 +1,4 @@
-import { t, useT } from "../i18n";
+import { useT } from "../i18n";
 import { useState } from "react";
 import { chooseFolder } from "../tauri";
 import { Icon } from "./Icon";
@@ -21,7 +21,7 @@ export function AddFolderForm({
   startOpen?: boolean;
   onDismiss?: () => void;
 }) {
-  useT();
+  const translate = useT();
   const [open, setOpen] = useState(!!startOpen);
   const [path, setPath] = useState("");
   const [writable, setWritable] = useState(false);
@@ -58,7 +58,7 @@ export function AddFolderForm({
         <input
           className="addfolder-path"
           autoFocus
-          placeholder={t("workspace.folders.choosePasteFolderPath")}
+          placeholder={translate("workspace.folders.choosePasteFolderPath")}
           value={path}
           spellCheck={false}
           onChange={(e) => setPath(e.target.value)}
@@ -67,12 +67,12 @@ export function AddFolderForm({
             else if (e.key === "Escape") reset();
           }}
         />
-        <button className="btn icon-only" onClick={browse} title={t("workspace.folders.chooseLocation")} aria-label={t("workspace.folders.chooseLocation")}>
+        <button className="btn icon-only" onClick={browse} title={translate("workspace.folders.chooseLocation")} aria-label={translate("workspace.folders.chooseLocation")}>
           <Icon name="folder" size={15} />
         </button>
       </div>
       <div className="addfolder-actions">
-        <label className="addfolder-write" title={t("workspace.folders.offReadOnlyTickLetAgentWriteHere")}>
+        <label className="addfolder-write" title={translate("workspace.folders.offReadOnlyTickLetAgentWriteHere")}>
           <input type="checkbox" checked={writable} onChange={(e) => setWritable(e.target.checked)} />
           Allow writes
         </label>

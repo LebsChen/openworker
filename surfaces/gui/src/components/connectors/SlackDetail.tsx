@@ -1,4 +1,4 @@
-import { t, useT } from "../../i18n";
+import { useT } from "../../i18n";
 import { useEffect, useRef, useState } from "react";
 import {
   hostForSession,
@@ -72,7 +72,7 @@ export function SlackDetail({ c, cloud, slack, onChanged }: DetailProps) {
   return (
     <div data-testid="slack-workspaces">
       <div className="flex items-center gap-3.5 mb-5">
-        <ConnectorBadge connector={c} size={44} title={t("connectors.slack.slack")} />
+        <ConnectorBadge connector={c} size={44} title={translate("connectors.slack.slack")} />
         <div className="min-w-0 flex-1">
           <h2 className="text-[20px] font-semibold tracking-tight leading-tight">Slack</h2>
           <div className="text-[12.5px] text-muted flex items-center gap-1.5">
@@ -90,7 +90,7 @@ export function SlackDetail({ c, cloud, slack, onChanged }: DetailProps) {
                 </span>
               </>
             ) : (
-              <span>{t("connectors.slack.notConnected")}</span>
+              <span>{translate("connectors.slack.notConnected")}</span>
             )}
           </div>
         </div>
@@ -129,7 +129,7 @@ export function SlackDetail({ c, cloud, slack, onChanged }: DetailProps) {
       {/* Manual Socket Mode: one workspace, the flat allow-list (unchanged semantics). */}
       {c.connected && !relay && (
         <div data-testid="slack-manual-card">
-          <div className={GRP_H}>{c.account || "workspace"} <span className="font-normal text-faint">{t("connectors.slack.manualTokens")}</span></div>
+          <div className={GRP_H}>{c.account || "workspace"} <span className="font-normal text-faint">{translate("connectors.slack.manualTokens")}</span></div>
           <div className={GRP}>
             <PeopleRow
               allowed={c.allowed_users}
@@ -160,14 +160,14 @@ export function SlackDetail({ c, cloud, slack, onChanged }: DetailProps) {
 
       <ToolsDisclosure c={c} onChanged={onChanged} />
       {c.connected && (
-        <div className={FOOT + " mt-2"}>{t("connectors.slack.namesFromSlack")}</div>
+        <div className={FOOT + " mt-2"}>{translate("connectors.slack.namesFromSlack")}</div>
       )}
 
       {adding && (
         <AddConnectionModal
           c={c}
           cloud={cloud}
-          title={t("connectors.slack.addWorkspace")}
+          title={translate("connectors.slack.addWorkspace")}
           onClose={() => setAdding(false)}
           onChanged={changed}
         />
@@ -189,7 +189,7 @@ function WorkspaceGroup({
   tokenOk: boolean;
   onChanged: () => void;
 }) {
-  useT();
+  const translate = useT();
   const [busy, setBusy] = useState(false);
   const parked = (c.unauthorized ?? []).filter((m) => m.team_id === w.team_id);
   const listening = subs.filter((s) => s.channel.startsWith(`slack:${w.team_id}/`));
@@ -224,7 +224,7 @@ function WorkspaceGroup({
           <>
             <div className={ROW}>
               <span className="min-w-0 flex-1 text-[12.5px] text-muted flex items-center gap-2 flex-wrap">
-                <span>{t("connectors.slack.noOneAllowedYetMentionsBotShowUpHereOk")}</span>
+                <span>{translate("connectors.slack.noOneAllowedYetMentionsBotShowUpHereOk")}</span>
                 <PersonPicker teamId={w.team_id} allowed={[]} onChanged={onChanged} />
               </span>
               <DisconnectBtn teamId={w.team_id} busy={busy} onClick={disconnect} />
@@ -278,7 +278,7 @@ function DisconnectBtn({ teamId, busy, onClick }: { teamId: string; busy: boolea
     <button
       className="text-[12.5px] text-danger/80 hover:text-danger shrink-0"
       data-testid={`disconnect-workspace-${teamId}`}
-      title={t("connectors.slack.stopRelay")}
+      title={translate("connectors.slack.stopRelay")}
       onClick={onClick}
       disabled={busy}
     >
@@ -315,7 +315,7 @@ function PeopleRow({
       <span className={LABEL}>People</span>
       <span className="min-w-0 flex-1 flex flex-wrap items-center gap-1.5">
         {allowed.length === 0 && (
-          <span className="text-[12px] text-faint">{t("connectors.slack.approveOrNameSender")}</span>
+          <span className="text-[12px] text-faint">{translate("connectors.slack.approveOrNameSender")}</span>
         )}
         {allowed.map((u) => (
           <span
@@ -328,16 +328,16 @@ function PeopleRow({
               {initials(label(u))}
             </span>
             {label(u)}
-            {u === installerId && <span className="text-[10.5px] text-faint">{t("connectors.slack.you")}</span>}
+            {u === installerId && <span className="text-[10.5px] text-faint">{translate("connectors.slack.you")}</span>}
             {protectedIds?.includes(u) ? (
               <span
                 className="text-[10.5px] text-faint"
-                title={t("connectors.slack.removeOwnerFirst")}
+                title={translate("connectors.slack.removeOwnerFirst")}
               >
                 · owner
               </span>
             ) : (
-              <button className={XBTN} title={t("connectors.slack.remove")} onClick={() => onRemove(u)}>
+              <button className={XBTN} title={translate("connectors.slack.remove")} onClick={() => onRemove(u)}>
                 ×
               </button>
             )}
@@ -427,7 +427,7 @@ function PersonPicker({
         ref={btn}
         className="inline-flex items-center px-2 py-0.5 rounded-full border border-dashed border-line text-[12.5px] text-muted hover:text-ink hover:border-faint"
         data-testid={testId || `add-person-${teamId || "default"}`}
-        title={t("connectors.slack.pickWorkspaceDirectory")}
+        title={translate("connectors.slack.pickWorkspaceDirectory")}
         onClick={toggle}
       >
         {buttonLabel}
@@ -441,7 +441,7 @@ function PersonPicker({
           <input
             autoFocus
             className="w-full bg-paper border border-line rounded-lg px-2 py-1 text-[12.5px] outline-none placeholder:text-faint"
-            placeholder={t("connectors.slack.typeName")}
+            placeholder={translate("connectors.slack.typeName")}
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => {
@@ -452,7 +452,7 @@ function PersonPicker({
             {err ? (
               <div className="px-2 py-1.5 text-[12px] text-warnInk">{err}</div>
             ) : candidates.length === 0 ? (
-              <div className="px-2 py-1.5 text-[12px] text-faint">{t("connectors.slack.noMatches")}</div>
+              <div className="px-2 py-1.5 text-[12px] text-faint">{translate("connectors.slack.noMatches")}</div>
             ) : (
               candidates.map((m) => (
                 <button
@@ -533,9 +533,9 @@ function ApprovalOwnersRow({
               {initials(label(u))}
             </span>
             {label(u)}
-            {u === installerId && <span className="text-[10.5px] text-faint">{t("connectors.slack.installer")}</span>}
+            {u === installerId && <span className="text-[10.5px] text-faint">{translate("connectors.slack.installer")}</span>}
             {editable && (
-              <button className={XBTN} title={t("connectors.slack.removeApprovalOwner")} onClick={() => remove(u)}>
+              <button className={XBTN} title={translate("connectors.slack.removeApprovalOwner")} onClick={() => remove(u)}>
                 ×
               </button>
             )}
@@ -552,7 +552,7 @@ function ApprovalOwnersRow({
           />
         )}
         {!editable && owners.length > 0 && (
-          <span className="text-[11.5px] text-faint">{t("connectors.slack.setWorkspaceInstaller")}</span>
+          <span className="text-[11.5px] text-faint">{translate("connectors.slack.setWorkspaceInstaller")}</span>
         )}
         {err && <span className="basis-full text-[11.5px] text-warnInk">{err}</span>}
       </span>
@@ -576,7 +576,7 @@ function WaitingRow({ m, onChanged }: { m: ParkedMessage; onChanged: () => void 
       <button
         className={PILL_ACCENT + " !py-1"}
         data-testid={`parked-allow-deliver-${m.id}`}
-        title={t("connectors.slack.allowSenderDeliverMessageNow")}
+        title={translate("connectors.slack.allowSenderDeliverMessageNow")}
         onClick={() => act("allow_deliver")}
       >
         Allow & deliver
@@ -584,12 +584,12 @@ function WaitingRow({ m, onChanged }: { m: ParkedMessage; onChanged: () => void 
       <button
         className={PILL_LINE + " !py-1"}
         data-testid={`parked-allow-${m.id}`}
-        title={t("connectors.slack.allowSenderMessageDiscarded")}
+        title={translate("connectors.slack.allowSenderMessageDiscarded")}
         onClick={() => act("allow")}
       >
         Allow
       </button>
-      <button className={XBTN + " px-1"} data-testid={`parked-dismiss-${m.id}`} title={t("connectors.slack.dismiss")} onClick={() => act("dismiss")}>
+      <button className={XBTN + " px-1"} data-testid={`parked-dismiss-${m.id}`} title={translate("connectors.slack.dismiss")} onClick={() => act("dismiss")}>
         ×
       </button>
     </div>
@@ -613,7 +613,7 @@ function ListeningRows({ subs, onChanged }: { subs: Subscription[]; onChanged: (
             </span>
             <button
               className={XBTN + " ml-auto"}
-              title={t("connectors.slack.unsubscribeSession")}
+              title={translate("connectors.slack.unsubscribeSession")}
               onClick={async () => {
                 await unsubscribeChannel(s.session_id, hostForSession(s.session_id), s.channel);
                 onChanged();
