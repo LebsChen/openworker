@@ -48,7 +48,14 @@ import { itemsFromMessages } from "./itemsFromMessages";
 import { addTurnUsage, emptyUsage, usageFromMessages } from "./usage";
 import { streamMode } from "./streamGate";
 import { InboxItemCard } from "./components/InboxItemCard";
-import { bindSessionHost, isTauri, platformOS, refreshSessionHosts, startWindowDrag } from "./tauri";
+import {
+  bindSessionHost,
+  isTauri,
+  platformOS,
+  refreshSessionHosts,
+  startWindowDrag,
+  testRemoteHost,
+} from "./tauri";
 import { Icon } from "./components/Icon";
 import { Sidebar } from "./components/Sidebar";
 import { ThinkingBlock, Transcript } from "./components/Transcript";
@@ -223,6 +230,7 @@ export function App() {
   // composer's "No model connected" chip. Default true so we don't flash the chip before settings
   // load; corrected by loadSettings.
   const [modelReady, setModelReady] = useState(true);
+  const [hostStatusVersion, setHostStatusVersion] = useState(0);
   const [surface, setSurface] = useState<
     "session" | "scheduled" | "integrations" | "audit" | "inbox" | "persona" | "settings"
   >("session");
@@ -235,6 +243,16 @@ export function App() {
         .then((hosts) => {
           const selected = hosts.find((host) => host.id === sessionHost.id) || hosts[0];
           if (selected) setSessionHost(selected);
+          for (const host of hosts) {
+            if (!host.local) {
+              void testRemoteHost(host.base_url, host.token).then((result) => {
+                const statuses = (globalThis as any).__COWORKER_HOST_STATUS__ || {};
+                statuses[host.id] = result.status;
+                (globalThis as any).__COWORKER_HOST_STATUS__ = statuses;
+                setHostStatusVersion((version) => version + 1);
+              });
+            }
+          }
         })
         .catch(() => {});
     }
@@ -1533,7 +1551,7 @@ export function App() {
           {/* Right: session-settings icon (§23) + panel toggle. Model/mode/persona chrome is
               gone — the facts live in the subtitle, the controls in the composer (§22). */}
           <div className="main-topbar-side main-topbar-actions" onPointerDown={beginWindowDrag}>
-            {sessionHosts().length > 1 && (
+            {sessionHosts().length > 1 && hostStatusVersion >= 0 && (
               <select
                 aria-label="Session host"
                 value={sessionHost.id}

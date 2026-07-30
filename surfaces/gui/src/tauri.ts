@@ -126,11 +126,14 @@ export async function testRemoteHost(
       latency_ms: Math.round(performance.now() - started),
       health: { status: payload.status, model: payload.model },
     };
-  } catch {
+  } catch (error) {
     return {
       status: "offline",
       latency_ms: Math.round(performance.now() - started),
-      error: "Host is unreachable. Check the address and network connection.",
+      error:
+        error instanceof Error && error.name === "AbortError"
+          ? "Connection timed out. Check the address and network connection."
+          : "Host is unreachable. Check the address and network connection.",
     };
   }
 }

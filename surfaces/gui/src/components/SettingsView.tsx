@@ -42,6 +42,7 @@ import {
   type DictationStatus,
 } from "../tauri";
 import { useThemePref } from "../theme";
+import { sessionHosts } from "../api";
 import { Icon } from "./Icon";
 import { PanelHead } from "./IntegrationsView";
 import { ModelsTab } from "./ManageTabs";
@@ -155,9 +156,15 @@ function RemoteHostsSection() {
   const [probeState, setProbeState] = useState<Record<string, RemoteHostProbeResult>>({});
   const [savedTokens, setSavedTokens] = useState<Record<string, string>>({});
   const [testing, setTesting] = useState<string | null>(null);
-  const refresh = () => {
-    listRemoteHosts().then((v) => setHosts(v || [])).catch(() => setHosts([]));
+  const refresh = async () => {
+    const listed = await listRemoteHosts().catch(() => []);
+    setHosts(listed || []);
     remoteHostConfigError().then(setConfigError).catch(() => setConfigError(null));
+    const runtimeHosts = sessionHosts();
+    for (const host of listed || []) {
+      const runtime = runtimeHosts.find((candidate) => candidate.id === host.name);
+      if (runtime?.token) void test(host.name, host.base_url, runtime.token);
+    }
   };
   useEffect(() => {
     refresh();
@@ -181,13 +188,29 @@ function RemoteHostsSection() {
     }
   };
   const test = async (hostName: string, url: string, hostToken: string) => {
+    setProbeState((current) => ({
+      ...current,
+      [hostName]: { status: "unknown", error: "Checking connection…" },
+    }));
     setTesting(hostName);
-    const result = await testRemoteHost(url, hostToken);
-    setProbeState((current) => ({ ...current, [hostName]: result }));
-    const statuses = (globalThis as any).__COWORKER_HOST_STATUS__ || {};
-    statuses[hostName] = result.status;
-    (globalThis as any).__COWORKER_HOST_STATUS__ = statuses;
-    setTesting(null);
+    try {
+      const result = await testRemoteHost(url, hostToken);
+      setProbeState((current) => ({ ...current, [hostName]: result }));
+      const statuses = (globalThis as any).__COWORKER_HOST_STATUS__ || {};
+      statuses[hostName] = result.status;
+      (globalThis as any).__COWORKER_HOST_STATUS__ = statuses;
+    } catch (error) {
+      const result: RemoteHostProbeResult = {
+        status: "offline",
+        error: error instanceof Error ? error.message : "Connection test failed.",
+      };
+      setProbeState((current) => ({ ...current, [hostName]: result }));
+      const statuses = (globalThis as any).__COWORKER_HOST_STATUS__ || {};
+      statuses[hostName] = result.status;
+      (globalThis as any).__COWORKER_HOST_STATUS__ = statuses;
+    } finally {
+      setTesting(null);
+    }
   };
   const statusLabel = (status: RemoteHostProbeResult["status"]) =>
     status === "online" ? "online" :
@@ -211,18 +234,22 @@ function RemoteHostsSection() {
             <div className="min-w-0 flex-1">
               <div className="text-[13px] font-medium">
                 {host.name}
-                {probeState[host.name] && (
-                  <span className="ml-2 text-[11px] text-muted">
-                    {statusLabel(probeState[host.name].status)}
-                  </span>
-                )}
+                <span className="ml-2 text-[11px] text-muted">
+                  {probeState[host.name]?.error === "Checking connection…"
+                    ? "checking"
+                    : statusLabel(probeState[host.name]?.status || "unknown")}
+                </span>
               </div>
               <div className="text-[12px] text-muted truncate">{host.base_url}</div>
               {probeState[host.name] && (
                 <div className="text-[11px] text-muted">
-                  {probeState[host.name].latency_ms != null && `${probeState[host.name].latency_ms} ms`}
+                  {probeState[host.name].error === "Checking connection…"
+                    ? "checking"
+                    : probeState[host.name].latency_ms != null
+                      ? `${probeState[host.name].latency_ms} ms`
+                      : ""}
                   {probeState[host.name].health?.model && ` · model ${probeState[host.name].health?.model}`}
-                  {probeState[host.name].error && ` · ${probeState[host.name].error}`}
+                  {probeState[host.name].error && probeState[host.name].error !== "Checking connection…" && ` · ${probeState[host.name].error}`}
                 </div>
               )}
             </div>
