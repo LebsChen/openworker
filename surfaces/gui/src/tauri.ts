@@ -214,8 +214,11 @@ export const deleteRemoteHost = async (name: string) => {
       : []
   ).filter((host: SessionHostInfo) => host.id !== name);
 };
-export const setRemoteHostOffline = (name: string, offline: boolean) =>
-  invokeStrict<void>("set_remote_host_offline", { name, offline });
+export const setRemoteHostOffline = async (name: string, offline: boolean) => {
+  await invokeStrict<void>("set_remote_host_offline", { name, offline });
+  await refreshSessionHosts();
+  window.dispatchEvent(new Event("coworker-hosts-changed"));
+};
 export const restartApp = () => invokeStrict<void>("restart_app");
 
 /** Begin native window dragging from a custom title/header region. */

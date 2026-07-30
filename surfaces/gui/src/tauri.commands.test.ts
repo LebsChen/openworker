@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { bindSessionHost, getSessionHost, saveRemoteHost, testRemoteHost } from "./tauri";
+import { bindSessionHost, getSessionHost, saveRemoteHost, setRemoteHostOffline, testRemoteHost } from "./tauri";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -62,6 +62,33 @@ it("reports an online host only after the protected settings probe succeeds", as
   });
   expect(request.mock.calls[0][0]).toBe("http://remote.example/api/health");
   expect(request.mock.calls[1][0]).toBe("http://remote.example/api/info");
+});
+
+it("synchronizes manual offline state into the picker host list", async () => {
+  const invoke = vi.fn(async (command: string) =>
+    command === "list_session_hosts"
+      ? [{
+          id: "rvm-a",
+          name: "rvm-a",
+          base_url: "http://remote.example",
+          url: "http://remote.example",
+          ws_url: "ws://remote.example",
+          token: "remote-token",
+          local: false,
+          offline: true,
+        }]
+      : null,
+  );
+  vi.stubGlobal("__TAURI__", { core: { invoke } });
+  vi.stubGlobal("__COWORKER_HOSTS__", []);
+  await setRemoteHostOffline("rvm-a", true);
+  expect(invoke).toHaveBeenNthCalledWith(1, "set_remote_host_offline", {
+    name: "rvm-a",
+    offline: true,
+  });
+  expect((globalThis as any).__COWORKER_HOSTS__).toEqual([
+    expect.objectContaining({ id: "rvm-a", offline: true }),
+  ]);
 });
 
 it("distinguishes authentication failures from unreachable hosts", async () => {

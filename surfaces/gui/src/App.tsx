@@ -257,6 +257,19 @@ export function App() {
         .catch(() => {});
     }
   }, []);
+  useEffect(() => {
+    const onHostsChanged = () => {
+      const hosts = sessionHosts();
+      const selected = hosts.find((host) => host.id === sessionHost.id);
+      if (selected) {
+        setSessionHost(selected);
+        if (!selected.local) setSessionOffline(Boolean(selected.offline) || selected.status === "offline");
+      }
+      setHostStatusVersion((version) => version + 1);
+    };
+    window.addEventListener("coworker-hosts-changed", onHostsChanged);
+    return () => window.removeEventListener("coworker-hosts-changed", onHostsChanged);
+  }, [sessionHost.id]);
 
   useEffect(() => {
     if (surface !== "scheduled") setScheduledOpenId(null);
@@ -1568,7 +1581,7 @@ export function App() {
                 ))}
               </select>
             )}
-            {!sessionHost.local && sessionHost.status !== "online" && (
+            {!sessionHost.local && (sessionHost.offline || sessionHost.status !== "online") && (
               <div role="status" className="text-[11px] text-warnInk">
                 Remote host "{sessionHost.name}" is {sessionHost.status === "auth_failed" ? "authentication failed" : "offline or untested"}; this session will not fall back to Local.
               </div>
