@@ -338,8 +338,8 @@ export interface RootInfo {
   exists: boolean;
 }
 
-export async function getRoots(sessionId: string): Promise<RootInfo[]> {
-  const res = await fetch(`${httpBase()}/v1/sessions/${encodeURIComponent(sessionId)}/roots`);
+export async function getRoots(sessionId: string, host: SessionHost): Promise<RootInfo[]> {
+  const res = await hostFetch(host, `${host.base_url}/v1/sessions/${encodeURIComponent(sessionId)}/roots`);
   return (await res.json()).roots ?? [];
 }
 
@@ -347,8 +347,9 @@ export async function addRoot(
   sessionId: string,
   path: string,
   writable: boolean,
+  host: SessionHost,
 ): Promise<{ ok: boolean; error?: string; roots?: RootInfo[] }> {
-  const res = await fetch(`${httpBase()}/v1/sessions/${encodeURIComponent(sessionId)}/roots`, {
+  const res = await hostFetch(host, `${host.base_url}/v1/sessions/${encodeURIComponent(sessionId)}/roots`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ path, writable }),
@@ -359,10 +360,12 @@ export async function addRoot(
 export async function removeRoot(
   sessionId: string,
   path: string,
+  host: SessionHost,
 ): Promise<{ ok: boolean; error?: string; roots?: RootInfo[] }> {
   const q = new URLSearchParams({ path });
-  const res = await fetch(
-    `${httpBase()}/v1/sessions/${encodeURIComponent(sessionId)}/roots?${q.toString()}`,
+  const res = await hostFetch(
+    host,
+    `${host.base_url}/v1/sessions/${encodeURIComponent(sessionId)}/roots?${q.toString()}`,
     { method: "DELETE" },
   );
   return res.json();
@@ -1154,11 +1157,13 @@ export interface SessionConnections {
  * record yet), otherwise the view resolves to the default persona's defaults/recommends. */
 export async function getSessionConnections(
   sessionId: string,
+  host: SessionHost,
   persona?: string,
 ): Promise<SessionConnections> {
   const q = persona ? `?persona=${encodeURIComponent(persona)}` : "";
-  const res = await fetch(
-    `${httpBase()}/v1/sessions/${encodeURIComponent(sessionId)}/connections${q}`,
+  const res = await hostFetch(
+    host,
+    `${host.base_url}/v1/sessions/${encodeURIComponent(sessionId)}/connections${q}`,
   );
   return res.json();
 }
@@ -1171,9 +1176,10 @@ export async function setSessionConnection(
   sessionId: string,
   connector: string,
   enabled: boolean,
+  host: SessionHost,
   clear = false,
 ): Promise<{ ok: boolean; error?: string }> {
-  const res = await fetch(`${httpBase()}/v1/sessions/${encodeURIComponent(sessionId)}/connections`, {
+  const res = await hostFetch(host, `${host.base_url}/v1/sessions/${encodeURIComponent(sessionId)}/connections`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ connector, enabled, ...(clear ? { clear: true } : {}) }),
@@ -1298,9 +1304,10 @@ export async function getRecentChannels(): Promise<RecentChannel[]> {
 
 export async function subscribeChannel(
   sessionId: string,
+  host: SessionHost,
   channel: string,
 ): Promise<{ ok: boolean; channel?: string; error?: string }> {
-  const res = await fetch(`${httpBase()}/v1/subscriptions`, {
+  const res = await hostFetch(host, `${host.base_url}/v1/subscriptions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ session_id: sessionId, channel }),
@@ -1310,9 +1317,10 @@ export async function subscribeChannel(
 
 export async function unsubscribeChannel(
   sessionId: string,
+  host: SessionHost,
   channel: string,
 ): Promise<{ ok: boolean; removed?: boolean }> {
-  const res = await fetch(`${httpBase()}/v1/subscriptions/remove`, {
+  const res = await hostFetch(host, `${host.base_url}/v1/subscriptions/remove`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ session_id: sessionId, channel }),
@@ -1494,8 +1502,8 @@ export async function getDmRoute(): Promise<string | null> {
   return (await res.json()).dm_session ?? null;
 }
 
-export async function setDmRoute(sessionId: string): Promise<{ ok: boolean; dm_session: string | null }> {
-  const res = await fetch(`${httpBase()}/v1/messaging/dm-route`, {
+export async function setDmRoute(sessionId: string, host: SessionHost): Promise<{ ok: boolean; dm_session: string | null }> {
+  const res = await hostFetch(host, `${host.base_url}/v1/messaging/dm-route`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ session_id: sessionId }),

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getConnectors, getSessionConnections } from "../api";
+import { getConnectors, getSessionConnections, type SessionHost } from "../api";
 import type { Attachment } from "../types";
 import { ConnectorIcon } from "../connectors/ConnectorIcon";
 import { indexConnectors, visualFor, type ConnectorMap } from "../connectors/visuals";
@@ -22,15 +22,17 @@ const GH_SLACK_PROMPT =
 
 export function SessionIntro({
   sessionId,
+  host,
   onOpenSessionSettings,
   onPrefill,
 }: {
   sessionId: string;
+  host: SessionHost;
   // Opens the §23 Session settings drawer (sources section) — the gated rows' Configure target.
   onOpenSessionSettings: () => void;
   onPrefill: (text: string, attachments?: Attachment[]) => void;
 }) {
-  const { roots, busy, error, addRoot } = useRoots(sessionId);
+  const { roots, busy, error, addRoot } = useRoots(sessionId, host);
   const [live, setLive] = useState<Set<string>>(new Set());
   const [byName, setByName] = useState<ConnectorMap>({});
   const [addingFolder, setAddingFolder] = useState(false);
@@ -38,13 +40,13 @@ export function SessionIntro({
   useEffect(() => {
     // Live = what this session can touch right now (connected AND not muted here) — the same
     // truth the §23 glance renders, so the dots here can never disagree with the row above.
-    getSessionConnections(sessionId)
+    getSessionConnections(sessionId, host)
       .then((c) => setLive(new Set(c.connected.filter((x) => x.enabled).map((x) => x.connector))))
       .catch(() => {});
     getConnectors()
       .then((list) => setByName(indexConnectors(list)))
       .catch(() => {});
-  }, [sessionId]);
+  }, [sessionId, host.id]);
 
   const shared = roots.filter((r) => !r.primary);
   const hubspotReady = live.has("hubspot");

@@ -24,6 +24,7 @@ import {
   type Connector,
   type RecentChannel,
   type SessionConnections,
+  type SessionHost,
   type Subscription,
 } from "../api";
 import { ConnectorBadge } from "../connectors/ConnectorIcon";
@@ -50,6 +51,7 @@ const BTN_BORDERED =
 
 export function AccessSection({
   sessionId,
+  host,
   personaId,
   projectScoped,
   workspace,
@@ -59,6 +61,7 @@ export function AccessSection({
   onOpenIntegrations,
 }: {
   sessionId: string;
+  host: SessionHost;
   personaId?: string;
   // Project-scoped (code-family) sessions summarize the folder NAME, not a count.
   projectScoped?: boolean;
@@ -73,16 +76,16 @@ export function AccessSection({
   const [conns, setConns] = useState<SessionConnections | null>(null);
   const [byName, setByName] = useState<ConnectorMap>({});
   const { roots, busy: rootsBusy, error: rootsError, addRoot, toggleAccess, removeRoot } =
-    useRoots(sessionId, open ? 1 : 0);
+    useRoots(sessionId, host, open ? 1 : 0);
   const rootEl = useRef<HTMLElement | null>(null);
 
   const reload = useCallback(() => {
     // personaId hint: a brand-new session has no server-side record yet, so without it the
     // view would resolve to the DEFAULT persona's defaults/recommends.
-    getSessionConnections(sessionId, personaId)
+    getSessionConnections(sessionId, host, personaId)
       .then(setConns)
       .catch(() => setConns(null));
-  }, [sessionId, personaId]);
+  }, [sessionId, host.id, personaId]);
   useEffect(() => {
     reload();
   }, [reload]);
@@ -162,7 +165,7 @@ export function AccessSection({
   }, [open]);
 
   const toggleSession = async (connector: string, next: boolean) => {
-    await setSessionConnection(sessionId, connector, next);
+    await setSessionConnection(sessionId, connector, next, host);
     reload();
   };
   const channelsOf = (connector: string) =>
@@ -171,7 +174,7 @@ export function AccessSection({
     const raw = draft.trim();
     if (!raw || !channelsFor) return;
     const channel = raw.includes(":") || raw.startsWith("#") ? raw : `${channelsFor}:${raw}`;
-    const r = await subscribeChannel(sessionId, channel);
+    const r = await subscribeChannel(sessionId, host, channel);
     if (!r.ok) {
       setAddErr(r.error || "Couldn't add that channel.");
       return;
@@ -181,7 +184,7 @@ export function AccessSection({
     loadSubs();
   };
   const removeChannel = async (channel: string) => {
-    await unsubscribeChannel(sessionId, channel);
+    await unsubscribeChannel(sessionId, host, channel);
     loadSubs();
   };
 
@@ -251,7 +254,7 @@ export function AccessSection({
                   // Added from THIS session's panel → also enable it here explicitly (a
                   // catalog connector need not be in the persona's default-on set).
                   setAddedFrom(null);
-                  setSessionConnection(sessionId, name, true)
+                  setSessionConnection(sessionId, name, true, host)
                     .catch(() => {})
                     .finally(reload);
                   return;

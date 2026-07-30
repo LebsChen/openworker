@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   getConnectors,
+  hostForSession,
   getRecentChannels,
   getSlackChannels,
   subscribeChannel,
@@ -275,12 +276,12 @@ export function SubscriptionsChip({
   const add = async () => {
     const c = draft.trim();
     if (!c) return;
-    await subscribeChannel(sessionId, c);
+    await subscribeChannel(sessionId, hostForSession(sessionId), c);
     setDraft("");
     onChanged();
   };
   const remove = async (c: string) => {
-    await unsubscribeChannel(sessionId, c);
+    await unsubscribeChannel(sessionId, hostForSession(sessionId), c);
     onChanged();
   };
 

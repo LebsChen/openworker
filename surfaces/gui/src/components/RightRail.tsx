@@ -216,6 +216,7 @@ export function RightRail({
           <AccessSection
             key={sessionId}
             sessionId={sessionId}
+            host={host}
             personaId={personaId}
             projectScoped={projectScoped}
             workspace={workspace}

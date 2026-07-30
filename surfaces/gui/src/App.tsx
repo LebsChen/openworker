@@ -402,6 +402,7 @@ export function App() {
   const [booting, setBooting] = useState(true);
   const [remoteError, setRemoteError] = useState<string | null>(null);
   const [localServerError, setLocalServerError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [onboarding, setOnboarding] = useState(false);
   // True once we've resumed a prior conversation on boot (drives the splash wording).
   const [resumedExisting, setResumedExisting] = useState(false);
@@ -918,6 +919,15 @@ export function App() {
   }, [surface, sessionId, sessionHost.id, browserRefreshKey, markUnattended]);
 
   const send = (text: string, attachments?: Attachment[]) => {
+    if (!connected) {
+      setActionError(
+        sessionHost.local
+          ? "Local agent is not connected."
+          : `Remote host "${sessionHost.name}" is offline. This session remains bound to that host and will not fall back to Local.`,
+      );
+      return;
+    }
+    setActionError(null);
     setItems((p) => [...p, { kind: "user", text, attachments, ts: Date.now() / 1000 }]);
     // The visible model rides along with the message (single source of truth per turn).
     sessionRef.current?.userMessage(text, attachments, model);
@@ -1146,19 +1156,31 @@ export function App() {
     setShowGate(true);
   };
   const renameConversation = async (id: string, title: string) => {
-    const host = hostForSession(id);
-    const res = await renameSession(id, title, host);
-    if (res.ok) refreshSessions();
+    try {
+      const res = await renameSession(id, title, hostForSession(id));
+      if (res.ok) refreshSessions();
+      else setActionError(res.error || "Could not rename session.");
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Could not rename session.");
+    }
   };
   const togglePinned = async (id: string, pinned: boolean) => {
-    const host = hostForSession(id);
-    await setSessionFlags(id, { pinned }, host);
-    refreshSessions();
+    try {
+      const res = await setSessionFlags(id, { pinned }, hostForSession(id));
+      if (res.ok) refreshSessions();
+      else setActionError(res.error || "Could not update session.");
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Could not update session.");
+    }
   };
   const toggleArchived = async (id: string, archived: boolean) => {
-    const host = hostForSession(id);
-    await setSessionFlags(id, { archived }, host);
-    refreshSessions();
+    try {
+      const res = await setSessionFlags(id, { archived }, hostForSession(id));
+      if (!res.ok) {
+        setActionError(res.error || "Could not update session.");
+        return;
+      }
+      refreshSessions();
     // Archiving the open chat: leave it and start fresh (it moves to the Archived section).
     if (archived && id === sessionId) {
       setItems([]);
@@ -1168,19 +1190,28 @@ export function App() {
       setRunning(false);
       setSessionId(newId());
     }
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Could not update session.");
+    }
   };
   const deleteConversation = async (id: string) => {
-    const host = hostForSession(id);
-    const res = await deleteSession(id, host);
-    if (!res.ok) return;
-    refreshSessions();
-    if (id === sessionId) {
-      setItems([]);
-      setUsage(emptyUsage());
-      setStreaming("");
-      setTodo([]);
-      setRunning(false);
-      setSessionId(newId());
+    try {
+      const res = await deleteSession(id, hostForSession(id));
+      if (!res.ok) {
+        setActionError(res.error || "Could not delete session.");
+        return;
+      }
+      refreshSessions();
+      if (id === sessionId) {
+        setItems([]);
+        setUsage(emptyUsage());
+        setStreaming("");
+        setTodo([]);
+        setRunning(false);
+        setSessionId(newId());
+      }
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Could not delete session.");
     }
   };
 
@@ -1600,11 +1631,20 @@ export function App() {
                 {localServerError}
               </div>
             )}
+            {actionError && (
+              <div
+                role="alert"
+                className="mx-4 mb-2 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-[12px] text-danger"
+              >
+                {actionError}
+              </div>
+            )}
             <div className="main-scroll" ref={scrollRef} onScroll={handleScroll}>
               {idle ? (
                 agent === "cowork" ? (
                   <SessionIntro
                     sessionId={sessionId}
+                    host={sessionHost}
                     onOpenSessionSettings={openAccess}
                     onPrefill={prefillComposer}
                   />
