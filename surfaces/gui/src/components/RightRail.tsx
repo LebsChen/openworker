@@ -355,7 +355,7 @@ function ArtifactViewer({
           </button>
           <button
             className="artifact-icon-btn"
-              onClick={() => revealArtifact(sessionId, artifact.path, host, "reveal")}
+            onClick={() => revealArtifact(sessionId, artifact.path, host, "reveal")}
             aria-label="Show in folder"
             title="Show in folder"
           >

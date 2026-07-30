@@ -13,6 +13,7 @@ import {
   getPersonas,
   getInbox,
   getUnattended,
+  hostForSession,
   rememberSessionHost,
   isRemoteMode,
   PERSONAS_CHANGED,
@@ -1145,17 +1146,17 @@ export function App() {
     setShowGate(true);
   };
   const renameConversation = async (id: string, title: string) => {
-    const host = sessionHosts().find((candidate) => candidate.id === sessions.find((s) => s.session_id === id)?.host_id) || sessionHost;
+    const host = hostForSession(id);
     const res = await renameSession(id, title, host);
     if (res.ok) refreshSessions();
   };
   const togglePinned = async (id: string, pinned: boolean) => {
-    const host = sessionHosts().find((candidate) => candidate.id === sessions.find((s) => s.session_id === id)?.host_id) || sessionHost;
+    const host = hostForSession(id);
     await setSessionFlags(id, { pinned }, host);
     refreshSessions();
   };
   const toggleArchived = async (id: string, archived: boolean) => {
-    const host = sessionHosts().find((candidate) => candidate.id === sessions.find((s) => s.session_id === id)?.host_id) || sessionHost;
+    const host = hostForSession(id);
     await setSessionFlags(id, { archived }, host);
     refreshSessions();
     // Archiving the open chat: leave it and start fresh (it moves to the Archived section).
@@ -1169,7 +1170,7 @@ export function App() {
     }
   };
   const deleteConversation = async (id: string) => {
-    const host = sessionHosts().find((candidate) => candidate.id === sessions.find((s) => s.session_id === id)?.host_id) || sessionHost;
+    const host = hostForSession(id);
     const res = await deleteSession(id, host);
     if (!res.ok) return;
     refreshSessions();
