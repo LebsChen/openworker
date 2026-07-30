@@ -37,3 +37,5 @@ class SessionRecord:
     # Auto-compaction state (OPE-27): CompactionState.as_dict(), {} when never compacted.
     # Persisted so a reloaded session keeps its compacted outbound view.
     compaction: dict[str, Any] = field(default_factory=dict)
+    # Desktop host identifier. Older records omit this and remain local.
+    host_id: str = "local"

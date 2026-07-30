@@ -87,3 +87,15 @@ sidecar；这只适用于配置文件损坏或不可读。已成功解析并激�
 远程地址不可达或返回 401/403 时，客户端显示明确的连接/鉴权错误并保持远程模式；
 绝不会静默切回本机执行。使用 “Use local server” 或取消 active profile 才恢复本机
 sidecar。
+
+## Session host mode (Increment 3)
+
+The desktop keeps the implicit local sidecar available as the `local` host even when remote
+profiles are registered. New sessions can select a host from the session-host picker; the selected
+host is carried by that session's HTTP/WS client and is persisted in the desktop remote-host state.
+Session lists are tagged with their host, and a failed host is never replaced by another host.
+
+Each server stores session workspace metadata below its own data root. Session workspaces are under
+`<root>/sessions/<session_id>/`; repository-backed sessions use `git worktree add` and archive uses
+`git worktree remove`, never recursive deletion of repository internals. Root checks reject paths
+outside the owning session workspace, so one session cannot read or write another session's files.

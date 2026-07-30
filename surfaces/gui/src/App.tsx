@@ -22,6 +22,8 @@ import {
   setSessionFlags,
   setUnattended,
   Session,
+  sessionHosts,
+  type SessionHost,
   type InboxItem,
   type MessageSource,
   type Persona,
@@ -44,7 +46,7 @@ import { itemsFromMessages } from "./itemsFromMessages";
 import { addTurnUsage, emptyUsage, usageFromMessages } from "./usage";
 import { streamMode } from "./streamGate";
 import { InboxItemCard } from "./components/InboxItemCard";
-import { isTauri, platformOS, startWindowDrag } from "./tauri";
+import { bindSessionHost, isTauri, platformOS, startWindowDrag } from "./tauri";
 import { Icon } from "./components/Icon";
 import { Sidebar } from "./components/Sidebar";
 import { ThinkingBlock, Transcript } from "./components/Transcript";
@@ -194,6 +196,7 @@ export function App() {
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [projects, setProjects] = useState<RecentWorkspace[]>([]);
   const [sessionId, setSessionId] = useState<string>(newId());
+  const [sessionHost, setSessionHost] = useState<SessionHost>(() => sessionHosts()[0]);
   // Automation-run context (§ owner ask 2026-07-04): which task an open __run__ session belongs
   // to, driving the banner + "Back to runs". Best-effort — a run session without context still
   // shows a generic banner (detected by its __run__ id).
@@ -409,7 +412,7 @@ export function App() {
           setBranch(null);
         }
         try {
-          const messages = await getSessionMessages(last.session_id);
+          const messages = await getSessionMessages(last.session_id, sessionHost);
           setItems(itemsFromMessages(messages));
           setUsage(usageFromMessages(messages));
         } catch {
@@ -559,7 +562,7 @@ export function App() {
     if (surface === "session") rememberLastSession(agent, sessionId, workspace);
   }, [surface, agent, sessionId, workspace]);
 
-  // (re)connect when workspace, session, or agent changes
+  // (re)connect when workspace, session, agent, or selected host changes
   useEffect(() => {
     if (booting) return; // wait until boot/resume settles the session before connecting
     if (gatesWorkspace(agent) && !workspace) return; // Code needs a folder (gate handles it)
@@ -771,7 +774,7 @@ export function App() {
         }
       },
       onClose: () => setConnected(false),
-    });
+    }, sessionHost);
     sessionRef.current = session;
     return () => session.close();
     // NOTE: `workspace` is intentionally NOT a dependency. Every real workspace change
@@ -782,7 +785,7 @@ export function App() {
     // first connect, dropping the user's first message (the "send twice" bug). The scratch
     // dir is deterministic from `sessionId` server-side, so skipping that reconnect is safe.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [booting, sessionId, agent, refreshSessions]);
+  }, [booting, sessionId, agent, sessionHost.id, refreshSessions]);
 
   // Stream-following (FB-004): auto-scroll only while the user is AT the bottom, so scrolling
   // up to read during a streaming turn sticks. `atBottomRef` is the live truth (per scroll
@@ -931,7 +934,9 @@ export function App() {
     // Knowledge family: a new conversation starts fresh (orphan) — clear the workspace so the
     // server provisions a NEW scratch dir for the new session id. Code keeps its repo.
     if (!gatesWorkspace(target)) setWorkspace(null);
-    setSessionId(newId());
+    const id = newId();
+    setSessionId(id);
+    if (isTauri()) bindSessionHost(id, sessionHost.id).catch(() => {});
   };
   // Inbox → session: the item carries its session's workspace/agent, so open it directly.
   // UX-026: 5s top-right toast when a SCHEDULED automation run starts (never for
@@ -962,12 +967,15 @@ export function App() {
   }, [runToast]);
 
   const openSessionFromInbox = (sid: string, ws: string, ag: string) => selectSession(sid, ws, ag);
-  const selectSession = async (id: string, ws: string, ag: string) => {
+  const selectSession = async (id: string, ws: string, ag: string, hostId?: string) => {
     setSurface("session"); // selecting a conversation always returns to the conversation view
     setTodo([]);
     setStreaming("");
     setRunning(false);
     if (ag) setAgent(ag);
+    const selectedHost = sessionHosts().find((host) => host.id === hostId) || sessionHosts()[0];
+    if (selectedHost) setSessionHost(selectedHost);
+    if (isTauri()) bindSessionHost(id, selectedHost?.id || "local").catch(() => {});
     if (!gatesWorkspace(ag)) setShowGate(false);
     if (ws && ws !== workspace) {
       setWorkspace(ws); // switch project to the session's folder
@@ -975,7 +983,7 @@ export function App() {
     }
     setSessionId(id);
     try {
-      const messages = await getSessionMessages(id);
+      const messages = await getSessionMessages(id, selectedHost);
       setItems(itemsFromMessages(messages));
       setUsage(usageFromMessages(messages));
     } catch {
@@ -1022,7 +1030,7 @@ export function App() {
       else setShowGate(true);
       setSessionId(target.sessionId);
       try {
-        const messages = await getSessionMessages(target.sessionId);
+        const messages = await getSessionMessages(target.sessionId, sessionHost);
         setItems(itemsFromMessages(messages));
         setUsage(usageFromMessages(messages));
       } catch {
@@ -1426,6 +1434,21 @@ export function App() {
           {/* Right: session-settings icon (§23) + panel toggle. Model/mode/persona chrome is
               gone — the facts live in the subtitle, the controls in the composer (§22). */}
           <div className="main-topbar-side main-topbar-actions" onPointerDown={beginWindowDrag}>
+            {sessionHosts().length > 1 && (
+              <select
+                aria-label="Session host"
+                value={sessionHost.id}
+                onChange={(e) => {
+                  const host = sessionHosts().find((candidate) => candidate.id === e.target.value);
+                  if (host) setSessionHost(host);
+                }}
+                className="text-[12px] bg-transparent border border-line rounded px-1.5 py-1 text-muted"
+              >
+                {sessionHosts().map((host) => (
+                  <option key={host.id} value={host.id}>{host.name}</option>
+                ))}
+              </select>
+            )}
             {agent === "cowork" && railHidden && artifactCount > 0 && (
               <button
                 className="topbar-artifacts-btn"

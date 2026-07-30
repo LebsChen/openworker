@@ -80,7 +80,19 @@ export type RemoteHostInfo = {
   active: boolean;
 };
 
+export type SessionHostInfo = RemoteHostInfo & {
+  id: string;
+  ws_url: string;
+  token: string;
+  local: boolean;
+};
+
 export const listRemoteHosts = () => invoke<RemoteHostInfo[]>("list_remote_hosts");
+export const listSessionHosts = () => invoke<SessionHostInfo[]>("list_session_hosts");
+export const bindSessionHost = (sessionId: string, hostId: string) =>
+  invokeStrict<void>("bind_session_host", { session_id: sessionId, host_id: hostId });
+export const getSessionHost = (sessionId: string) =>
+  invoke<string | null>("session_host", { session_id: sessionId });
 export const saveRemoteHost = (name: string, baseUrl: string, token: string) =>
   invokeStrict<void>("save_remote_host", { name, base_url: baseUrl, token });
 export const deleteRemoteHost = (name: string) => invokeStrict<void>("delete_remote_host", { name });

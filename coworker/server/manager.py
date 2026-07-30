@@ -82,6 +82,7 @@ from ..providers import (
 )
 from ..secrets import SecretStore, state_dir
 from ..sessions import SessionRecord
+from ..session_workspaces import SessionWorkspaceManager
 from ..skills import SkillLoader
 
 _SCOPES = {s.value for s in Scope}
@@ -114,10 +115,12 @@ class SessionManager:
         model: str = "gpt-5.6-sol",
         mode: Mode = Mode.INTERACTIVE,
         provider: Optional[ProviderClient] = None,
+        host_id: str = "local",
     ) -> None:
         self.default_workspace = (
             str(Path(workspace).expanduser().resolve()) if workspace else None
         )
+        self.host_id = host_id or "local"
         self.model = model
         self.mode = mode
         self.provider = provider
@@ -160,6 +163,7 @@ class SessionManager:
         self._mcp_errors: dict[str, str] = {}
         self.gateway: Optional[Gateway] = None
         self._data_base = base
+        self.session_workspaces = SessionWorkspaceManager(base / "session-workspaces")
         # Desktop/UI prefs (default model, onboarding state) — not secrets; a plain JSON file.
         self._prefs = self._load_prefs()
         if self._prefs.get("default_model"):
@@ -3311,6 +3315,7 @@ class SessionManager:
                 workspace=workspace,
                 model=engine.model,
                 mode=engine.permissions.mode.value,
+                host_id=self.host_id,
                 messages=engine.messages,
                 title=title_from(engine.messages),
                 agent=getattr(engine, "agent_name", "code"),
@@ -3683,6 +3688,7 @@ class SessionManager:
                 "session_id": r.session_id,
                 "title": r.title or "New session",
                 "workspace": r.workspace,
+                "host_id": r.host_id,
                 "agent": r.agent,
                 "model": r.model,
                 "mode": r.mode,

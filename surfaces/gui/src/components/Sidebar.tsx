@@ -121,7 +121,7 @@ interface Props {
   activeSession: string;
   onSwitchAgent: (agent: string) => void;
   onNewSession: (agent: string) => void;
-  onSelectSession: (id: string, workspace: string, agent: string) => void;
+  onSelectSession: (id: string, workspace: string, agent: string, hostId?: string) => void;
   onNewProject: (persona: string) => void;
   onRenameSession: (id: string, title: string) => void;
   onDeleteSession: (id: string) => void;
@@ -539,7 +539,7 @@ export function Sidebar(props: Props) {
             : "hover:bg-panel")
         }
         onClick={() => {
-          if (!editing) props.onSelectSession(s.session_id, s.workspace, s.agent);
+          if (!editing) props.onSelectSession(s.session_id, s.workspace, s.agent, s.host_id);
         }}
         title={editing ? undefined : title}
       >
@@ -567,6 +567,9 @@ export function Sidebar(props: Props) {
             >
               {s.pinned && <Icon name="pin" size={11} className="text-faint shrink-0" />}
               <span className="truncate">{title}</span>
+              {s.host_status === "offline" && (
+                <span className="text-[10px] text-red-500 shrink-0">offline</span>
+              )}
             </span>
             <span
               className={
@@ -612,7 +615,7 @@ export function Sidebar(props: Props) {
         }
         title={editing ? undefined : title}
         onClick={() => {
-          if (!editing) props.onSelectSession(s.session_id, s.workspace, s.agent);
+          if (!editing) props.onSelectSession(s.session_id, s.workspace, s.agent, s.host_id);
         }}
       >
         {/* No leading glyph on session rows (Rohit's call 2026-07-07: the per-session icon

@@ -18,6 +18,27 @@ const apiToken = (): string =>
   (import.meta as any).env?.VITE_COWORKER_API_TOKEN ||
   (typeof __COWORKER_DEV_TOKEN__ === "string" ? __COWORKER_DEV_TOKEN__ : "");
 
+export type SessionHost = {
+  id: string;
+  name: string;
+  base_url: string;
+  ws_url: string;
+  token: string;
+  local: boolean;
+};
+
+export const sessionHosts = (): SessionHost[] => {
+  const hosts = (globalThis as any).__COWORKER_HOSTS__;
+  return Array.isArray(hosts) ? hosts : [{
+    id: "local",
+    name: "This computer",
+    base_url: httpBase(),
+    ws_url: wsBase(),
+    token: apiToken(),
+    local: true,
+  }];
+};
+
 // All local REST calls pass through this module, so a module-local wrapper applies launch
 // authentication without asking every endpoint helper to remember the security header.
 const fetch = (
@@ -147,10 +168,44 @@ export async function setWorkspaceTrusted(
   return res.json();
 }
 
+const hostFetch = (host: SessionHost, input: RequestInfo | URL, init: RequestInit = {}) => {
+  const headers = new Headers(init.headers);
+  if (host.token) headers.set("X-OpenWorker-Token", host.token);
+  return globalThis.fetch(input, { ...init, headers });
+};
+
 export async function getSessions(workspace?: string): Promise<SessionInfo[]> {
   const q = workspace ? `?workspace=${encodeURIComponent(workspace)}` : "";
-  const res = await fetch(`${httpBase()}/v1/sessions${q}`);
-  return (await res.json()).sessions ?? [];
+  const hosts = sessionHosts();
+  const all = await Promise.all(
+    hosts.map(async (host) => {
+      try {
+        const res = host.local
+          ? await fetch(`${host.base_url}/v1/sessions${q}`)
+          : await hostFetch(host, `${host.base_url}/v1/sessions${q}`);
+        const sessions = (await res.json()).sessions ?? [];
+        const tagged = sessions.map((s: SessionInfo) => ({
+          ...s,
+          host_id: host.id,
+          host_status: "online" as const,
+        }));
+        try {
+          localStorage.setItem(`openworker:sessions:${host.id}`, JSON.stringify(tagged));
+        } catch {}
+        return tagged;
+      } catch {
+        try {
+          const cached = JSON.parse(localStorage.getItem(`openworker:sessions:${host.id}`) || "[]");
+          return Array.isArray(cached)
+            ? cached.map((s: SessionInfo) => ({ ...s, host_id: host.id, host_status: "offline" as const }))
+            : [];
+        } catch {
+          return [];
+        }
+      }
+    }),
+  );
+  return all.flat();
 }
 
 // A structured connector-delivered inbound message (§3.1). Attached to the user message it framed,
@@ -180,8 +235,13 @@ export interface ConversationMessage {
   [key: string]: any;
 }
 
-export async function getSessionMessages(sessionId: string): Promise<ConversationMessage[]> {
-  const res = await fetch(`${httpBase()}/v1/sessions/${sessionId}/messages`);
+export async function getSessionMessages(
+  sessionId: string,
+  host?: SessionHost,
+): Promise<ConversationMessage[]> {
+  const res = host
+    ? await hostFetch(host, `${host.base_url}/v1/sessions/${sessionId}/messages`)
+    : await fetch(`${httpBase()}/v1/sessions/${sessionId}/messages`);
   return (await res.json()).messages ?? [];
 }
 
@@ -1836,9 +1896,19 @@ export class Session {
   // against the first message being dropped if the user sends in the connect window.
   private outbox: object[] = [];
 
-  constructor(sessionId: string, workspace: string, agent: string, handlers: Handlers) {
+  constructor(
+    sessionId: string,
+    workspace: string,
+    agent: string,
+    handlers: Handlers,
+    host?: SessionHost,
+  ) {
     const q = `?workspace=${encodeURIComponent(workspace)}&agent=${encodeURIComponent(agent)}`;
-    this.ws = openWebSocket(`${wsBase()}/ws/session/${sessionId}${q}`);
+    const endpoint = host?.ws_url || wsBase();
+    const token = host?.token;
+    this.ws = token
+      ? new WebSocket(`${endpoint}/ws/session/${sessionId}${q}`, ["openworker", token])
+      : openWebSocket(`${endpoint}/ws/session/${sessionId}${q}`);
     this.ws.onmessage = (e) => handlers.onEvent(JSON.parse(e.data));
     this.ws.onopen = () => {
       this.flush();

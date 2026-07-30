@@ -55,6 +55,8 @@ struct RemoteHostsFile {
     hosts: Vec<RemoteHostMeta>,
     #[serde(default)]
     active: Option<String>,
+    #[serde(default)]
+    sessions: std::collections::HashMap<String, String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -62,6 +64,16 @@ struct RemoteHostInfo {
     name: String,
     base_url: String,
     active: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct SessionHostInfo {
+    id: String,
+    name: String,
+    base_url: String,
+    ws_url: String,
+    token: String,
+    local: bool,
 }
 
 fn free_port() -> u16 {
@@ -202,13 +214,6 @@ fn validate_remote_url(base_url: &str) -> Result<String, String> {
     Ok(value.to_owned())
 }
 
-fn active_remote_host() -> Option<(RemoteHostMeta, String)> {
-    let hosts = read_remote_hosts();
-    let name = hosts.active?;
-    let host = hosts.hosts.into_iter().find(|h| h.name == name)?;
-    Some((host.clone(), host.token))
-}
-
 #[tauri::command]
 fn list_remote_hosts() -> Vec<RemoteHostInfo> {
     let hosts = read_remote_hosts();
@@ -222,6 +227,43 @@ fn list_remote_hosts() -> Vec<RemoteHostInfo> {
             base_url: host.base_url,
         })
         .collect()
+}
+
+#[tauri::command]
+fn list_session_hosts() -> Vec<SessionHostInfo> {
+    read_remote_hosts()
+        .hosts
+        .into_iter()
+        .map(|host| SessionHostInfo {
+            id: host.name.clone(),
+            name: host.name,
+            ws_url: host
+                .base_url
+                .replacen("https://", "wss://", 1)
+                .replacen("http://", "ws://", 1),
+            base_url: host.base_url,
+            token: host.token,
+            local: false,
+        })
+        .collect()
+}
+
+#[tauri::command]
+fn bind_session_host(session_id: String, host_id: String) -> Result<(), String> {
+    if session_id.trim().is_empty() || host_id.trim().is_empty() {
+        return Err("Session and host are required.".into());
+    }
+    let mut hosts = read_remote_hosts();
+    if host_id != "local" && !hosts.hosts.iter().any(|host| host.name == host_id) {
+        return Err("Remote host profile not found.".into());
+    }
+    hosts.sessions.insert(session_id, host_id);
+    write_remote_hosts(&hosts)
+}
+
+#[tauri::command]
+fn session_host(session_id: String) -> Option<String> {
+    read_remote_hosts().sessions.get(&session_id).cloned()
 }
 
 #[tauri::command]
@@ -743,32 +785,39 @@ async fn install_update(
 }
 
 pub fn run() {
-    let remote = active_remote_host();
-    let (http, ws, api_token, local_port) = match remote.as_ref() {
-        Some((host, token)) => (
-            host.base_url.clone(),
-            host.base_url
+    // The local host is always available as one session target. Remote profiles are
+    // additional targets and must never disable the local sidecar.
+    let port = free_port();
+    let http = format!("http://127.0.0.1:{port}");
+    let ws = format!("ws://127.0.0.1:{port}");
+    let api_token = launch_token();
+    let local_port = Some(port);
+    let remote_hosts = read_remote_hosts().hosts;
+    let mut session_host_values = vec![serde_json::json!({
+        "id": "local",
+        "name": "This computer",
+        "base_url": http,
+        "ws_url": ws,
+        "token": api_token,
+        "local": true
+    })];
+    session_host_values.extend(remote_hosts.iter().map(|host| {
+        serde_json::json!({
+            "id": host.name,
+            "name": host.name,
+            "base_url": host.base_url,
+            "ws_url": host.base_url
                 .replacen("https://", "wss://", 1)
                 .replacen("http://", "ws://", 1),
-            token.clone(),
-            None,
-        ),
-        None => {
-            let port = free_port();
-            (
-                format!("http://127.0.0.1:{port}"),
-                format!("ws://127.0.0.1:{port}"),
-                launch_token(),
-                Some(port),
-            )
-        }
-    };
-    let remote_mode = remote.is_some();
-    let remote_name = remote.as_ref().map(|(host, _)| host.name.clone());
+            "token": host.token,
+            "local": false
+        })
+    }));
+    let session_hosts = serde_json::Value::Array(session_host_values);
     // Debug-format yields a quoted JS string literal.
     let inject = format!(
-        "window.__COWORKER_HTTP__={http:?};window.__COWORKER_WS__={ws:?};window.__COWORKER_API_TOKEN__={api_token:?};window.__COWORKER_REMOTE_MODE__={remote_mode};window.__COWORKER_REMOTE_NAME__={:?};window.__OCW_PLATFORM__={:?};",
-        remote_name.as_deref(),
+        "window.__COWORKER_HTTP__={http:?};window.__COWORKER_WS__={ws:?};window.__COWORKER_API_TOKEN__={api_token:?};window.__COWORKER_REMOTE_MODE__=false;window.__COWORKER_REMOTE_NAME__=null;window.__COWORKER_HOSTS__={};window.__OCW_PLATFORM__={:?};",
+        session_hosts,
         std::env::consts::OS
     );
 
@@ -808,23 +857,18 @@ pub fn run() {
             clear_pending_update,
             install_update,
             list_remote_hosts,
+            list_session_hosts,
+            bind_session_host,
+            session_host,
             save_remote_host,
             delete_remote_host,
             activate_remote_host,
             restart_app
         ])
         .setup(move |app| {
-            // 1. Start the Python server sidecar unless a remote profile is active.
-            let child = if remote_mode {
-                eprintln!(
-                    "[coworker] remote host mode active{}; local server spawn skipped",
-                    remote_name
-                        .as_deref()
-                        .map(|name| format!(" profile={name}"))
-                        .unwrap_or_default()
-                );
-                None
-            } else {
+            // 1. Start the Python server sidecar. It is the implicit local session host
+            // and remains available even when remote profiles are registered.
+            let child = {
                 let port = local_port.expect("local mode must select a port");
                 let mut server_cmd = Command::new(server_bin());
                 server_cmd
