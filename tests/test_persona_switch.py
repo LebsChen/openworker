@@ -60,6 +60,26 @@ def test_switch_persona_rebuilds_prompt_preserves_history_todo_and_filters_grant
     assert persisted.messages[0]["content"] == replacement.messages[0]["content"]
 
 
+def test_manifest_persona_id_survives_engine_reload(tmp_path):
+    manager = _manager(tmp_path)
+    original = manager.get_engine("reload-fullstack", workspace=str(tmp_path), agent="code")
+    assert original is not None
+
+    replacement, _, error = manager.switch_persona("reload-fullstack", "fullstack")
+
+    assert error is None and replacement is not None
+    assert replacement.agent_name == "fullstack"
+    assert replacement.audit_context["agent"] == "Full-Stack Engineer"
+    assert replacement.audit_context["agent_id"] == "fullstack"
+
+    manager._engines.pop("reload-fullstack")
+    restored = manager.get_engine("reload-fullstack")
+
+    assert restored.agent_name == "fullstack"
+    assert restored.messages[0]["content"] == replacement.messages[0]["content"]
+    assert restored.registry.get("run_shell") is not None
+
+
 def test_switch_persona_rejects_running_and_pending_sessions(tmp_path, monkeypatch):
     manager = _manager(tmp_path)
     engine = manager.get_engine("guarded", workspace=str(tmp_path), agent="code")

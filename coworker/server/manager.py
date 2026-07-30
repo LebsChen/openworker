@@ -3564,10 +3564,13 @@ class SessionManager:
         self._apply_grants(new, grants)
         text = f"Persona switched to {entry.name}"
         new._append_notice("persona_switch", text)
-        new.agent_name = target.name
+        # Agent.name is currently the stable persona id for both hand-written and
+        # manifest-backed agents. Persist that id, never the display title.
+        new.agent_name = persona_id
         new.audit_context = {
             **getattr(old, "audit_context", {}),
-            "agent": target.name,
+            "agent": entry.name,
+            "agent_id": persona_id,
         }
         try:
             self.session_store.rewrite_messages(session_id, new.messages)
