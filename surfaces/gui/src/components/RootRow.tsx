@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type { RootInfo } from "../api";
 import { Icon } from "./Icon";
 import { baseName } from "../paths";
@@ -52,7 +53,7 @@ export function RootRow({
         {root.writable ? "Read-write" : "Read-only"}
       </button>
       {!root.primary && (
-        <button className="root-x" onClick={() => onRemove(root.path)} disabled={busy} title="Remove">
+        <button className="root-x" onClick={() => onRemove(root.path)} disabled={busy} title={t("ui.RootRow.e963907dac")}>
           ×
         </button>
       )}

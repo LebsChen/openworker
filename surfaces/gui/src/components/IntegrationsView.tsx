@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { useEffect, useState } from "react";
 import { getConnectors } from "../api";
 import { McpTab } from "./ManageTabs";
@@ -69,7 +70,7 @@ export function IntegrationsView() {
           {tab === "connectors" ? (
             <section>
               <PanelHead
-                title="Connectors"
+                title={t("ui.IntegrationsView.4b1e9501b9")}
                 sub="Apps and tools your coworkers can use. Connected ones come first."
               />
               <ConnectorsSection />
@@ -77,7 +78,7 @@ export function IntegrationsView() {
           ) : (
             <section>
               <PanelHead
-                title="MCP servers"
+                title={t("ui.IntegrationsView.8d9a304fd9")}
                 sub="External tool servers (stdio or HTTP), shared across all agents."
               />
               <McpTab />

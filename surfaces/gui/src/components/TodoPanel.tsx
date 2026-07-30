@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type { TodoItem } from "../types";
 
 export function TodoPanel({ items }: { items: TodoItem[] }) {
@@ -5,7 +6,7 @@ export function TodoPanel({ items }: { items: TodoItem[] }) {
   const box = (s: string) => (s === "done" ? "☑" : s === "in_progress" ? "◉" : "☐");
   return (
     <div className="todo">
-      <h4>Tasks</h4>
+      <h4>{t("ui.TodoPanel.090ec5f560")}</h4>
       {items.map((it, i) => (
         <div className="item" key={i}>
           <span className="box">{box(it.status)}</span>

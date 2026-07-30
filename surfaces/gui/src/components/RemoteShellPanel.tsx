@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { useEffect, useRef, useState } from "react";
 import "@xterm/xterm/css/xterm.css";
 import { openRvmPty, type SessionHost } from "../api";
@@ -89,7 +90,7 @@ export function RemoteShellPanel({ active, sessionId, host }: Props) {
     return (
       <div className="right-panel-empty">
         <h3>Shell</h3>
-        <p>Requires an RVM host. Local sessions do not provide a PTY.</p>
+        <p>{t("ui.RemoteShellPanel.99ddc42edf")}</p>
       </div>
     );
   }

@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { useEffect, useState } from "react";
 import {
   cloudLogin,
@@ -229,9 +230,9 @@ export function GalleryModal({
               </div>
               <div className="shrink-0 flex items-center">
                 {isInstalled ? (
-                  <span className="text-[12px] text-muted">Installed</span>
+                  <span className="text-[12px] text-muted">{t("ui.GalleryModal.7bb4405cdf")}</span>
                 ) : (
-                  <span className="text-[12.5px] text-accent">View & install →</span>
+                  <span className="text-[12.5px] text-accent">{t("ui.GalleryModal.29b6557ad3")}</span>
                 )}
               </div>
             </div>
@@ -267,7 +268,7 @@ export function GalleryModal({
         ← Gallery
       </button>
       {!detail ? (
-        <div className="text-[12.5px] text-muted">Loading…</div>
+        <div className="text-[12.5px] text-muted">{t("ui.GalleryModal.33ce417454")}</div>
       ) : !detail.ok || !card ? (
         <div className="text-[12.5px] text-danger">{detail.error || "could not load details"}</div>
       ) : (
@@ -285,7 +286,7 @@ export function GalleryModal({
             </div>
             <div className="shrink-0">
               {installed.has(detailSlug) ? (
-                <span className="text-[12.5px] text-muted">Installed</span>
+                <span className="text-[12.5px] text-muted">{t("ui.GalleryModal.7bb4405cdf")}</span>
               ) : (
                 <button className={BTN_ACCENT} onClick={() => install(detailSlug)} disabled={busy}>
                   {busy ? "Installing…" : "Install"}
@@ -325,21 +326,21 @@ export function GalleryModal({
               </div>
               <div className="space-y-2 text-[12.5px]">
                 <div>
-                  <span className="text-muted">Tools: </span>
+                  <span className="text-muted">{t("ui.GalleryModal.a20749208e")}</span>
                   {caps.tools.join(", ") || "none"}
                   {caps.risk.length > 0 && (
                     <span className="text-faint"> · risk: {caps.risk.join(", ")}</span>
                   )}
                 </div>
                 <div>
-                  <span className="text-muted">Permissions: </span>
+                  <span className="text-muted">{t("ui.GalleryModal.587f23494e")}</span>
                   {caps.recommended_mode} mode
                   {caps.messaging ? " · can use messaging" : ""}
                   {caps.mcp.length > 0 ? ` · MCP: ${caps.mcp.join(", ")}` : ""}
                 </div>
                 {(detail.recommends?.length ?? 0) > 0 && (
                   <div>
-                    <div className="text-muted mb-1.5">Works with these connections:</div>
+                    <div className="text-muted mb-1.5">{t("ui.GalleryModal.70f81db03d")}</div>
                     <div className="space-y-1.5">
                       {detail.recommends!.map((r) => (
                         <div key={r.kind + r.ref} className="flex items-baseline gap-2">
@@ -372,7 +373,7 @@ export function GalleryModal({
       <div className="absolute left-1/2 top-[6vh] -translate-x-1/2 w-[720px] max-w-[94vw] max-h-[88vh] rounded-xl2 border border-line bg-panel shadow-2xl overflow-hidden flex flex-col">
         <div className="px-5 pt-4 pb-3 border-b border-line flex items-center gap-3 shrink-0">
           <div className="min-w-0 flex-1">
-            <div className="text-[15px] font-semibold">Persona Gallery</div>
+            <div className="text-[15px] font-semibold">{t("ui.GalleryModal.5252908d38")}</div>
             <div className="text-[12px] text-muted">
               Curated coworkers · installs stay disabled until you approve them
             </div>
@@ -381,14 +382,14 @@ export function GalleryModal({
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search personas"
+              placeholder={t("ui.GalleryModal.c96bd0d88b")}
               className="w-[180px] px-3 py-1.5 rounded-lg border border-line bg-paper text-[12.5px] text-ink outline-none focus:border-accent"
             />
           )}
           <button
             className="text-faint hover:text-ink shrink-0"
             onClick={onClose}
-            aria-label="Close gallery"
+            aria-label={t("ui.GalleryModal.3da2078b7b")}
             data-testid="gallery-close"
           >
             <Icon name="x" size={16} />
@@ -398,7 +399,7 @@ export function GalleryModal({
         <div className="overflow-y-auto hairline-scroll p-5">
           {loading ? (
             <div className="space-y-2" data-testid="gallery-loading" aria-busy="true">
-              <div className="text-[12.5px] text-muted mb-3">Loading the gallery…</div>
+              <div className="text-[12.5px] text-muted mb-3">{t("ui.GalleryModal.af03a23efa")}</div>
               {[0, 1, 2].map((i) => (
                 <div key={i} className={CARD + " p-3.5 animate-pulse"}>
                   <div className="h-3.5 w-44 rounded bg-line mb-2.5" />
@@ -409,7 +410,7 @@ export function GalleryModal({
           ) : cloud && !cloud.signed_in ? (
             <div className={CARD + " p-5 flex items-center gap-4"} data-testid="gallery-signin">
               <div className="min-w-0 flex-1">
-                <div className="font-semibold text-[14px] mb-1">Sign in to browse the Gallery</div>
+                <div className="font-semibold text-[14px] mb-1">{t("ui.GalleryModal.e3c637306a")}</div>
                 <div className="text-[12.5px] text-muted leading-relaxed">
                   The Gallery is a curated set of coworkers from OpenWorker Cloud and needs a
                   (free) cloud sign-in. Installing personas from a folder or Git URL — on the

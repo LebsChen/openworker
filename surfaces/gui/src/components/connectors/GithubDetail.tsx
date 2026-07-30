@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import { useEffect, useState } from "react";
 import {
   hostForSession,
@@ -63,7 +64,7 @@ export function GithubDetail({ c, cloud, onChanged }: DetailProps) {
   return (
     <div data-testid="github-installations">
       <div className="flex items-center gap-3.5 mb-5">
-        <ConnectorBadge connector={c} size={44} title="GitHub" />
+        <ConnectorBadge connector={c} size={44} title={t("ui.GithubDetail.5442e2b64f")} />
         <div className="min-w-0 flex-1">
           <h2 className="text-[20px] font-semibold tracking-tight leading-tight">GitHub</h2>
           <div className="text-[12.5px] text-muted flex items-center gap-1.5">
@@ -81,7 +82,7 @@ export function GithubDetail({ c, cloud, onChanged }: DetailProps) {
                 </span>
               </>
             ) : (
-              <span>Not connected</span>
+              <span>{t("ui.GithubDetail.8b02f3de39")}</span>
             )}
           </div>
         </div>
@@ -129,7 +130,7 @@ export function GithubDetail({ c, cloud, onChanged }: DetailProps) {
 
       {relay && listening.length > 0 && (
         <>
-          <div className={GRP_H}>Listening</div>
+          <div className={GRP_H}>{t("ui.GithubDetail.dc35348702")}</div>
           <div className={GRP}>
             <ListeningRows subs={listening} onChanged={changed} />
           </div>
@@ -148,7 +149,7 @@ export function GithubDetail({ c, cloud, onChanged }: DetailProps) {
         <AddConnectionModal
           c={c}
           cloud={cloud}
-          title="Add an installation"
+          title={t("ui.GithubDetail.e528c2ee7d")}
           onClose={() => setAdding(false)}
           onChanged={changed}
         />
@@ -228,7 +229,7 @@ function DisconnectBtn({ id, busy, onClick }: { id: string; busy: boolean; onCli
     <button
       className="text-[12.5px] text-danger/80 hover:text-danger shrink-0"
       data-testid={`disconnect-install-${id}`}
-      title="Stops relaying this installation to this computer. The App stays installed on GitHub."
+      title={t("ui.GithubDetail.5af032ed65")}
       onClick={onClick}
       disabled={busy}
     >
@@ -248,10 +249,10 @@ function PeopleRow({
 }) {
   return (
     <div className={ROW}>
-      <span className={LABEL}>People</span>
+      <span className={LABEL}>{t("ui.GithubDetail.b37554f695")}</span>
       <span className="min-w-0 flex-1 flex flex-wrap items-center gap-1.5">
         {allowed.length === 0 && (
-          <span className="text-[12px] text-faint">nobody yet — approve a waiting sender below</span>
+          <span className="text-[12px] text-faint">{t("ui.GithubDetail.2b8d39b302")}</span>
         )}
         {allowed.map((login) => (
           <span
@@ -262,7 +263,7 @@ function PeopleRow({
             @{login}
             <button
               className={XBTN}
-              title="remove"
+              title={t("ui.GithubDetail.db99845855")}
               onClick={() => disallowUser("github", login, installationId).then(onChanged)}
             >
               ×
@@ -290,7 +291,7 @@ function WaitingRow({ m, onChanged }: { m: ParkedMessage; onChanged: () => void 
       <button
         className={PILL_ACCENT + " !py-1"}
         data-testid={`parked-allow-deliver-${m.id}`}
-        title="Allow the sender and deliver this mention now"
+        title={t("ui.GithubDetail.be09fcbb46")}
         onClick={() => act("allow_deliver")}
       >
         Allow & deliver
@@ -298,12 +299,12 @@ function WaitingRow({ m, onChanged }: { m: ParkedMessage; onChanged: () => void 
       <button
         className={PILL_LINE + " !py-1"}
         data-testid={`parked-allow-${m.id}`}
-        title="Allow the sender; this mention is discarded"
+        title={t("ui.GithubDetail.4b23fcad9f")}
         onClick={() => act("allow")}
       >
         Allow
       </button>
-      <button className={XBTN + " px-1"} data-testid={`parked-dismiss-${m.id}`} title="Dismiss" onClick={() => act("dismiss")}>
+      <button className={XBTN + " px-1"} data-testid={`parked-dismiss-${m.id}`} title={t("ui.GithubDetail.70afe9eff3")} onClick={() => act("dismiss")}>
         ×
       </button>
     </div>
@@ -313,7 +314,7 @@ function WaitingRow({ m, onChanged }: { m: ParkedMessage; onChanged: () => void 
 function ListeningRows({ subs, onChanged }: { subs: Subscription[]; onChanged: () => void }) {
   return (
     <div className={ROW} data-testid="listening-github">
-      <span className={LABEL}>Listening</span>
+      <span className={LABEL}>{t("ui.GithubDetail.dc35348702")}</span>
       <span className="min-w-0 flex-1 space-y-1">
         {subs.map((s) => (
           <span key={s.session_id + s.channel} className="flex items-center gap-2 text-[12.5px]">
@@ -326,7 +327,7 @@ function ListeningRows({ subs, onChanged }: { subs: Subscription[]; onChanged: (
             </span>
             <button
               className={XBTN + " ml-auto"}
-              title="Unsubscribe this session"
+              title={t("ui.GithubDetail.b5907179dc")}
               onClick={async () => {
                 await unsubscribeChannel(s.session_id, hostForSession(s.session_id), s.channel);
                 onChanged();

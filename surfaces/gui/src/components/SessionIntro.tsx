@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { useEffect, useState } from "react";
 import { getConnectors, getSessionConnections, type SessionHost } from "../api";
 import type { Attachment } from "../types";
@@ -77,10 +78,10 @@ export function SessionIntro({
       <div className="intro-tasks">
         <button className="task-card" data-testid="intro-task-folder" onClick={pickFolder}>
           <span className="task-card-body">
-            <span className="task-card-title">Analyze the files in a directory</span>
-            <span className="task-card-sub">I'll read them and summarize what matters</span>
+            <span className="task-card-title">{t("ui.SessionIntro.842a3365ee")}</span>
+            <span className="task-card-sub">{t("ui.SessionIntro.4f938924ae")}</span>
           </span>
-          <span className="task-card-act">Pick a folder →</span>
+          <span className="task-card-act">{t("ui.SessionIntro.ed4b21f0c2")}</span>
         </button>
         {addingFolder && (
           <div className="intro-addfolder">
@@ -104,7 +105,7 @@ export function SessionIntro({
           onClick={() => (hubspotReady ? onPrefill(HUBSPOT_PROMPT) : onOpenSessionSettings())}
         >
           <span className="task-card-body">
-            <span className="task-card-title">Create a report from my HubSpot leads</span>
+            <span className="task-card-title">{t("ui.SessionIntro.829fd9cbec")}</span>
             <span className="task-card-sub">
               {dot("hubspot", hubspotReady)}
               Sources, stages, and who needs follow-up
@@ -119,7 +120,7 @@ export function SessionIntro({
           onClick={() => (ghSlackReady ? onPrefill(GH_SLACK_PROMPT) : onOpenSessionSettings())}
         >
           <span className="task-card-body">
-            <span className="task-card-title">Automate a weekly GitHub progress report to Slack</span>
+            <span className="task-card-title">{t("ui.SessionIntro.5ed2618c6e")}</span>
             <span className="task-card-sub">
               {dot("github", live.has("github"))}
               {dot("slack", live.has("slack"))}

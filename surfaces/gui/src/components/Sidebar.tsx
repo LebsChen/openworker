@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   announceCloudChanged,
@@ -77,11 +78,11 @@ function UnseenBadge({ n, failed }: { n: number; failed?: boolean }) {
 function LiveDot({ state }: { state?: "working" | "sleeping" | "idle" }) {
   if (state !== "working" && state !== "sleeping") return null;
   return state === "working" ? (
-    <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse shrink-0" title="Working now" />
+    <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse shrink-0" title={t("ui.Sidebar.efaa47e3e0")} />
   ) : (
     <span
       className="w-1.5 h-1.5 rounded-full bg-faint/60 shrink-0"
-      title="Sleeping (will wake itself)"
+      title={t("ui.Sidebar.8a1799ec66")}
     />
   );
 }
@@ -453,8 +454,8 @@ export function Sidebar(props: Props) {
         onClick={(e) => e.stopPropagation()}
       >
         <button
-          title="Session actions"
-          aria-label="Session actions"
+          title={t("ui.Sidebar.b086cae428")}
+          aria-label={t("ui.Sidebar.b086cae428")}
           aria-haspopup="menu"
           aria-expanded={menuOpen}
           data-testid="row-menu"
@@ -488,7 +489,7 @@ export function Sidebar(props: Props) {
               <div className="h-px bg-line my-1 mx-2" />
               {confirmDelId === s.session_id ? (
                 <button
-                  title="Click again to permanently delete"
+                  title={t("ui.Sidebar.b0ef610ece")}
                   className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[12.5px] text-left font-medium text-danger hover:bg-paper"
                   data-testid="row-menu-delete"
                   role="menuitem"
@@ -498,7 +499,7 @@ export function Sidebar(props: Props) {
                   }}
                 >
                   <Icon name="trash" size={13} className="shrink-0" />
-                  <span className="flex-1">Delete?</span>
+                  <span className="flex-1">{t("ui.Sidebar.042dc9b751")}</span>
                 </button>
               ) : (
                 <button
@@ -508,7 +509,7 @@ export function Sidebar(props: Props) {
                   onClick={() => setConfirmDelId(s.session_id)}
                 >
                   <Icon name="trash" size={13} className="shrink-0" />
-                  <span className="flex-1">Delete</span>
+                  <span className="flex-1">{t("ui.Sidebar.f6fdbe48dc")}</span>
                 </button>
               )}
             </div>
@@ -730,8 +731,8 @@ export function Sidebar(props: Props) {
       </span>
       <button
         className="w-6 h-6 grid place-items-center rounded-md text-faint hover:text-ink hover:bg-paper -mr-1"
-        title="Group & filter conversations"
-        aria-label="Group and filter conversations"
+        title={t("ui.Sidebar.ed8a225e81")}
+        aria-label={t("ui.Sidebar.8a48164a1d")}
         onClick={() => setGroupMenuOpen((v) => !v)}
       >
         <Icon name="sliders" size={14} />
@@ -883,8 +884,8 @@ export function Sidebar(props: Props) {
               </span>
               <button
                 className="w-5 h-5 grid place-items-center rounded text-faint hover:text-ink hover:bg-panel"
-                title="New project"
-                aria-label="New project"
+                title={t("ui.Sidebar.e5bcbe241f")}
+                aria-label={t("ui.Sidebar.e5bcbe241f")}
                 onClick={() => props.onNewProject(browseKey)}
               >
                 <Icon name="folderPlus" size={14} />
@@ -1021,7 +1022,7 @@ export function Sidebar(props: Props) {
             <Icon name="sidebar" size={16} />
           </button>
         )}
-        <div className="brand-wordmark text-[15px]">OpenWorker<span className="beta-tag">BETA</span></div>
+        <div className="brand-wordmark text-[15px]">OpenWorker<span className="beta-tag">{t("ui.Sidebar.28d6304dd6")}</span></div>
       </div>
 
       {/* New session: split button — primary starts the last-used persona; ▾ picks a specific one. */}
@@ -1055,7 +1056,7 @@ export function Sidebar(props: Props) {
           onClick={props.onOpenScheduled}
         >
           <Icon name="clock" size={15} className="shrink-0" />
-          <span className="flex-1">Automations</span>
+          <span className="flex-1">{t("ui.Sidebar.82542d6d0a")}</span>
         </button>
       </div>
 
@@ -1250,7 +1251,7 @@ export function Sidebar(props: Props) {
             {cloud?.signed_in && (
               <span
                 className="w-[7px] h-[7px] rounded-full bg-ok shrink-0"
-                title="Signed in to OpenWorker Cloud"
+                title={t("ui.Sidebar.1114ab613e")}
                 aria-hidden
               />
             )}
@@ -1339,8 +1340,8 @@ function NewSessionSplit({
         {!solo && (
           <button
             className="px-2.5 rounded-r-lg bg-accent text-white border-l border-white/25 hover:opacity-95 flex items-center"
-            title="Start with a specific persona"
-            aria-label="Choose a persona"
+            title={t("ui.Sidebar.23d94af701")}
+            aria-label={t("ui.Sidebar.bdbf1d20d3")}
             onClick={() => setOpen((v) => !v)}
           >
             <Icon name="chevronDown" size={13} />

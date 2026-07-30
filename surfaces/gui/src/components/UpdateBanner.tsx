@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { useEffect, useRef, useState } from "react";
 import {
   checkForUpdate,
@@ -88,7 +89,7 @@ export function UpdateBanner() {
       role="status"
       data-testid="update-banner"
     >
-      <div className="text-[13px] font-semibold">Update available</div>
+      <div className="text-[13px] font-semibold">{t("ui.UpdateBanner.21f1865b4f")}</div>
       <div className="text-[12px] text-muted mt-0.5">
         OpenWorker v{update.version} is ready to install.
       </div>

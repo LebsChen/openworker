@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { useState } from "react";
 import type { Item } from "../types";
 import { Icon } from "./Icon";
@@ -22,7 +23,7 @@ export function PlanCard({
     <div className="dirreq-card plan-card">
       <div className="dirreq-head">
         <Icon name="sparkle" size={16} className="ico" />
-        <span>The agent proposed a plan</span>
+        <span>{t("ui.PlanCard.bec0113cca")}</span>
       </div>
       <div className="plan-body">
         <Markdown text={item.plan} />
@@ -31,7 +32,7 @@ export function PlanCard({
         <div className="dirreq-actions">
           <input
             className="dirreq-path"
-            placeholder="What should change about the plan?"
+            placeholder={t("ui.PlanCard.195026f55e")}
             value={feedback}
             autoFocus
             onChange={(e) => setFeedback(e.target.value)}

@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import { useEffect, useState } from "react";
 import {
   connectConnector,
@@ -65,7 +66,7 @@ export function AddConnectionModal({
           <div className="flex-1 font-semibold text-[16px] tracking-tight">
             {title || `Connect ${c.title}`}
           </div>
-          <button className="text-faint hover:text-ink text-[18px] leading-none" onClick={onClose} title="Close">
+          <button className="text-faint hover:text-ink text-[18px] leading-none" onClick={onClose} title={t("ui.AddConnectionModal.bbfa773e5a")}>
             ×
           </button>
         </div>
@@ -165,7 +166,7 @@ function McpOneClick({ c, onConnected }: { c: Connector; onConnected: () => void
       </button>
       {error && <div className="text-[12.5px] text-danger">{error}</div>}
       <p className="text-[12px] text-faint text-center flex items-center justify-center gap-1.5">
-        <span className={TAG_ACCENT}>Recommended</span> agents get a curated set of{" "}
+        <span className={TAG_ACCENT}>{t("ui.AddConnectionModal.9ef937556e")}</span> agents get a curated set of{" "}
         {c.title} tools · tokens stay on this computer
       </p>
     </div>
@@ -205,7 +206,7 @@ function GenericOneClick({ c, cloud }: { c: Connector; cloud: CloudStatus | null
       )}
       {error && <div className="text-[12.5px] text-danger">{error}</div>}
       <p className="text-[12px] text-faint text-center flex items-center justify-center gap-1.5">
-        <span className={TAG_ACCENT}>Recommended</span> tokens stay on this computer
+        <span className={TAG_ACCENT}>{t("ui.AddConnectionModal.9ef937556e")}</span> tokens stay on this computer
       </p>
     </div>
   );
@@ -237,7 +238,7 @@ function SlackOneClick({ c, cloud }: { c: Connector; cloud: CloudStatus | null }
       )}
       {error && <div className="text-[12.5px] text-danger">{error}</div>}
       <p className="text-[12px] text-faint text-center flex items-center justify-center gap-1.5">
-        <span className={TAG_ACCENT}>Recommended</span> relay · tokens stay on this computer
+        <span className={TAG_ACCENT}>{t("ui.AddConnectionModal.9ef937556e")}</span> relay · tokens stay on this computer
       </p>
     </div>
   );
@@ -273,7 +274,7 @@ function GithubOneClick({ c, cloud }: { c: Connector; cloud: CloudStatus | null 
       )}
       {error && <div className="text-[12.5px] text-danger">{error}</div>}
       <p className="text-[12px] text-faint text-center flex items-center justify-center gap-1.5">
-        <span className={TAG_ACCENT}>Recommended</span> relay · short-lived tokens, never stored
+        <span className={TAG_ACCENT}>{t("ui.AddConnectionModal.9ef937556e")}</span> relay · short-lived tokens, never stored
       </p>
     </div>
   );
@@ -351,12 +352,12 @@ function SlackManual({ onConnected }: { onConnected: () => void }) {
   return (
     <div className="px-5 py-4 space-y-3">
       <ol className="list-decimal pl-4 text-[13px] text-muted space-y-1">
-        <li>Create an app at api.slack.com/apps</li>
-        <li>Enable Socket Mode, add bot scopes, install it to your workspace</li>
-        <li>Paste both tokens</li>
+        <li>{t("ui.AddConnectionModal.2593f04971")}</li>
+        <li>{t("ui.AddConnectionModal.14666b505c")}</li>
+        <li>{t("ui.AddConnectionModal.72e41e4976")}</li>
       </ol>
-      <input className={INPUT} type="password" placeholder="Bot token · xoxb-…" value={bot} spellCheck={false} onChange={(e) => setBot(e.target.value)} />
-      <input className={INPUT} type="password" placeholder="App token · xapp-…" value={app} spellCheck={false} onChange={(e) => setApp(e.target.value)} />
+      <input className={INPUT} type="password" placeholder={t("ui.AddConnectionModal.e1eccdab65")} value={bot} spellCheck={false} onChange={(e) => setBot(e.target.value)} />
+      <input className={INPUT} type="password" placeholder={t("ui.AddConnectionModal.172442ec69")} value={app} spellCheck={false} onChange={(e) => setApp(e.target.value)} />
       <button className={PILL_LINE + " w-full !py-2"} onClick={submit} disabled={busy || !bot.trim() || !app.trim()}>
         {busy ? "Validating…" : "Connect"}
       </button>

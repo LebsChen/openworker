@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { useState } from "react";
 import { chooseFolder } from "../tauri";
 import { Icon } from "./Icon";
@@ -56,7 +57,7 @@ export function AddFolderForm({
         <input
           className="addfolder-path"
           autoFocus
-          placeholder="Choose or paste a folder path…"
+          placeholder={t("ui.AddFolderForm.b86947c9f1")}
           value={path}
           spellCheck={false}
           onChange={(e) => setPath(e.target.value)}
@@ -65,12 +66,12 @@ export function AddFolderForm({
             else if (e.key === "Escape") reset();
           }}
         />
-        <button className="btn icon-only" onClick={browse} title="Choose location" aria-label="Choose location">
+        <button className="btn icon-only" onClick={browse} title={t("ui.AddFolderForm.f39a536228")} aria-label={t("ui.AddFolderForm.f39a536228")}>
           <Icon name="folder" size={15} />
         </button>
       </div>
       <div className="addfolder-actions">
-        <label className="addfolder-write" title="Off = read-only. Tick to let the agent write here.">
+        <label className="addfolder-write" title={t("ui.AddFolderForm.5eb327ce29")}>
           <input type="checkbox" checked={writable} onChange={(e) => setWritable(e.target.checked)} />
           Allow writes
         </label>

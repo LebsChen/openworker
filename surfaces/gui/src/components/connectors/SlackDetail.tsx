@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import { useEffect, useRef, useState } from "react";
 import {
   hostForSession,
@@ -71,7 +72,7 @@ export function SlackDetail({ c, cloud, slack, onChanged }: DetailProps) {
   return (
     <div data-testid="slack-workspaces">
       <div className="flex items-center gap-3.5 mb-5">
-        <ConnectorBadge connector={c} size={44} title="Slack" />
+        <ConnectorBadge connector={c} size={44} title={t("ui.SlackDetail.430b38bf6d")} />
         <div className="min-w-0 flex-1">
           <h2 className="text-[20px] font-semibold tracking-tight leading-tight">Slack</h2>
           <div className="text-[12.5px] text-muted flex items-center gap-1.5">
@@ -89,7 +90,7 @@ export function SlackDetail({ c, cloud, slack, onChanged }: DetailProps) {
                 </span>
               </>
             ) : (
-              <span>Not connected</span>
+              <span>{t("ui.SlackDetail.8b02f3de39")}</span>
             )}
           </div>
         </div>
@@ -128,7 +129,7 @@ export function SlackDetail({ c, cloud, slack, onChanged }: DetailProps) {
       {/* Manual Socket Mode: one workspace, the flat allow-list (unchanged semantics). */}
       {c.connected && !relay && (
         <div data-testid="slack-manual-card">
-          <div className={GRP_H}>{c.account || "workspace"} <span className="font-normal text-faint">· manual tokens</span></div>
+          <div className={GRP_H}>{c.account || "workspace"} <span className="font-normal text-faint">{t("ui.SlackDetail.517acee72f")}</span></div>
           <div className={GRP}>
             <PeopleRow
               allowed={c.allowed_users}
@@ -159,14 +160,14 @@ export function SlackDetail({ c, cloud, slack, onChanged }: DetailProps) {
 
       <ToolsDisclosure c={c} onChanged={onChanged} />
       {c.connected && (
-        <div className={FOOT + " mt-2"}>Names come from Slack automatically. IDs show on hover.</div>
+        <div className={FOOT + " mt-2"}>{t("ui.SlackDetail.38c85c9a9a")}</div>
       )}
 
       {adding && (
         <AddConnectionModal
           c={c}
           cloud={cloud}
-          title="Add a workspace"
+          title={t("ui.SlackDetail.2a5ee7b5fa")}
           onClose={() => setAdding(false)}
           onChanged={changed}
         />
@@ -222,7 +223,7 @@ function WorkspaceGroup({
           <>
             <div className={ROW}>
               <span className="min-w-0 flex-1 text-[12.5px] text-muted flex items-center gap-2 flex-wrap">
-                <span>No one allowed yet — mentions of the bot show up here for your OK.</span>
+                <span>{t("ui.SlackDetail.5f779c589f")}</span>
                 <PersonPicker teamId={w.team_id} allowed={[]} onChanged={onChanged} />
               </span>
               <DisconnectBtn teamId={w.team_id} busy={busy} onClick={disconnect} />
@@ -276,7 +277,7 @@ function DisconnectBtn({ teamId, busy, onClick }: { teamId: string; busy: boolea
     <button
       className="text-[12.5px] text-danger/80 hover:text-danger shrink-0"
       data-testid={`disconnect-workspace-${teamId}`}
-      title="Stops relaying this workspace to this computer. The app stays installed in Slack."
+      title={t("ui.SlackDetail.f953d12c37")}
       onClick={onClick}
       disabled={busy}
     >
@@ -313,7 +314,7 @@ function PeopleRow({
       <span className={LABEL}>People</span>
       <span className="min-w-0 flex-1 flex flex-wrap items-center gap-1.5">
         {allowed.length === 0 && (
-          <span className="text-[12px] text-faint">nobody yet — pick a name, or approve a waiting sender below</span>
+          <span className="text-[12px] text-faint">{t("ui.SlackDetail.312ea1d8ee")}</span>
         )}
         {allowed.map((u) => (
           <span
@@ -326,16 +327,16 @@ function PeopleRow({
               {initials(label(u))}
             </span>
             {label(u)}
-            {u === installerId && <span className="text-[10.5px] text-faint">· you</span>}
+            {u === installerId && <span className="text-[10.5px] text-faint">{t("ui.SlackDetail.53b5f87fe0")}</span>}
             {protectedIds?.includes(u) ? (
               <span
                 className="text-[10.5px] text-faint"
-                title="Remove approval-owner access before removing this person."
+                title={t("ui.SlackDetail.3d8510edb0")}
               >
                 · owner
               </span>
             ) : (
-              <button className={XBTN} title="remove" onClick={() => onRemove(u)}>
+              <button className={XBTN} title={t("ui.SlackDetail.db99845855")} onClick={() => onRemove(u)}>
                 ×
               </button>
             )}
@@ -425,7 +426,7 @@ function PersonPicker({
         ref={btn}
         className="inline-flex items-center px-2 py-0.5 rounded-full border border-dashed border-line text-[12.5px] text-muted hover:text-ink hover:border-faint"
         data-testid={testId || `add-person-${teamId || "default"}`}
-        title="Pick from the workspace directory"
+        title={t("ui.SlackDetail.67bcacf85d")}
         onClick={toggle}
       >
         {buttonLabel}
@@ -439,7 +440,7 @@ function PersonPicker({
           <input
             autoFocus
             className="w-full bg-paper border border-line rounded-lg px-2 py-1 text-[12.5px] outline-none placeholder:text-faint"
-            placeholder="Type a name…"
+            placeholder={t("ui.SlackDetail.c5c4b220b5")}
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => {
@@ -450,7 +451,7 @@ function PersonPicker({
             {err ? (
               <div className="px-2 py-1.5 text-[12px] text-warnInk">{err}</div>
             ) : candidates.length === 0 ? (
-              <div className="px-2 py-1.5 text-[12px] text-faint">no matches</div>
+              <div className="px-2 py-1.5 text-[12px] text-faint">{t("ui.SlackDetail.e6f1d34932")}</div>
             ) : (
               candidates.map((m) => (
                 <button
@@ -531,9 +532,9 @@ function ApprovalOwnersRow({
               {initials(label(u))}
             </span>
             {label(u)}
-            {u === installerId && <span className="text-[10.5px] text-faint">· installer</span>}
+            {u === installerId && <span className="text-[10.5px] text-faint">{t("ui.SlackDetail.f296e798d6")}</span>}
             {editable && (
-              <button className={XBTN} title="remove approval owner" onClick={() => remove(u)}>
+              <button className={XBTN} title={t("ui.SlackDetail.2a2f22b6e8")} onClick={() => remove(u)}>
                 ×
               </button>
             )}
@@ -550,7 +551,7 @@ function ApprovalOwnersRow({
           />
         )}
         {!editable && owners.length > 0 && (
-          <span className="text-[11.5px] text-faint">Set by the workspace installer.</span>
+          <span className="text-[11.5px] text-faint">{t("ui.SlackDetail.5fe66d1116")}</span>
         )}
         {err && <span className="basis-full text-[11.5px] text-warnInk">{err}</span>}
       </span>
@@ -574,7 +575,7 @@ function WaitingRow({ m, onChanged }: { m: ParkedMessage; onChanged: () => void 
       <button
         className={PILL_ACCENT + " !py-1"}
         data-testid={`parked-allow-deliver-${m.id}`}
-        title="Allow the sender and deliver this message now"
+        title={t("ui.SlackDetail.e95789a0a4")}
         onClick={() => act("allow_deliver")}
       >
         Allow & deliver
@@ -582,12 +583,12 @@ function WaitingRow({ m, onChanged }: { m: ParkedMessage; onChanged: () => void 
       <button
         className={PILL_LINE + " !py-1"}
         data-testid={`parked-allow-${m.id}`}
-        title="Allow the sender; this message is discarded"
+        title={t("ui.SlackDetail.953c4ad461")}
         onClick={() => act("allow")}
       >
         Allow
       </button>
-      <button className={XBTN + " px-1"} data-testid={`parked-dismiss-${m.id}`} title="Dismiss" onClick={() => act("dismiss")}>
+      <button className={XBTN + " px-1"} data-testid={`parked-dismiss-${m.id}`} title={t("ui.SlackDetail.70afe9eff3")} onClick={() => act("dismiss")}>
         ×
       </button>
     </div>
@@ -611,7 +612,7 @@ function ListeningRows({ subs, onChanged }: { subs: Subscription[]; onChanged: (
             </span>
             <button
               className={XBTN + " ml-auto"}
-              title="Unsubscribe this session"
+              title={t("ui.SlackDetail.b5907179dc")}
               onClick={async () => {
                 await unsubscribeChannel(s.session_id, hostForSession(s.session_id), s.channel);
                 onChanged();
