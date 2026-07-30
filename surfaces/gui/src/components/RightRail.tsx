@@ -18,13 +18,13 @@ import { hostProbeResult, HOST_STATUS_CHANGED } from "../hostStatus";
 import { selectWorklog, type WorklogEntry } from "../worklogSelector";
 
 export type PanelTab = "info" | "worklog" | "changes" | "shell" | "ide" | "desktop";
-const PANEL_TABS: { id: PanelTab; label: string; icon: "sparkle" | "wrench" | "fileCode" | "code" | "sidebarRight" }[] = [
-  { id: "info", label: "Info", icon: "sparkle" },
-  { id: "worklog", label: "Worklog", icon: "wrench" },
+const PANEL_TABS: { id: PanelTab; label: string; icon: "audit" | "clock" | "fileCode" | "terminal" | "code" | "monitor" }[] = [
+  { id: "info", label: "Info", icon: "audit" },
+  { id: "worklog", label: "Worklog", icon: "clock" },
   { id: "changes", label: "File changes", icon: "fileCode" },
-  { id: "shell", label: "Shell", icon: "wrench" },
+  { id: "shell", label: "Shell", icon: "terminal" },
   { id: "ide", label: "Web IDE", icon: "code" },
-  { id: "desktop", label: "Browser/Desktop", icon: "sidebarRight" },
+  { id: "desktop", label: "Browser/Desktop", icon: "monitor" },
 ];
 export const isRvmPanelTab = (tab: PanelTab): boolean =>
   tab === "shell" || tab === "ide" || tab === "desktop";
@@ -185,11 +185,6 @@ export function RightRail({
   return (
     <aside className={"right-panel-shell" + (selected ? " artifact-mode" : "")}>
       <div className={"right-panel-drawer" + (panelOpen ? " open" : " collapsed")}>
-      {host.local && panelOpen && (
-        <div className="right-panel-local-hint">
-          Requires an RVM host. The current session is bound to Local.
-        </div>
-      )}
       <div className="right-panel-tabbody">
         <div style={{ display: panelOpen && tab === "info" && !selected ? "block" : "none" }}>
           <InfoPanel
@@ -309,7 +304,7 @@ function InfoPanel({
           {probe.health?.platform && <FieldRow label="Platform" value={probe.health.platform} />}
           {(probe.health?.host || probe.info?.hostname) && <FieldRow label="Host" value={probe.health?.host || probe.info?.hostname || ""} />}
           {probe.health?.version && <FieldRow label="Version" value={probe.health.version} />}
-          {probe.health?.capabilities?.length && <FieldRow label="Capabilities" value={probe.health.capabilities.join(", ")} />}
+          {!!probe.health?.capabilities?.length && <FieldRow label="Capabilities" value={probe.health.capabilities.join(", ")} />}
           {probe.health?.vnc_port != null && <FieldRow label="VNC" value="Available" />}
           {probe.health?.ide_port != null && <FieldRow label="IDE" value="Available" />}
         </>
@@ -407,8 +402,11 @@ function RvmUnavailablePanel({ host, tab }: { host: SessionHost; tab: PanelTab }
   return (
     <div className="right-panel-empty">
       <h3>{PANEL_TABS.find((entry) => entry.id === tab)?.label}</h3>
-      <p>Not implemented yet.</p>
-      <p>{host.local ? "Requires an RVM host. The current session is bound to Local." : "Requires an RVM host."}</p>
+      <p>
+        {host.local
+          ? "Requires an RVM host. This session is bound to Local."
+          : "Secure connection bootstrap is not implemented yet."}
+      </p>
     </div>
   );
 }

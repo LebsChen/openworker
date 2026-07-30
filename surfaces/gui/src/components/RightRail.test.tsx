@@ -39,5 +39,6 @@ describe("right panel tab model", () => {
     expect((screen.getByRole("button", { name: "Shell" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Web IDE" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Browser/Desktop" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByText("Requires an RVM host")).toBeNull();
   });
 });

@@ -24,4 +24,16 @@ describe("selectWorklog", () => {
     expect(rows[0]).toMatchObject({ kind: "tool", status: "failed", detail: "exit 1" });
     expect(rows[1]).toMatchObject({ kind: "notice", title: "Interrupted.", status: "warn" });
   });
+
+  it("redacts credential-like tool arguments and bounds detail size", () => {
+    const [row] = selectWorklog([{
+      kind: "tool",
+      id: "tool-secret",
+      name: "shell",
+      args: { authorization: "Bearer super-secret", command: "echo ok" },
+      status: "ok",
+    }]);
+    expect(row.detail).not.toContain("super-secret");
+    expect(row.detail?.length).toBeLessThanOrEqual(1200);
+  });
 });

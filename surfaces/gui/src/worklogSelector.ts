@@ -37,13 +37,23 @@ function filePathsFrom(value: unknown): string[] {
   return [...new Set(result)];
 }
 
+const SENSITIVE_KEY_RE = /(?:token|secret|password|passwd|authorization|api[_-]?key|credential|cookie|header)/i;
+const MAX_DETAIL_LENGTH = 1200;
+
+function sanitizeText(value: string): string {
+  return value
+    .replace(/((?:bearer|basic)\s+)[^\s"'}`]+/gi, "$1[REDACTED]")
+    .replace(/((?:token|secret|password|passwd|authorization|api[_-]?key|cookie)\s*[:=]\s*)[^,\s}"']+/gi, "$1[REDACTED]")
+    .slice(0, MAX_DETAIL_LENGTH);
+}
+
 function textFrom(value: unknown): string {
   if (typeof value === "string") return value;
   if (value === undefined || value === null) return "";
   try {
-    return JSON.stringify(value, null, 2);
+    return sanitizeText(JSON.stringify(value, (key, child) => (key && SENSITIVE_KEY_RE.test(key) ? "[REDACTED]" : child), 2));
   } catch {
-    return String(value);
+    return sanitizeText(String(value));
   }
 }
 
@@ -70,7 +80,7 @@ export function selectWorklog(items: Item[]): WorklogEntry[] {
         id,
         kind: filePaths.length ? "file" : "tool",
         title: item.name.replace(/[_-]+/g, " "),
-        detail: item.preview || textFrom(item.args),
+        detail: sanitizeText(item.preview || textFrom(item.args)),
         filePaths,
         status: item.status,
       }];
