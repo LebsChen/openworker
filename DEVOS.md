@@ -59,7 +59,7 @@ git push origin devos/main
 ## 当前增量清单
 
 - 远程 token/server 模式：功能分支 `devos/1785422207-remote-token`，为 server 增加显式 token、token file、非回环绑定安全约束和常数时间鉴权。
-- 客户端远程主机模式：功能分支 `devos/1785423280-remote-host`。Tauri 客户端可保存多个远程 profile，profile 保存在独立的 `remote-hosts.json`（权限 `0600`，临时文件写入后原子替换），Rust 不读取或改写 Python SecretStore 的 `secrets.json`。激活后重启客户端生效。未激活 profile 时继续启动本机 sidecar。
+- 客户端远程主机模式：功能分支 `devos/1785423280-remote-host`。Tauri 客户端可保存多个远程 profile，profile 保存在独立的 `remote-hosts.json`（权限 `0600`，临时文件写入后原子替换），Rust 不读取或改写 Python SecretStore 的 `secrets.json`。本机 Local 始终是默认主机，登记远程 profile 后新建会话 picker 才提供远程选项；切换会话主机不需要重启客户端。
 - token 环境优先级：`COWORKER_API_TOKEN` 高于 `OPENWORKER_TOKEN`，因为前者是 Tauri 按会话显式注入的 token；两者都低于 CLI/token-file。
 - RVM 执行 VM 的首选方向：让整个 OpenWorker server 运行在 RVM 主机上，使现有 `LocalExecutor` 就地执行；只有确实需要客户端本机 server 时才考虑 `RvmExecutor`。
 - 当前增量的每个上游接缝见 `UPSTREAM_PATCHES.md`。
@@ -74,14 +74,15 @@ openworker-server \
   --token-file /path/to/rvm-openworker.token
 ```
 
-在客户端 Settings → Remote host 中保存名称、`http(s)` base URL 和 token，再选择
-“Use”。客户端会重启并注入远程 HTTP/WS endpoint；WS endpoint 从 `http://`/`https://`
-分别派生为 `ws://`/`wss://`。HTTPS 一律校验证书，不提供关闭证书校验的开关，token 不进入 URL query、普通
-配置或日志。远程 profile 激活时 Tauri 不创建本地 `openworker-server` 子进程，server
+在客户端 Settings → Remote host 中保存名称、`http(s)` base URL 和 token。新建会话时
+默认选择 Local，也可以在 VM picker 中选择已登记的远程主机；切换会话主机不需要重启。
+WS endpoint 从 `http://`/`https://` 分别派生为 `ws://`/`wss://`。HTTPS 一律校验证书，
+不提供关闭证书校验的开关，token 不进入 URL query、普通配置或日志。远程会话的 server
 及其 `LocalExecutor` 全部运行在 RVM 主机。
 
 如果 `remote-hosts.json` 无法解析，客户端按“没有远程 profile”处理并启动本机
-sidecar；这只适用于配置文件损坏或不可读。已成功解析并激活的 profile 如果远程不可达
+sidecar，同时在 GUI/server 日志和 Settings → Remote host 页面显示明确的解析警告；
+这只适用于配置文件损坏或不可读。已成功解析的 profile 如果远程不可达
 或鉴权失败，客户端保持远程模式，绝不会回退本机执行。
 
 远程地址不可达或返回 401/403 时，客户端显示明确的连接/鉴权错误并保持远程模式；

@@ -186,10 +186,41 @@ fn atomic_private_write(path: &std::path::Path, bytes: &[u8]) -> Result<(), Stri
 }
 
 fn read_remote_hosts() -> RemoteHostsFile {
-    std::fs::read_to_string(remote_hosts_path())
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_default()
+    match std::fs::read_to_string(remote_hosts_path()) {
+        Ok(contents) => match serde_json::from_str(&contents) {
+            Ok(hosts) => hosts,
+            Err(error) => {
+                eprintln!(
+                    "[coworker] warning: unable to parse {}: {}; treating remote hosts as unconfigured",
+                    remote_hosts_path().display(),
+                    error
+                );
+                RemoteHostsFile::default()
+            }
+        },
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => RemoteHostsFile::default(),
+        Err(error) => {
+            eprintln!(
+                "[coworker] warning: unable to read {}: {}; treating remote hosts as unconfigured",
+                remote_hosts_path().display(),
+                error
+            );
+            RemoteHostsFile::default()
+        }
+    }
+}
+
+#[tauri::command]
+fn remote_host_config_error() -> Option<String> {
+    let path = remote_hosts_path();
+    let contents = match std::fs::read_to_string(&path) {
+        Ok(contents) => contents,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return None,
+        Err(error) => return Some(format!("Could not read {}: {error}", path.display())),
+    };
+    serde_json::from_str::<RemoteHostsFile>(&contents)
+        .err()
+        .map(|error| format!("Could not parse {}: {error}", path.display()))
 }
 
 fn write_remote_hosts(hosts: &RemoteHostsFile) -> Result<(), String> {
@@ -795,7 +826,7 @@ pub fn run() {
     let remote_hosts = read_remote_hosts().hosts;
     let mut session_host_values = vec![serde_json::json!({
         "id": "local",
-        "name": "This computer",
+        "name": "Local",
         "base_url": http,
         "ws_url": ws,
         "token": api_token,
@@ -858,6 +889,7 @@ pub fn run() {
             install_update,
             list_remote_hosts,
             list_session_hosts,
+            remote_host_config_error,
             bind_session_host,
             session_host,
             save_remote_host,

@@ -31,7 +31,7 @@ export const sessionHosts = (): SessionHost[] => {
   const hosts = (globalThis as any).__COWORKER_HOSTS__;
   return Array.isArray(hosts) ? hosts : [{
     id: "local",
-    name: "This computer",
+    name: "Local",
     base_url: httpBase(),
     ws_url: wsBase(),
     token: apiToken(),

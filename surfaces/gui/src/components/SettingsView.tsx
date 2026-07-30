@@ -33,6 +33,7 @@ import {
   listRemoteHosts,
   restartApp,
   saveRemoteHost,
+  remoteHostConfigError,
   type RemoteHostInfo,
   startDictation,
   stopDictation,
@@ -150,7 +151,11 @@ function RemoteHostsSection() {
   const [token, setToken] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const refresh = () => listRemoteHosts().then((v) => setHosts(v || [])).catch(() => setHosts([]));
+  const [configError, setConfigError] = useState<string | null>(null);
+  const refresh = () => {
+    listRemoteHosts().then((v) => setHosts(v || [])).catch(() => setHosts([]));
+    remoteHostConfigError().then(setConfigError).catch(() => setConfigError(null));
+  };
   useEffect(() => {
     refresh();
   }, []);
@@ -181,6 +186,11 @@ function RemoteHostsSection() {
         sub="Connect the desktop client to an OpenWorker server running on an RVM host. HTTPS certificate verification remains enabled."
       />
       <div className={`${CARD} p-4 space-y-3`}>
+        {configError && (
+          <div role="alert" className="text-[12px] text-danger">
+            Remote host configuration could not be parsed. Local mode remains active. {configError}
+          </div>
+        )}
         {hosts.map((host) => (
           <div key={host.name} className="flex items-center gap-3 border-b border-line pb-3">
             <div className="min-w-0 flex-1">

@@ -89,6 +89,7 @@ export type SessionHostInfo = RemoteHostInfo & {
 
 export const listRemoteHosts = () => invoke<RemoteHostInfo[]>("list_remote_hosts");
 export const listSessionHosts = () => invoke<SessionHostInfo[]>("list_session_hosts");
+export const remoteHostConfigError = () => invoke<string | null>("remote_host_config_error");
 export const refreshSessionHosts = async () => {
   const remote = (await listSessionHosts()) || [];
   const current = Array.isArray((globalThis as any).__COWORKER_HOSTS__)
