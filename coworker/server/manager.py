@@ -404,6 +404,7 @@ class SessionManager:
                 raise ValueError(f"unknown RVM host for session {session_id}: {bound_host_id}")
             client = self.rvm_hosts.client(bound_host_id)
             style = self.rvm_hosts.path_style_for(host)
+            health = client.health()
             explicit_remote_workspace = (
                 record.workspace if record and record.workspace else workspace
             )
@@ -422,6 +423,7 @@ class SessionManager:
                 client=client,
                 style=style,
                 workspace=remote_workspace,
+                capabilities=set(health.get("capabilities") or []),
             )
         managed_workspace = False
 

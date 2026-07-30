@@ -83,6 +83,29 @@ def test_client_maps_all_routes_and_storage_payloads():
         assert "secret" not in repr(request)
 
 
+def test_client_maps_screenshot_and_computer_routes():
+    seen = []
+
+    def handler(request):
+        seen.append(request)
+        if request.url.path == "/api/screenshot":
+            return httpx.Response(200, json={"image": "abc", "format": "png"})
+        return httpx.Response(200, json={"ok": True})
+
+    client = RvmClient(
+        "http://rvm", "secret", transport=httpx.MockTransport(handler)
+    )
+    assert client.screenshot() == {"image": "abc", "format": "png"}
+    assert client.computer(action="left_click", coordinate=[1, 2]) == {"ok": True}
+    assert client.computer(
+        actions=[{"action": "mouse_move", "coordinate": [1, 2]}]
+    ) == {"ok": True}
+    assert seen[0].content == b"{}"
+    assert seen[1].content == b'{"action":"left_click","coordinate":[1,2]}'
+    assert seen[2].content == b'{"actions":[{"action":"mouse_move","coordinate":[1,2]}]}'
+    assert all(request.headers["authorization"] == "Bearer secret" for request in seen)
+
+
 def test_client_classifies_timeout_and_malformed_json_without_token():
     def timeout(request):
         raise httpx.ReadTimeout("slow", request=request)

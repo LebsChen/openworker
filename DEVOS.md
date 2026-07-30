@@ -63,6 +63,14 @@ git push origin devos/main
 - token 环境优先级：`COWORKER_API_TOKEN` 高于 `OPENWORKER_TOKEN`，因为前者是 Tauri 按会话显式注入的 token；两者都低于 CLI/token-file。
 - RVM 执行 VM 支持 client-side execution：LLM/agent loop、permissions 和 session state stay in the Python client while batch-1 shell/file/search/git calls use `coworker.remote.RvmExecutor` and the Cloud-Dev HTTP agent. Do not silently fall back to Local when a bound host is offline or unauthorized.
 - 当前增量的每个上游接缝见 `UPSTREAM_PATCHES.md`。
+- Batch 2 remote computer capability: remote sessions may expose `screenshot` and `computer`
+  only when the selected RVM health capabilities advertise the corresponding support. The
+  client sends Bearer-authenticated HTTP requests to `/api/screenshot` and
+  `/api/computer-use`; local sessions never receive these tools. Screenshot results are kept
+  as canonical OpenAI image content for the latest two captures, while older captures become
+  text placeholders. The `computer` tool uses the RVM logical 1024x768 top-left coordinate
+  space; `zoom` is a crop operation despite its upstream name. Windows SendKeys may lose spaces
+  under Microsoft Pinyin IME, so clipboard paste is the recovery path.
 
 ## 远程主机模式
 

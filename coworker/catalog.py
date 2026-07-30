@@ -26,7 +26,12 @@ from .tools.git import git_tools
 from .tools.search import search_tools
 from .tools.shell import shell_tools
 from .tools.todo import todo_tools
-from .remote.tools import remote_file_tools, remote_git_tools, remote_search_tools
+from .remote.tools import (
+    remote_computer_tools,
+    remote_file_tools,
+    remote_git_tools,
+    remote_search_tools,
+)
 
 # Context prerequisites a capability may require, mapped to a predicate over AgentContext.
 _REQUIREMENTS: dict[str, Callable[[AgentContext], bool]] = {
@@ -103,6 +108,12 @@ def _shell(context: AgentContext) -> list:
     return shell_tools(context.executor)  # run_shell + background task tools
 
 
+def _computer(context: AgentContext) -> list:
+    if context.remote_target:
+        return remote_computer_tools(context.remote_target)
+    return []
+
+
 def _todo(context: AgentContext) -> list:
     return todo_tools(context.todo)  # todo_write (drives the Progress panel)
 
@@ -147,6 +158,14 @@ _CAPS: list[Capability] = [
         build=_shell,
         requires=("executor",),
         risk=(RiskClass.EXEC,),
+    ),
+    Capability(
+        id="computer",
+        name="Remote computer",
+        description="Observe and interact with a remote desktop through the RVM.",
+        build=_computer,
+        requires=(),
+        risk=(RiskClass.READ, RiskClass.COMPUTER),
     ),
     Capability(
         id="todo",

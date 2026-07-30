@@ -34,6 +34,40 @@ class ApprovalOutcome(str, Enum):
     DENY = "deny"
 
 
+SCREENSHOT_HISTORY_LIMIT = 2
+_SCREENSHOT_PLACEHOLDER = (
+    "[screenshot from an earlier turn — take a new one if you need to look again]"
+)
+
+
+def _screenshot_content(result: Any) -> Optional[list[dict[str, Any]]]:
+    """Convert an RVM image result into canonical OpenAI-shaped user content."""
+    if not isinstance(result, dict):
+        return None
+    image = result.get("image")
+    image_format = str(result.get("format") or "png").lower()
+    if not isinstance(image, str) or not image:
+        return None
+    data_url = (
+        image
+        if image.startswith("data:image/")
+        else f"data:image/{image_format};base64,{image}"
+    )
+    return [
+        {"type": "text", "text": f"screenshot 1024x768 {image_format}"},
+        {"type": "image_url", "image_url": {"url": data_url}},
+    ]
+
+
+def _retain_screenshot_images(messages: list[dict[str, Any]]) -> None:
+    screenshot_messages = [
+        message for message in messages if message.get("_screenshot_image") is True
+    ]
+    for message in screenshot_messages[:-SCREENSHOT_HISTORY_LIMIT]:
+        message["content"] = _SCREENSHOT_PLACEHOLDER
+        message.pop("_screenshot_image", None)
+
+
 @dataclass
 class PermissionRequest:
     tool_name: str
@@ -678,6 +712,12 @@ class TurnEngine:
                     "arguments": tool_call.arguments,
                     "reason": decision.reason,
                     "category": getattr(metadata, "category", ""),
+                    **(
+                        {"host": getattr(spec.func, "__computer_host__")}
+                        if spec is not None
+                        and getattr(spec.func, "__computer_host__", None)
+                        else {}
+                    ),
                     # The exact target a standing rule could pin, or None when the call
                     # isn't eligible (no declared target arg / exec risk). Surfaces use it
                     # to offer "Allow every time" on automation-run approval cards only.
@@ -772,10 +812,24 @@ class TurnEngine:
         if isinstance(result, dict) and "_display" in result:
             display = result.get("_display") or None
             result = {k: v for k, v in result.items() if k != "_display"}
-        message = _tool_result_message(tool_call, result)
+        image_content = _screenshot_content(result)
+        tool_result: Any = result
+        if image_content is not None:
+            tool_result = image_content[0]["text"]
+        message = _tool_result_message(tool_call, tool_result)
         if display:
             message["_display"] = display
         self.messages.append(message)
+        if image_content is not None:
+            self.messages.append(
+                {
+                    "role": "user",
+                    "content": image_content,
+                    "_screenshot_image": True,
+                    "ts": time.time(),
+                }
+            )
+            _retain_screenshot_images(self.messages)
         hidden = int((display or {}).get("hidden_by_filters") or 0)
         stripped = int((display or {}).get("hidden_fields") or 0)
         if hidden or stripped:
@@ -1013,7 +1067,7 @@ class TurnEngine:
         # (thinking text), and `usage` (token counts) — copying only messages that carry
         # one. Whole `notice` messages (error/interrupted/model-switch markers) are
         # display-only too: dropped entirely.
-        _SIDECARS = ("source", "_display", "ts", "reasoning", "usage")
+        _SIDECARS = ("source", "_display", "ts", "reasoning", "usage", "_screenshot_image")
         # Auto-compaction (OPE-27): everything before the boundary is represented by the
         # compacted block. Outbound-only — the canonical history stays intact — and the
         # block+tail are byte-stable between turns, so prompt caching keeps working.
