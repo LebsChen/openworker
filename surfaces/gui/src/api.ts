@@ -64,16 +64,35 @@ export interface WorkspaceCommandTrust {
 }
 
 export async function getHealth(): Promise<Health> {
-  const res = await fetch(`${httpBase()}/v1/health`);
-  if (typeof res.ok === "boolean" && !res.ok) {
-    if (res.status === 401 || res.status === 403) {
-      throw new Error("Remote host authentication failed. Check the selected profile token.");
+  try {
+    const res = await fetch(`${httpBase()}/v1/health`);
+    if (typeof res.ok === "boolean" && !res.ok) {
+      if (res.status === 401 || res.status === 403) {
+        throw new Error("Remote host authentication failed. Check the selected profile token.");
+      }
+      throw new Error(
+        `Remote host connection failed (${res.status || "unreachable"}). Check the host address.`,
+      );
     }
-    throw new Error(
-      `Remote host connection failed (${res.status || "unreachable"}). Check the host address.`,
-    );
+    if (isRemoteMode()) {
+      const authProbe = await fetch(`${httpBase()}/v1/settings`);
+      if (typeof authProbe.ok === "boolean" && !authProbe.ok) {
+        if (authProbe.status === 401 || authProbe.status === 403) {
+          throw new Error("Remote host authentication failed. Check the selected profile token.");
+        }
+        throw new Error(
+          `Remote host connection failed (${authProbe.status || "unreachable"}). Check the host address.`,
+        );
+      }
+    }
+    return res.json();
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("Remote host ")) throw error;
+    if (isRemoteMode()) {
+      throw new Error("Remote host connection failed (unreachable). Check the host address.");
+    }
+    throw error;
   }
-  return res.json();
 }
 
 export async function getRecentWorkspaces(): Promise<RecentWorkspace[]> {
