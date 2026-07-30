@@ -38,6 +38,17 @@ def test_token_file_then_environment_then_random(tmp_path):
     selected = resolve_token(environ={"OPENWORKER_TOKEN": "env-token"})
     assert (selected.token, selected.source) == ("env-token", "env:OPENWORKER_TOKEN")
 
+    selected = resolve_token(
+        environ={
+            "OPENWORKER_TOKEN": "openworker-token",
+            "COWORKER_API_TOKEN": "tauri-token",
+        }
+    )
+    assert (selected.token, selected.source) == (
+        "tauri-token",
+        "env:COWORKER_API_TOKEN",
+    )
+
     selected = resolve_token(environ={})
     assert len(selected.token) == 64
     assert selected.source == "random"

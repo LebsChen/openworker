@@ -15,6 +15,6 @@ git merge --ff-only upstream/main
 cat <<'EOF'
 Upstream main is synchronized.
 Rebase the development branch separately when ready:
-  git switch devos
+  git switch devos/main
   git rebase upstream/main
 EOF

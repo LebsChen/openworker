@@ -14,6 +14,13 @@ class TokenSelection:
     source: str
 
 
+@dataclass(frozen=True)
+class LaunchAuth:
+    selection: TokenSelection
+    generated_token_path: Path | None
+    previous_api_token: str | None
+
+
 def resolve_token(
     *,
     cli_token: str | None = None,
@@ -23,8 +30,9 @@ def resolve_token(
     """Resolve an API token without ever returning an empty credential.
 
     Explicit CLI input wins over ``--token-file`` and environment configuration.
-    ``OPENWORKER_TOKEN`` is the public server setting; ``COWORKER_API_TOKEN`` remains
-    supported for the Tauri-managed sidecar.
+    ``COWORKER_API_TOKEN`` wins over ``OPENWORKER_TOKEN`` because it is the
+    per-launch token explicitly injected by the Tauri caller. ``OPENWORKER_TOKEN``
+    is the standalone/server setting.
     """
 
     if cli_token is not None and token_file is not None:
@@ -44,7 +52,7 @@ def resolve_token(
         return TokenSelection(token, "file")
 
     env = environ if environ is not None else {}
-    for name in ("OPENWORKER_TOKEN", "COWORKER_API_TOKEN"):
+    for name in ("COWORKER_API_TOKEN", "OPENWORKER_TOKEN"):
         token = str(env.get(name, "")).strip()
         if token:
             return TokenSelection(token, f"env:{name}")

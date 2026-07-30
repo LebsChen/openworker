@@ -18,8 +18,8 @@ upstream https://github.com/andrewyng/openworker.git
 ```
 
 - `main`：纯 upstream 镜像，只允许从 `upstream/main` fast-forward；不落自研提交。
-- `devos`：长期自研分支，从 `upstream/main` 切出；所有功能分支从 `devos` 切出，功能 PR 合回 `devos`。
-- 约定的功能分支命名是 `devos/<unix秒>-<topic>`；但 Git ref 规则不允许同时存在 `devos` 分支和 `devos/*` 分支。本仓库保留用户指定的长期 `devos` 分支，因此实际功能分支使用 `devos-<unix秒>-<topic>`，直到决定把长期分支改名为例如 `devos/main`。
+- `devos/main`：长期自研分支，从 `upstream/main` 切出；所有功能分支从 `devos/main` 切出，功能 PR 合回 `devos/main`。
+- 功能分支命名：`devos/<unix秒>-<topic>`。
 - `upstream` push URL 已禁用，避免误推上游。
 - 当前功能分支的提交不会直接合入 `main`。
 
@@ -49,15 +49,16 @@ upstream https://github.com/andrewyng/openworker.git
 随后人工审阅并执行：
 
 ```bash
-git switch devos
+git switch devos/main
 git rebase upstream/main
-git push origin devos
+git push origin devos/main
 ```
 
 若 rebase 发生冲突，先根据 `UPSTREAM_PATCHES.md` 逐条检查接缝，再运行完整基线/改动测试。不得把自研提交直接写入 `main`。
 
 ## 当前增量清单
 
-- 远程 token/server 模式：功能分支 `devos/<unix秒>-remote-token`，为 server 增加显式 token、token file、非回环绑定安全约束和常数时间鉴权。
+- 远程 token/server 模式：功能分支 `devos/1785422207-remote-token`，为 server 增加显式 token、token file、非回环绑定安全约束和常数时间鉴权。
+- token 环境优先级：`COWORKER_API_TOKEN` 高于 `OPENWORKER_TOKEN`，因为前者是 Tauri 按会话显式注入的 token；两者都低于 CLI/token-file。
 - RVM 执行 VM 的首选方向：让整个 OpenWorker server 运行在 RVM 主机上，使现有 `LocalExecutor` 就地执行；只有确实需要客户端本机 server 时才考虑 `RvmExecutor`。
 - 当前增量的每个上游接缝见 `UPSTREAM_PATCHES.md`。
