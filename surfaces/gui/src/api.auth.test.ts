@@ -4,7 +4,10 @@ import {
   getHealth,
   getInbox,
   getSessionMessages,
+  getSessions,
   getUnattended,
+  isCurrentSessionBinding,
+  isCurrentSessionLoad,
   Session,
   type SessionHost,
 } from "./api";
@@ -75,4 +78,79 @@ it("routes every session REST request through the bound remote host", async () =
     expect(url).toMatch(/^http:\/\/remote\.example\//);
     expect(url).not.toContain("127.0.0.1");
   }
+});
+
+it("deduplicates session ids and keeps the remote binding over a local duplicate", async () => {
+  const local: SessionHost = {
+    id: "local",
+    name: "Local",
+    base_url: "http://local.example",
+    ws_url: "ws://local.example",
+    token: "",
+    local: true,
+  };
+  const remote: SessionHost = {
+    id: "rvm-a",
+    name: "rvm-a",
+    base_url: "http://remote.example",
+    ws_url: "ws://remote.example",
+    token: "remote-token",
+    local: false,
+  };
+  vi.stubGlobal("__COWORKER_HOSTS__", [local, remote]);
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => ({
+    json: async () => ({
+      sessions: [{ session_id: "shared", title: url.includes("remote") ? "remote" : "local" }],
+    }),
+  }) as Response));
+
+  const sessions = await getSessions();
+  expect(sessions).toHaveLength(1);
+  expect(sessions[0].host_id).toBe("rvm-a");
+  expect(sessions[0].title).toBe("remote");
+});
+
+it("keeps the selected session's host on its WebSocket client", () => {
+  const remote: SessionHost = {
+    id: "rvm-a",
+    name: "rvm-a",
+    base_url: "http://remote.example",
+    ws_url: "ws://remote.example",
+    token: "remote-token",
+    local: false,
+  };
+  class FakeWebSocket {
+    static readonly CONNECTING = 0;
+    static readonly OPEN = 1;
+    readyState = FakeWebSocket.CONNECTING;
+    onmessage: ((event: MessageEvent) => void) | null = null;
+    onopen: (() => void) | null = null;
+    onclose: (() => void) | null = null;
+    constructor(public readonly url: string, public readonly protocols?: string | string[]) {}
+    send = vi.fn();
+    close = vi.fn();
+  }
+  vi.stubGlobal("WebSocket", FakeWebSocket);
+
+  const session = new Session("selected", "", "cowork", { onEvent: vi.fn() }, remote);
+  const socket = (session as unknown as { ws: FakeWebSocket }).ws;
+  expect(session.sessionId).toBe("selected");
+  expect(session.hostId).toBe("rvm-a");
+  expect(socket.url).toContain("ws://remote.example/ws/session/selected");
+  expect(socket.protocols).toEqual(["openworker", "remote-token"]);
+});
+
+it("rejects a late response from session A after switching to session B", () => {
+  expect(isCurrentSessionBinding("session-a", "local", "session-b", "local")).toBe(false);
+  expect(isCurrentSessionBinding("session-b", "rvm-a", "session-b", "local")).toBe(false);
+  expect(isCurrentSessionBinding("session-b", "rvm-a", "session-b", "rvm-a")).toBe(true);
+});
+
+it("rejects a late startup restore after the user selects another session", () => {
+  expect(
+    isCurrentSessionLoad(1, 2, "restored-session", "local", "selected-session", "local"),
+  ).toBe(false);
+  expect(
+    isCurrentSessionLoad(1, 1, "restored-session", "local", "restored-session", "local"),
+  ).toBe(true);
 });

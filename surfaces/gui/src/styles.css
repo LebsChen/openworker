@@ -598,6 +598,9 @@ button.btn.danger { color: var(--accent); }
   border-left: 1px solid var(--line);
   backdrop-filter: blur(12px);
 }
+.right-panel-shell.collapsed {
+  width: 42px;
+}
 .right-panel-shell.artifact-mode {
   width: var(--artifact-rail-w);
   z-index: 8;
@@ -651,6 +654,8 @@ button.btn.danger { color: var(--accent); }
 .session-history-unavailable p { margin: 6px 0; }
 .main.rail-open:has(.right-panel-shell.artifact-mode) .main-chat { margin-right: var(--artifact-rail-w); }
 .main.rail-open:has(.right-panel-shell.artifact-mode) .main-topbar { right: var(--artifact-rail-w); }
+.main.rail-open:has(.right-panel-shell.collapsed) .main-chat { margin-right: 42px; }
+.main.rail-open:has(.right-panel-shell.collapsed) .main-topbar { right: 42px; }
 .artifact-head { display: flex; justify-content: space-between; gap: 14px; align-items: center; }
 .rail-section { border-bottom: 1px solid var(--line); padding: 11px 0; }
 .rail-section-head { display: flex; justify-content: space-between; gap: 8px; align-items: center; min-height: 24px; }

@@ -183,7 +183,7 @@ export function RightRail({
   if (!active) return null;
 
   return (
-    <aside className={"right-panel-shell" + (selected ? " artifact-mode" : "")}>
+    <aside className={"right-panel-shell" + (!panelOpen ? " collapsed" : "") + (selected ? " artifact-mode" : "")}>
       <div className={"right-panel-drawer" + (panelOpen ? " open" : " collapsed")}>
       <div className="right-panel-tabbody">
         <div style={{ display: panelOpen && tab === "info" && !selected ? "block" : "none" }}>

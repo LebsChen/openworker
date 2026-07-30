@@ -1293,9 +1293,9 @@ export function Sidebar(props: Props) {
         <SearchModal
           sessions={props.sessions}
           personas={personas ?? undefined}
-          onSelect={(id, ws, ag) => {
+          onSelect={(id, ws, ag, hostId) => {
             setSearchModalOpen(false);
-            props.onSelectSession(id, ws, ag);
+            props.onSelectSession(id, ws, ag, hostId);
           }}
           onClose={() => setSearchModalOpen(false)}
         />
