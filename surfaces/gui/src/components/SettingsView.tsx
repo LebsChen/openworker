@@ -167,7 +167,13 @@ function RemoteHostsSection() {
       setSaved(true);
       refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save remote host.");
+      setError(
+        e instanceof Error
+          ? e.message
+          : typeof e === "string"
+            ? e
+            : "Could not save remote host.",
+      );
     }
   };
   const activate = async (host: RemoteHostInfo | null) => {
