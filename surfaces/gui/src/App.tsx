@@ -46,7 +46,7 @@ import { itemsFromMessages } from "./itemsFromMessages";
 import { addTurnUsage, emptyUsage, usageFromMessages } from "./usage";
 import { streamMode } from "./streamGate";
 import { InboxItemCard } from "./components/InboxItemCard";
-import { bindSessionHost, isTauri, platformOS, startWindowDrag } from "./tauri";
+import { bindSessionHost, isTauri, platformOS, refreshSessionHosts, startWindowDrag } from "./tauri";
 import { Icon } from "./components/Icon";
 import { Sidebar } from "./components/Sidebar";
 import { ThinkingBlock, Transcript } from "./components/Transcript";
@@ -226,6 +226,17 @@ export function App() {
   // A remembered Scheduled-detail target must not outlive the surface (see the
   // scheduledOpenId comment above): nav re-entry lands on the list, never a
   // possibly-deleted automation's dead detail.
+  useEffect(() => {
+    if (isTauri()) {
+      refreshSessionHosts()
+        .then((hosts) => {
+          const selected = hosts.find((host) => host.id === sessionHost.id) || hosts[0];
+          if (selected) setSessionHost(selected);
+        })
+        .catch(() => {});
+    }
+  }, []);
+
   useEffect(() => {
     if (surface !== "scheduled") setScheduledOpenId(null);
   }, [surface]);

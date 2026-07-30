@@ -89,6 +89,16 @@ export type SessionHostInfo = RemoteHostInfo & {
 
 export const listRemoteHosts = () => invoke<RemoteHostInfo[]>("list_remote_hosts");
 export const listSessionHosts = () => invoke<SessionHostInfo[]>("list_session_hosts");
+export const refreshSessionHosts = async () => {
+  const remote = (await listSessionHosts()) || [];
+  const current = Array.isArray((globalThis as any).__COWORKER_HOSTS__)
+    ? ((globalThis as any).__COWORKER_HOSTS__ as SessionHostInfo[])
+    : [];
+  const local = current.find((host) => host.local);
+  const hosts = [...(local ? [local] : []), ...remote];
+  (globalThis as any).__COWORKER_HOSTS__ = hosts;
+  return hosts;
+};
 export const bindSessionHost = (sessionId: string, hostId: string) =>
   invokeStrict<void>("bind_session_host", { session_id: sessionId, host_id: hostId });
 export const getSessionHost = (sessionId: string) =>
