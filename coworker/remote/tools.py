@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import json
+import fnmatch
 import re
 import uuid
 from dataclasses import dataclass
@@ -107,13 +107,6 @@ def _error(exc: Exception) -> dict[str, str]:
     return {"error": str(exc)}
 
 
-def _read(target: RemoteTarget, path: str) -> dict[str, Any]:
-    try:
-        return target.client.read(target.resolve(path))
-    except (RvmError, RemotePathError) as exc:
-        return _error(exc)
-
-
 def _codex_to_unified(patch: str) -> str:
     lines = patch.splitlines(keepends=True)
     if not lines or lines[0].strip() != "*** Begin Patch" or lines[-1].strip() != "*** End Patch":
@@ -165,14 +158,13 @@ def _apply_remote_diff(target: RemoteTarget, diff: str) -> dict[str, Any]:
     paths = re.findall(
         r"^(?:\+\+\+|---) (?:[ab]/)?([^\t\r\n]+)", unified, re.MULTILINE
     )
-    for path in paths:
-        if path == "/dev/null":
-            continue
-        target.resolve(path)
     remote_path = target.style.join(
         target.workspace, f".coworker/tmp/patch-{uuid.uuid4().hex}.diff"
     )
     try:
+        for path in paths:
+            if path != "/dev/null":
+                target.resolve(path)
         target.client.mkdir(target.style.join(target.workspace, ".coworker/tmp"))
         target.client.write(remote_path, unified)
         if target.style.name == "windows":
@@ -209,7 +201,11 @@ def _apply_remote_diff(target: RemoteTarget, diff: str) -> dict[str, Any]:
 
 
 def remote_file_tools(target: RemoteTarget, *, repo_oriented: bool = True) -> list:
-    def read_file(path: str, start_line: int = 1, max_lines: int = _DEFAULT_MAX_LINES) -> dict[str, Any]:
+    def read_file(
+        path: str,
+        start_line: int = 1,
+        max_lines: int = _DEFAULT_MAX_LINES,
+    ) -> dict[str, Any] | str:
         start = start_line if isinstance(start_line, int) and start_line > 0 else 1
         n = min(max_lines if isinstance(max_lines, int) and max_lines > 0 else _DEFAULT_MAX_LINES, _DEFAULT_MAX_LINES)
         try:
@@ -236,7 +232,12 @@ def remote_file_tools(target: RemoteTarget, *, repo_oriented: bool = True) -> li
         except (RvmError, RemotePathError) as exc:
             return _error(exc)
 
-    def list_files(path: str = ".", pattern: str = "*", recursive: bool = True, max_results: int = 100) -> list[str]:
+    def list_files(
+        path: str = ".",
+        pattern: str = "*",
+        recursive: bool = True,
+        max_results: int = 100,
+    ) -> list[str] | list[dict[str, str]]:
         try:
             root = target.resolve(path)
             out: list[str] = []
@@ -410,7 +411,7 @@ def remote_git_tools(target: RemoteTarget) -> list:
         if "error" in result:
             return result
         commits = []
-        for line in str(result.get("output") or "").splitlines():
+        for line in str(result.get("stdout") or "").splitlines():
             parts = line.split("\x1f")
             if len(parts) == 4:
                 commits.append({"hash": parts[0], "author": parts[1], "date": parts[2], "subject": parts[3]})
@@ -460,7 +461,6 @@ def _wrap(
 
 
 def _fnmatch(value: str, pattern: str) -> bool:
-    import fnmatch
     return fnmatch.fnmatch(value, pattern or "*")
 
 

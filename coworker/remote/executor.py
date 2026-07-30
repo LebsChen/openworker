@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import base64
 import re
 import threading
 import uuid
 from typing import Any, Optional
 
 from ..tools.shell import Executor
-from .client import RvmClient, RvmError, RvmTimeoutError, RvmUnreachableError
+from .client import RvmClient, RvmError, RvmTimeoutError
 from .paths import RemotePathStyle
 
 _DEFAULT_TIMEOUT = 120.0
@@ -23,7 +24,7 @@ class RvmExecutor(Executor):
         cwd: str,
         style: RemotePathStyle | None = None,
         session_id: str | None = None,
-        max_output_chars: int = 50_000,
+        max_output_chars: int = 20_000,
     ) -> None:
         self.client = client
         self.cwd = cwd
@@ -153,14 +154,14 @@ class RvmExecutor(Executor):
                 }
             output, cwd, exit_code, marker_seen = self._parse(response, marker)
             payload = response.get("result", {})
-            remote_timed_out = (
-                isinstance(payload, dict)
-                and (
-                    "timed out" in str(payload.get("stderr") or "").lower()
-                    or "timeout" in str(payload.get("stderr") or "").lower()
-                )
-            )
             if not marker_seen:
+                remote_timed_out = (
+                    isinstance(payload, dict)
+                    and (
+                        "timed out" in str(payload.get("stderr") or "").lower()
+                        or "timeout" in str(payload.get("stderr") or "").lower()
+                    )
+                )
                 self._rotate_session()
                 return {
                     "command": command, "cwd": self.cwd, "exit_code": None,
@@ -169,14 +170,12 @@ class RvmExecutor(Executor):
                     "error": "remote shell session ended before returning its marker",
                 }
             self._first_call = False
-            if remote_timed_out:
-                self._rotate_session()
             truncated = len(output) > self.max_output_chars
             if truncated:
                 output = output[-self.max_output_chars :]
             result: dict[str, Any] = {
                 "command": command, "cwd": cwd, "exit_code": exit_code,
-                "output": output, "timed_out": remote_timed_out, "truncated": truncated,
+                "output": output, "timed_out": False, "truncated": truncated,
             }
             if self._cancel.is_set():
                 result["error"] = "interrupted by user"
@@ -206,8 +205,6 @@ class RvmExecutor(Executor):
                 "elseif ($?) { 0 } else { 1 }\n"
                 f"[IO.File]::WriteAllText({self.style.quote(rc)}, [string]$__ow_rc)"
             )
-            import base64
-
             encoded = base64.b64encode(child.encode("utf-16le")).decode("ascii")
             script = (
                 f"New-Item -ItemType Directory -Force -Path {self.style.quote(root)} | Out-Null; "

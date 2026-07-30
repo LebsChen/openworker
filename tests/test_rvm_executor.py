@@ -62,6 +62,27 @@ def test_missing_marker_rotates_session_and_resends_cwd():
     assert client.calls[-1][1]["cwd"] == "/workspace"
 
 
+def test_timeout_word_in_intact_command_output_does_not_rotate_or_timeout():
+    client = FakeClient({})
+
+    def call(*args, **kwargs):
+        marker = args[0].split("printf '\\n")[1].split(" %s")[0]
+        return {
+            "result": {
+                "stdout": f"curl: (28) Operation timed out\n\n{marker} 0 /workspace\n",
+                "stderr": "",
+                "exit_code": 0,
+            }
+        }
+
+    client.exec_sync = call
+    executor = RvmExecutor(client=client, cwd="/workspace", session_id="stable")
+    result = executor.run("curl")
+    assert result["timed_out"] is False
+    assert executor.session_id == "stable"
+    assert executor.cwd == "/workspace"
+
+
 def test_timeout_rotates_session_and_close_does_not_close_shared_client():
     class TimeoutClient(FakeClient):
         def exec_sync(self, *args, **kwargs):
