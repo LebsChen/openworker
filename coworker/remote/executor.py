@@ -197,8 +197,6 @@ class RvmExecutor(Executor):
         root = self.style.join(self.cwd, ".coworker/bg")
         log = self.style.join(root, task_id + ".log")
         err = self.style.join(root, task_id + ".err")
-        rc = self.style.join(root, task_id + ".rc")
-        pid = self.style.join(root, task_id + ".pid")
         if self.style.name == "windows":
             child = (
                 f"& {{ {command} }}\n"
@@ -217,6 +215,8 @@ class RvmExecutor(Executor):
                 "$p.Id; $global:LASTEXITCODE=0"
             )
         else:
+            rc = self.style.join(root, task_id + ".rc")
+            pid = self.style.join(root, task_id + ".pid")
             child = (
                 f"cd {self.style.quote(self.cwd)} && "
                 f"({command}) >{self.style.quote(log)} 2>&1; "
@@ -239,7 +239,16 @@ class RvmExecutor(Executor):
                 return {"error": "remote background launch did not return a process id"}
         else:
             pid_value = pid
-        self._tasks[task_id] = {"log": log, "err": err, "rc": rc, "pid": pid_value, "cursor": 0}
+        if self.style.name == "windows":
+            self._tasks[task_id] = {
+                "log": log,
+                "err": err,
+                "pid": pid_value,
+                "stdout_cursor": 0,
+                "stderr_cursor": 0,
+            }
+        else:
+            self._tasks[task_id] = {"log": log, "rc": rc, "pid": pid_value, "cursor": 0}
         return {
             "task_id": task_id, "command": command, "status": "running",
             "note": "use shell_task_output to read its output, shell_task_kill to stop it",
@@ -249,27 +258,41 @@ class RvmExecutor(Executor):
         task = self._tasks.get(task_id)
         if task is None:
             return {"error": f"unknown task: {task_id}"}
-        try:
-            content = str(self.client.read(task["log"]).get("content") or "")
-        except RvmError:
-            content = ""
-        cursor = task["cursor"]
         exit_code: int | None = None
         status = "running"
-        try:
-            rc_text = str(self.client.read(task["rc"]).get("content") or "").strip()
-            exit_code = int(rc_text)
-            status = "exited"
-        except (RvmError, ValueError):
-            pass
-        if exit_code is None and self.style.name == "windows":
+        if self.style.name == "windows":
+            try:
+                content = str(self.client.read(task["log"]).get("content") or "")
+            except RvmError:
+                content = ""
+            try:
+                error_content = str(self.client.read(task["err"]).get("content") or "")
+            except RvmError:
+                error_content = ""
             match = re.search(r"(?:^|\r?\n)__COWORKER_BG_RC__(-?\d+)\s*$", content)
             if match:
                 exit_code = int(match.group(1))
                 status = "exited"
                 content = content[: match.start()].rstrip("\r\n") + "\n"
-        new = content[cursor:]
-        task["cursor"] = len(content)
+            stdout_cursor = task["stdout_cursor"]
+            stderr_cursor = task["stderr_cursor"]
+            new = content[stdout_cursor:] + error_content[stderr_cursor:]
+            task["stdout_cursor"] = len(content)
+            task["stderr_cursor"] = len(error_content)
+        else:
+            try:
+                content = str(self.client.read(task["log"]).get("content") or "")
+            except RvmError:
+                content = ""
+            cursor = task["cursor"]
+            try:
+                rc_text = str(self.client.read(task["rc"]).get("content") or "").strip()
+                exit_code = int(rc_text)
+                status = "exited"
+            except (RvmError, ValueError):
+                pass
+            new = content[cursor:]
+            task["cursor"] = len(content)
         truncated = len(new) > self.max_output_chars
         if truncated:
             new = new[-self.max_output_chars :]

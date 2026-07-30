@@ -132,3 +132,28 @@ def test_background_commands_use_process_groups_and_style_quoting():
     script = win.calls[-1][0][0]
     assert "-EncodedCommand" in script
     assert "RedirectStandardError" in script
+
+
+def test_windows_background_output_merges_stderr_after_stdout():
+    class BackgroundClient(FakeClient):
+        def __init__(self):
+            super().__init__({"result": {"stdout": "123\n", "stderr": "", "exit_code": 0}})
+            self.files = {}
+
+        def read(self, path):
+            return {"content": self.files.get(path, "")}
+
+    client = BackgroundClient()
+    executor = RvmExecutor(
+        client=client,
+        cwd=r"C:\Work",
+        style=RemotePathStyle("windows"),
+    )
+    task = executor.run_background("Write-Output out")
+    record = executor._tasks[task["task_id"]]
+    client.files[record["log"]] = "out\r\n__COWORKER_BG_RC__0\r\n"
+    client.files[record["err"]] = "err\r\n"
+    result = executor.background_output(task["task_id"])
+    assert result["status"] == "exited"
+    assert result["exit_code"] == 0
+    assert result["output"] == "out\nerr\r\n"
