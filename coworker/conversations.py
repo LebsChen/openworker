@@ -17,6 +17,7 @@ import threading
 from pathlib import Path
 from typing import Optional
 
+from .secrets import write_private_text
 from .sessions import SessionRecord
 
 
@@ -133,6 +134,16 @@ class ConversationStore:
             for m in messages:
                 f.write(json.dumps(m) + "\n")
 
+    def rewrite_messages(self, session_id: str, messages: list[dict]) -> None:
+        """Atomically replace a session's JSONL message log.
+
+        Normal turns must use append-only ``save``. This explicit operation is reserved for
+        transitions such as replacing the leading persona system message.
+        """
+        content = "".join(json.dumps(message) + "\n" for message in messages)
+        with self._lock:
+            write_private_text(self._file(session_id), content)
+
     def _backfill_counts(self) -> None:
         """One-time per session: move any inline blob into a .jsonl and persist
         title + n_msgs in the index. Skips already-migrated rows on later startups."""
@@ -184,21 +195,10 @@ class ConversationStore:
                         self._append(sid, legacy)
 
             existing = self._count(sid)
-            existing_messages = self._read_jsonl(sid) or []
-            prefix_matches = (
-                len(record.messages) >= len(existing_messages)
-                and record.messages[: len(existing_messages)] == existing_messages
-            )
-            if not prefix_matches:
-                with open(self._file(sid), "w", encoding="utf-8") as f:
-                    for m in record.messages:
-                        f.write(json.dumps(m) + "\n")
-            elif len(record.messages) > existing:
+            if len(record.messages) > existing:
                 self._append(sid, record.messages[existing:])
             elif len(record.messages) < existing:  # rare; not append-only
-                with open(self._file(sid), "w", encoding="utf-8") as f:
-                    for m in record.messages:
-                        f.write(json.dumps(m) + "\n")
+                self.rewrite_messages(sid, record.messages)
 
             title = record.title or title_from(record.messages)
             self._conn.execute(

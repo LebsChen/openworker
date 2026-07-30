@@ -3569,11 +3569,13 @@ class SessionManager:
             **getattr(old, "audit_context", {}),
             "agent": target.name,
         }
-        self._engines[session_id] = new
         try:
+            self.session_store.rewrite_messages(session_id, new.messages)
+            self._engines[session_id] = new
             self.save(session_id, new)
         except Exception:
             self._engines[session_id] = old
+            self.session_store.rewrite_messages(session_id, old.messages)
             raise
         return new, text, None
 
