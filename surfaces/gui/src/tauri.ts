@@ -78,6 +78,7 @@ export type RemoteHostInfo = {
   name: string;
   url: string;
   vnc_password?: string | null;
+  offline?: boolean;
 };
 
 export type RemoteHostProbeResult = {
@@ -166,6 +167,7 @@ export type SessionHostInfo = RemoteHostInfo & {
   ws_url: string;
   token: string;
   local: boolean;
+  offline?: boolean;
 };
 
 export const listRemoteHosts = () => invoke<RemoteHostInfo[]>("list_remote_hosts");
@@ -214,6 +216,8 @@ export const deleteRemoteHost = async (name: string) => {
       : []
   ).filter((host: SessionHostInfo) => host.id !== name);
 };
+export const setRemoteHostOffline = (name: string, offline: boolean) =>
+  invokeStrict<void>("set_remote_host_offline", { name, offline });
 export const restartApp = () => invokeStrict<void>("restart_app");
 
 /** Begin native window dragging from a custom title/header region. */

@@ -28,6 +28,7 @@ export type SessionHost = {
   url?: string;
   vnc_password?: string | null;
   status?: "online" | "offline" | "auth_failed" | "unknown";
+  offline?: boolean;
 };
 
 export const sessionHosts = (): SessionHost[] => {

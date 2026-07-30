@@ -45,6 +45,8 @@ struct RemoteHostMeta {
     #[serde(default)]
     #[serde(rename = "vncPassword", alias = "vnc_password")]
     vnc_password: Option<String>,
+    #[serde(default)]
+    offline: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -68,6 +70,7 @@ struct RemoteHostInfo {
     name: String,
     url: String,
     vnc_password: Option<String>,
+    offline: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -80,6 +83,7 @@ struct SessionHostInfo {
     local: bool,
     url: String,
     vnc_password: Option<String>,
+    offline: bool,
 }
 
 fn free_port() -> u16 {
@@ -261,6 +265,7 @@ fn list_remote_hosts() -> Vec<RemoteHostInfo> {
             name: host.name,
             url: host.url,
             vnc_password: host.vnc_password,
+            offline: host.offline,
         })
         .collect()
 }
@@ -282,6 +287,7 @@ fn list_session_hosts() -> Vec<SessionHostInfo> {
             local: false,
             url: host.url,
             vnc_password: host.vnc_password,
+            offline: host.offline,
         })
         .collect()
 }
@@ -332,8 +338,21 @@ fn save_remote_host(
             url,
             token,
             vnc_password,
+            offline: false,
         });
     }
+    write_remote_hosts(&hosts)
+}
+
+#[tauri::command]
+fn set_remote_host_offline(name: String, offline: bool) -> Result<(), String> {
+    let mut hosts = read_remote_hosts();
+    let host = hosts
+        .hosts
+        .iter_mut()
+        .find(|host| host.name == name)
+        .ok_or_else(|| "Remote host profile not found.".to_string())?;
+    host.offline = offline;
     write_remote_hosts(&hosts)
 }
 
@@ -835,6 +854,7 @@ pub fn run() {
                 .replacen("http://", "ws://", 1),
             "token": host.token,
             "vnc_password": host.vnc_password,
+            "offline": host.offline,
             "local": false
         })
     }));
@@ -888,6 +908,7 @@ pub fn run() {
             bind_session_host,
             session_host,
             save_remote_host,
+            set_remote_host_offline,
             delete_remote_host,
             restart_app
         ])

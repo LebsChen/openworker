@@ -31,6 +31,7 @@ import {
   deleteRemoteHost,
   listRemoteHosts,
   saveRemoteHost,
+  setRemoteHostOffline,
   testRemoteHost,
   remoteHostConfigError,
   type RemoteHostInfo,
@@ -157,6 +158,8 @@ function RemoteHostsSection() {
   const [probeState, setProbeState] = useState<Record<string, RemoteHostProbeResult>>({});
   const [savedTokens, setSavedTokens] = useState<Record<string, string>>({});
   const [testing, setTesting] = useState<string | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [lastSeen, setLastSeen] = useState<Record<string, number>>({});
   const refresh = async () => {
     const listed = await listRemoteHosts().catch(() => []);
     setHosts(listed || []);
@@ -169,6 +172,8 @@ function RemoteHostsSection() {
   };
   useEffect(() => {
     refresh();
+    const timer = window.setInterval(refresh, 30_000);
+    return () => window.clearInterval(timer);
   }, []);
   const save = async () => {
     setError(null);
@@ -176,6 +181,7 @@ function RemoteHostsSection() {
       await saveRemoteHost(name, url, token, vncPassword);
       setSavedTokens((current) => ({ ...current, [name]: token }));
       setToken("");
+      setEditing(null);
       setSaved(true);
       refresh();
     } catch (e) {
@@ -196,6 +202,7 @@ function RemoteHostsSection() {
     setTesting(hostName);
     try {
       const result = await testRemoteHost(url, hostToken);
+      if (result.status === "online") setLastSeen((current) => ({ ...current, [hostName]: Date.now() }));
       setProbeState((current) => ({ ...current, [hostName]: result }));
       const statuses = (globalThis as any).__COWORKER_HOST_STATUS__ || {};
       statuses[hostName] = result.status;
@@ -238,7 +245,7 @@ function RemoteHostsSection() {
                 <span className="ml-2 text-[11px] text-muted">
                   {probeState[host.name]?.error === "Checking connection…"
                     ? "checking"
-                    : statusLabel(probeState[host.name]?.status || "unknown")}
+                    : host.offline ? "offline" : statusLabel(probeState[host.name]?.status || "unknown")}
                 </span>
               </div>
               <div className="text-[12px] text-muted truncate">{host.url}</div>
@@ -257,6 +264,7 @@ function RemoteHostsSection() {
                   {probeState[host.name]?.health?.ide_port != null && " · IDE"}
                   {probeState[host.name]?.info?.cpus != null && ` · ${probeState[host.name]?.info?.cpus} CPU`}
                   {probeState[host.name]?.info?.memory_gb != null && ` · ${probeState[host.name]?.info?.memory_gb} GB`}
+                  {lastSeen[host.name] && ` · Last seen: ${new Date(lastSeen[host.name]).toLocaleString()}`}
                   {probeState[host.name]?.health?.capabilities?.length && ` · ${probeState[host.name]?.health?.capabilities?.join(", ")}`}
                   {probeState[host.name].error && probeState[host.name].error !== "Checking connection…" && ` · ${probeState[host.name].error}`}
                 </div>
@@ -270,16 +278,28 @@ function RemoteHostsSection() {
             >
               {testing === host.name ? "Testing…" : "Test connection"}
             </button>
+            <button className="text-[12px]" onClick={() => {
+              setEditing(host.name);
+              setName(host.name);
+              setUrl(host.url);
+              setToken(savedTokens[host.name] || "");
+              setVncPassword(host.vnc_password || "");
+            }}>
+              Edit
+            </button>
+            <button className="text-[12px]" onClick={() => setRemoteHostOffline(host.name, !host.offline).then(refresh)}>
+              {host.offline ? "Online" : "Offline"}
+            </button>
             <button className="text-[12px] text-danger" onClick={() => deleteRemoteHost(host.name).then(refresh)}>
-              Remove
+              Delete
             </button>
           </div>
         ))}
-        <div className="pt-2 text-[12px] font-medium">Add or update host</div>
-        <input className={INPUT} placeholder="例: Linux 开发服务器" value={name} onChange={(e) => setName(e.target.value)} />
-        <input className={INPUT} placeholder="http://192.168.1.100:9920 或 https://xxx.trycloudflare.com" value={url} onChange={(e) => setUrl(e.target.value)} />
-        <input className={INPUT} type="password" placeholder="agent.js 启动时显示的 token" value={token} onChange={(e) => setToken(e.target.value)} />
-        <input className={INPUT} type="password" placeholder="留空则使用 Token" value={vncPassword} onChange={(e) => setVncPassword(e.target.value)} />
+        <div className="pt-2 text-[12px] font-medium">{editing ? "Edit host" : "Add host"}</div>
+        <input className={INPUT} placeholder="e.g. Linux dev server" value={name} onChange={(e) => setName(e.target.value)} />
+        <input className={INPUT} placeholder="http://192.168.1.100:9920 or https://xxx.trycloudflare.com" value={url} onChange={(e) => setUrl(e.target.value)} />
+        <input className={INPUT} type="password" placeholder="token shown when agent.js starts" value={token} onChange={(e) => setToken(e.target.value)} />
+        <input className={INPUT} type="password" placeholder="leave empty to reuse the token" value={vncPassword} onChange={(e) => setVncPassword(e.target.value)} />
         <button
           className={BTN_BORDERED}
           disabled={!name || !url || !token || testing === name}
@@ -300,7 +320,10 @@ function RemoteHostsSection() {
             {currentFormResult.error && ` · ${currentFormResult.error}`}
           </div>
         )}
-        <button className={BTN_ACCENT} disabled={!name || !url || !token} onClick={save}>添加</button>
+        <button className={BTN_ACCENT} disabled={!name || !url || !token} onClick={save}>{editing ? "Save" : "Add"}</button>
+        {editing && <button className={BTN_BORDERED} onClick={() => {
+          setEditing(null); setName(""); setUrl(""); setToken(""); setVncPassword("");
+        }}>Cancel</button>}
         {saved && <div className="text-[12px] text-accent">Saved securely. Remote hosts are available when selecting a VM for a new session.</div>}
         {error && <div role="alert" className="text-[12px] text-danger">{error}</div>}
       </div>

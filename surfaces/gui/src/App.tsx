@@ -1562,8 +1562,8 @@ export function App() {
                 className="text-[12px] bg-transparent border border-line rounded px-1.5 py-1 text-muted"
               >
                 {sessionHosts().map((host) => (
-                  <option key={host.id} value={host.id}>
-                    {host.name} · {host.local ? "online" : host.status || "unknown"}
+                  <option key={host.id} value={host.id} disabled={Boolean(host.offline)}>
+                    {host.name} · {host.offline ? "offline" : host.local ? "online" : host.status || "unknown"}
                   </option>
                 ))}
               </select>
