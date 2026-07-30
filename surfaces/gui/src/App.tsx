@@ -68,6 +68,7 @@ import { Onboarding } from "./components/Onboarding";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { ScheduledView } from "./components/ScheduledView";
 import { RightRail } from "./components/RightRail";
+import { setHostProbeResult } from "./hostStatus";
 import { IntegrationsView } from "./components/IntegrationsView";
 import { SettingsView } from "./components/SettingsView";
 import { PersonaView } from "./components/PersonaView";
@@ -245,10 +246,9 @@ export function App() {
           if (selected) setSessionHost(selected);
           for (const host of hosts) {
             if (!host.local) {
-                void testRemoteHost(host.base_url, host.token).then((result) => {
-                const statuses = (globalThis as any).__COWORKER_HOST_STATUS__ || {};
-                statuses[host.id] = result.status;
-                (globalThis as any).__COWORKER_HOST_STATUS__ = statuses;
+              setHostProbeResult(host.id, { status: "checking", error: "Checking connection…" });
+              void testRemoteHost(host.base_url, host.token).then((result) => {
+                setHostProbeResult(host.id, result);
                 setHostStatusVersion((version) => version + 1);
               });
             }
@@ -1831,6 +1831,7 @@ export function App() {
             host={sessionHost}
             refreshKey={browserRefreshKey}
             toolNames={items.filter((i) => i.kind === "tool").map((i: any) => i.name)}
+            items={items}
             todo={todo}
             running={running}
             onPreviewChange={onArtifactPreview}

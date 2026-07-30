@@ -534,6 +534,42 @@ button.btn.danger { color: var(--accent); }
   backdrop-filter: blur(12px);
   z-index: 5;
 }
+.right-panel-tabs { padding: 0; }
+.right-panel-tabbar {
+  display: flex; gap: 2px; overflow-x: auto; padding: 8px 10px;
+  border-bottom: 1px solid var(--line); background: var(--glass-soft);
+}
+.right-panel-tab {
+  flex: 0 0 auto; border: 0; border-radius: 7px; padding: 6px 8px;
+  background: transparent; color: var(--muted); cursor: pointer; font-size: 11px;
+}
+.right-panel-tab:hover { color: var(--ink); background: var(--paper); }
+.right-panel-tab.active { color: var(--ink); background: var(--paper); font-weight: 600; }
+.right-panel-tab:disabled { color: var(--faint); cursor: not-allowed; opacity: .55; }
+.right-panel-tabbody { padding: 0 16px 18px; }
+.right-panel-section { padding-top: 12px; }
+.right-panel-heading { margin: 0 0 10px; font-size: 14px; font-weight: 650; color: var(--ink); }
+.right-panel-heading-row { display: flex; align-items: center; justify-content: space-between; }
+.right-panel-subheading { margin: 14px 0 7px; font-size: 12px; color: var(--muted); }
+.right-panel-host { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.right-panel-status { border-radius: 999px; padding: 2px 7px; font-size: 10px; text-transform: capitalize; }
+.right-panel-status.online { color: var(--ok); background: var(--ok-soft); }
+.right-panel-status.offline, .right-panel-status.auth { color: var(--danger); background: var(--danger-soft); }
+.right-panel-status.unknown, .right-panel-status.checking { color: var(--warn-ink); background: var(--warn-soft); }
+.right-panel-field { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; font-size: 11px; color: var(--faint); }
+.right-panel-field strong { max-width: 70%; color: var(--muted); text-align: right; overflow-wrap: anywhere; font-weight: 500; }
+.right-panel-worklog { display: flex; flex-direction: column; gap: 8px; }
+.right-panel-worklog-row { display: grid; grid-template-columns: 8px minmax(0, 1fr); gap: 8px; font-size: 11px; }
+.right-panel-worklog-row strong { display: block; color: var(--muted); text-transform: capitalize; }
+.right-panel-worklog-dot { width: 7px; height: 7px; margin-top: 4px; border-radius: 50%; background: var(--faint); }
+.right-panel-worklog-dot.tool { background: var(--accent); }
+.right-panel-worklog-dot.file { background: var(--ok); }
+.right-panel-worklog-dot.assistant { background: var(--teal); }
+.right-panel-worklog-status { margin-left: 6px; color: var(--faint); }
+.right-panel-worklog-row pre { max-height: 84px; margin: 4px 0 0; overflow: auto; white-space: pre-wrap; color: var(--faint); font: 10px/1.35 ui-monospace, monospace; }
+.right-panel-empty { padding: 32px 8px; text-align: center; color: var(--faint); font-size: 12px; }
+.right-panel-empty h3 { margin: 0 0 8px; color: var(--muted); font-size: 14px; }
+.right-panel-empty p { margin: 5px 0; }
 /* An open artifact widens the rail into a reading panel (Codex-style) — the chat stays visible
    and usable beside it; Back returns to the normal-width Progress/Artifacts list. */
 .right-rail.artifact-mode {

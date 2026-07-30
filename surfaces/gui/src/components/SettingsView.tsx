@@ -50,6 +50,7 @@ import { ModelsTab } from "./ManageTabs";
 import { GalleryModal } from "./GalleryModal";
 import { PersonasTab } from "./PersonasTab";
 import { showPersonas } from "../flags";
+import { setHostProbeResult } from "../hostStatus";
 
 // Settings, restructured (Option 2) into a full-page surface that mirrors IntegrationsView's shell:
 // a left sub-nav (Appearance · Files · Models · Personas) + centered panel, replacing the old
@@ -195,6 +196,7 @@ function RemoteHostsSection() {
     }
   };
   const test = async (hostName: string, url: string, hostToken: string) => {
+    setHostProbeResult(hostName, { status: "checking", error: "Checking connection…" });
     setProbeState((current) => ({
       ...current,
       [hostName]: { status: "unknown", error: "Checking connection…" },
@@ -204,18 +206,14 @@ function RemoteHostsSection() {
       const result = await testRemoteHost(url, hostToken);
       if (result.status === "online") setLastSeen((current) => ({ ...current, [hostName]: Date.now() }));
       setProbeState((current) => ({ ...current, [hostName]: result }));
-      const statuses = (globalThis as any).__COWORKER_HOST_STATUS__ || {};
-      statuses[hostName] = result.status;
-      (globalThis as any).__COWORKER_HOST_STATUS__ = statuses;
+      setHostProbeResult(hostName, result);
     } catch (error) {
       const result: RemoteHostProbeResult = {
         status: "offline",
         error: error instanceof Error ? error.message : "Connection test failed.",
       };
       setProbeState((current) => ({ ...current, [hostName]: result }));
-      const statuses = (globalThis as any).__COWORKER_HOST_STATUS__ || {};
-      statuses[hostName] = result.status;
-      (globalThis as any).__COWORKER_HOST_STATUS__ = statuses;
+      setHostProbeResult(hostName, result);
     } finally {
       setTesting(null);
     }
