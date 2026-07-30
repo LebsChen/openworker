@@ -139,6 +139,8 @@ export function ModelsTab() {
             curated={settings.models}
             defaultModel={settings.model}
             labels={settings.model_labels}
+            capabilityOverrides={settings.model_capabilities}
+            onCapabilitiesChanged={(next) => setSettings((s) => (s ? { ...s, model_capabilities: next } : s))}
             onChanged={(next) => setSettings((s) => (s ? { ...s, models: next.models, model: next.model } : s))}
           />
         </div>

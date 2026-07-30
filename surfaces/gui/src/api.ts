@@ -855,6 +855,7 @@ export interface ModelSettings {
   // {full id → context window in tokens}, verified matrix entries only — drives the
   // composer's context-fill meter (absent id → the meter hides). Optional for older backends.
   model_context_windows?: Record<string, number>;
+  model_capabilities?: Record<string, Record<string, unknown>>;
   // Token savings (PDF attachments): fallback for models without native PDF support,
   // and attach-time thresholds. Optional so the GUI is robust to an older backend.
   pdf_fallback?: "text" | "images";
@@ -1482,6 +1483,8 @@ export interface ProviderInfo {
   blurb?: string; // one-line note under the title ("Uses X's OpenAI-compatible API…")
   key_set_at?: string | null; // ISO date the key was last (re)saved — absent for env-only config
   last_used_at?: number | null; // epoch secs the provider last served a completion
+  imported_models?: string[];
+  header_names?: string[];
 }
 
 export async function getProviders(): Promise<ProviderInfo[]> {
@@ -1491,7 +1494,7 @@ export async function getProviders(): Promise<ProviderInfo[]> {
 
 export async function setProvider(
   name: string,
-  fields: Record<string, string>,
+  fields: Record<string, unknown>,
 ): Promise<{ ok: boolean; error?: string; provider?: string; recommended_model?: string | null }> {
   const res = await fetch(`${httpBase()}/v1/providers`, {
     method: "POST",
@@ -1512,12 +1515,60 @@ export async function removeProvider(name: string): Promise<{ ok: boolean; error
 /** Live read-only credential check (does NOT save the key). Triggered by the user's "Test" click. */
 export async function verifyProvider(
   name: string,
-  fields: Record<string, string>,
+  fields: Record<string, unknown>,
 ): Promise<{ ok: boolean; error?: string }> {
   const res = await fetch(`${httpBase()}/v1/providers/verify`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name, fields }),
+  });
+  return res.json();
+}
+
+export async function discoverProviderModels(
+  name: string,
+  fields: Record<string, unknown>,
+): Promise<{ ok: boolean; error?: string; models?: string[] }> {
+  const res = await fetch(`${httpBase()}/v1/providers/models`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, fields }),
+  });
+  return res.json();
+}
+
+export async function importProviderModels(
+  name: string,
+  models: string[],
+): Promise<{ ok: boolean; error?: string; models?: string[]; imported_models?: string[] }> {
+  const res = await fetch(`${httpBase()}/v1/providers/models/import`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, models }),
+  });
+  return res.json();
+}
+
+export async function setProviderHeaders(
+  name: string,
+  headers: { name: string; value: string }[],
+): Promise<{ ok: boolean; error?: string }> {
+  const res = await fetch(`${httpBase()}/v1/providers/headers`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, headers }),
+  });
+  return res.json();
+}
+
+export async function setModelCapabilities(
+  model: string,
+  override: Record<string, unknown> | null,
+): Promise<{ ok: boolean; error?: string; model_capabilities?: Record<string, Record<string, unknown>> }> {
+  const res = await fetch(`${httpBase()}/v1/providers/capabilities`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model, override }),
   });
   return res.json();
 }

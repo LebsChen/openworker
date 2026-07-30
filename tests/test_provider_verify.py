@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from coworker.providers import detect_provider, verify_provider_key
+from coworker.providers import detect_provider, fetch_openai_models, verify_provider_key
 
 
 # -- detect_provider ------------------------------------------------------------
@@ -57,6 +57,52 @@ def test_verify_openai_custom_endpoint(monkeypatch):
     )
     # trailing slash trimmed, /models appended to the custom endpoint
     assert cap["url"] == "https://gw.example/openai/v1/models"
+
+
+def test_verify_openai_forwards_valid_extra_headers(monkeypatch):
+    cap: dict = {}
+    _patch_get(monkeypatch, status=200, capture=cap)
+    verify_provider_key(
+        "openai",
+        api_key="sk-x",
+        base_url="https://gw.example/v1",
+        headers=[{"name": "X-Project", "value": "project-a"}],
+    )
+    assert cap["headers"] == {
+        "Authorization": "Bearer sk-x",
+        "X-Project": "project-a",
+    }
+
+
+def test_discovery_preserves_raw_model_ids(monkeypatch):
+    class Response:
+        status_code = 200
+
+        @staticmethod
+        def json():
+            return {"data": [{"id": "vendor/foo:v1"}, {"id": "my.model/2"}]}
+
+    monkeypatch.setattr("httpx.get", lambda *args, **kwargs: Response())
+    assert fetch_openai_models(
+        api_key="key",
+        base_url="https://gateway.example/v1",
+    ) == ["vendor/foo:v1", "my.model/2"]
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        [{"name": "Authorization", "value": "override"}],
+        [{"name": "Bad Header", "value": "x"}],
+        [{"name": "X-Test", "value": "line\nbreak"}],
+        [{"name": "X-Test", "value": "a"}, {"name": "x-test", "value": "b"}],
+    ],
+)
+def test_verify_rejects_invalid_extra_headers(monkeypatch, headers):
+    from coworker.providers.registry import validate_extra_headers
+
+    with pytest.raises(ValueError):
+        validate_extra_headers(headers)
 
 
 def test_verify_bad_key_is_invalid(monkeypatch):

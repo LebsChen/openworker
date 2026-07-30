@@ -45,6 +45,26 @@ def test_base_url_omitted_when_none(monkeypatch):
     assert "base_url" not in captured
 
 
+def test_extra_headers_passed_to_sdk(monkeypatch):
+    captured: dict = {}
+
+    class FakeOpenAI:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr("openai.OpenAI", FakeOpenAI)
+    build_provider_client(
+        "openai",
+        {
+            "api_key": "sk-x",
+            "base_url": "https://gw.example/v1",
+            "headers": [{"name": "X-Project", "value": "project-a"}],
+        },
+        None,
+    )._ensure_client()  # type: ignore[attr-defined]
+    assert captured["default_headers"] == {"X-Project": "project-a"}
+
+
 # -- ollama URL normalization ---------------------------------------------------
 def test_normalize_ollama_url():
     assert _normalize_ollama_url(None) == "http://localhost:11434/v1"

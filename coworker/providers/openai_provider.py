@@ -124,6 +124,7 @@ class OpenAIProvider(ProviderClient):
         default_model: str = "gpt-5.6-sol",
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
+        headers: Optional[dict[str, str]] = None,
         secrets: Any = None,
     ):
         # The SDK client is built lazily on first use, NOT at construction. This lets an engine
@@ -138,6 +139,7 @@ class OpenAIProvider(ProviderClient):
         self._client = client
         self._api_key = api_key
         self._base_url = base_url
+        self._headers = dict(headers or {})
         self._secrets = secrets
         self.default_model = default_model
 
@@ -155,6 +157,8 @@ class OpenAIProvider(ProviderClient):
             kwargs: dict[str, Any] = {"api_key": key}
             if self._base_url:
                 kwargs["base_url"] = self._base_url
+            if self._headers:
+                kwargs["default_headers"] = dict(self._headers)
             self._client = OpenAI(**kwargs)
         return self._client
 

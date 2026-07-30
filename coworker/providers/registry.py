@@ -17,6 +17,7 @@ MaaS endpoint), and `ollama` (local, OpenAI-compatible `/v1`).
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
@@ -28,6 +29,53 @@ from .openai_provider import OpenAIProvider
 from .vertex_provider import VertexProvider
 
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
+_HEADER_NAME_RE = re.compile(r"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$")
+_RESERVED_HEADERS = {
+    "authorization",
+    "content-length",
+    "content-type",
+    "host",
+    "proxy-authenticate",
+    "proxy-authorization",
+    "transfer-encoding",
+    "user-agent",
+}
+
+
+def validate_extra_headers(value: Any) -> list[dict[str, str]]:
+    """Validate and normalize user-supplied OpenAI-compatible request headers.
+
+    Header values are credentials and are deliberately never included in any returned
+    provider metadata or exception text.
+    """
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ValueError("extra headers must be a list")
+    out: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for item in value:
+        if not isinstance(item, dict):
+            raise ValueError("each extra header must be an object")
+        name = item.get("name")
+        header_value = item.get("value")
+        if not isinstance(name, str) or not name.strip() or not _HEADER_NAME_RE.fullmatch(name.strip()):
+            raise ValueError("extra header name is invalid")
+        name = name.strip()
+        lower = name.lower()
+        if lower in _RESERVED_HEADERS:
+            raise ValueError(f"extra header '{name}' is reserved")
+        if lower in seen:
+            raise ValueError(f"duplicate extra header '{name}'")
+        if not isinstance(header_value, str) or not header_value or "\r" in header_value or "\n" in header_value:
+            raise ValueError("extra header value is invalid")
+        seen.add(lower)
+        out.append({"name": name, "value": header_value})
+    return out
+
+
+def extra_headers_dict(value: Any) -> dict[str, str]:
+    return {item["name"]: item["value"] for item in validate_extra_headers(value)}
 
 
 @dataclass(frozen=True)
@@ -115,7 +163,8 @@ def _build_openai(profile: dict[str, Any], secrets: Any) -> ProviderClient:
     # so we just hand it the SecretStore. An optional custom endpoint (Azure OpenAI /openai/v1,
     # OpenRouter, vLLM, …) comes from the stored profile.
     base_url = ((profile or {}).get("base_url") or "").strip() or None
-    return OpenAIProvider(secrets=secrets, base_url=base_url)
+    headers = extra_headers_dict((profile or {}).get("headers"))
+    return OpenAIProvider(secrets=secrets, base_url=base_url, headers=headers)
 
 
 def _build_anthropic(profile: dict[str, Any], secrets: Any) -> ProviderClient:
@@ -795,6 +844,7 @@ def verify_provider_key(
     api_key: Optional[str] = None,
     base_url: Optional[str] = None,
     fields: Optional[dict[str, Any]] = None,
+    headers: Any = None,
     timeout: float = 10.0,
 ) -> dict[str, Any]:
     """Validate a provider's credentials with one cheap, read-only call (list models) — the same
@@ -835,9 +885,11 @@ def verify_provider_key(
                 or default_base.rstrip("/")
                 or "https://api.openai.com/v1"
             )
+            request_headers = {"Authorization": f"Bearer {key}"}
+            request_headers.update(extra_headers_dict(headers))
             resp = httpx.get(
                 base + "/models",
-                headers={"Authorization": f"Bearer {key}"},
+                headers=request_headers,
                 timeout=timeout,
             )
     except Exception as exc:  # DNS/connection/timeout — never let it bubble to a 500
@@ -858,3 +910,44 @@ def verify_provider_key(
             "error": "Reached the server, but no OpenAI-compatible /v1 API there.",
         }
     return {"ok": False, "error": f"{d.title} returned HTTP {resp.status_code}."}
+
+
+def fetch_openai_models(
+    *,
+    api_key: str,
+    base_url: str,
+    headers: Any = None,
+    timeout: float = 10.0,
+) -> list[str]:
+    """Fetch raw model IDs from an OpenAI-compatible endpoint.
+
+    This is intentionally separate from verification: discovery is an explicit user action
+    and callers must surface failures instead of falling back to the stock endpoint.
+    """
+    import httpx
+
+    base = (base_url or "").strip().rstrip("/")
+    if not base:
+        base = "https://api.openai.com/v1"
+    request_headers = {"Authorization": f"Bearer {api_key}"}
+    request_headers.update(extra_headers_dict(headers))
+    try:
+        resp = httpx.get(base + "/models", headers=request_headers, timeout=timeout)
+    except Exception as exc:
+        raise RuntimeError(f"Couldn't reach OpenAI-compatible endpoint ({exc.__class__.__name__}).") from None
+    if resp.status_code >= 300:
+        if resp.status_code in (401, 403):
+            raise RuntimeError("Invalid API key.")
+        raise RuntimeError(f"OpenAI-compatible endpoint returned HTTP {resp.status_code}.")
+    try:
+        data = resp.json()
+    except Exception:
+        raise RuntimeError("OpenAI-compatible endpoint returned invalid JSON.") from None
+    rows = data.get("data") if isinstance(data, dict) else None
+    if not isinstance(rows, list):
+        raise RuntimeError("OpenAI-compatible endpoint returned an invalid model list.")
+    models: list[str] = []
+    for row in rows:
+        if isinstance(row, dict) and isinstance(row.get("id"), str) and row["id"]:
+            models.append(row["id"])
+    return list(dict.fromkeys(models))

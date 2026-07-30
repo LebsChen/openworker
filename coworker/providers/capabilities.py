@@ -9,11 +9,24 @@ from __future__ import annotations
 from .base import ModelCapabilities
 
 
-def capabilities_for(model: str) -> ModelCapabilities:
+def capabilities_for(model: str, overrides: dict[str, object] | None = None) -> ModelCapabilities:
     # Curated models answer from the matrix (exact full-id match — including reseller ids
     # like `together:zai-org/GLM-5.2`, whose names defeat the prefix heuristics below).
     # Custom user-added models fall through to the heuristics, at their own risk.
     from .matrix import entry_for
+
+    override = (overrides or {}).get(model)
+    if isinstance(override, dict):
+        base = capabilities_for(model, None)
+        return ModelCapabilities(
+            tools=base.tools,
+            vision=bool(override.get("vision", base.vision)),
+            pdf=bool(override.get("pdf", base.pdf)),
+            parallel_tool_calls=bool(
+                override.get("parallel_tool_calls", base.parallel_tool_calls)
+            ),
+            streaming=base.streaming,
+        )
 
     entry = entry_for(model)
     if entry is not None:

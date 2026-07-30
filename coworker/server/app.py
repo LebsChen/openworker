@@ -1336,6 +1336,30 @@ def create_app(manager: SessionManager) -> FastAPI:
             manager.verify_provider, name, (body or {}).get("fields")
         )
 
+    @app.post("/v1/providers/models")
+    async def providers_models(body: dict) -> dict[str, Any]:
+        name = (body or {}).get("name", "") or "openai"
+        return await asyncio.to_thread(
+            manager.discover_provider_models, name, (body or {}).get("fields")
+        )
+
+    @app.post("/v1/providers/models/import")
+    def providers_models_import(body: dict) -> dict[str, Any]:
+        name = (body or {}).get("name", "") or "openai"
+        return manager.import_provider_models(name, (body or {}).get("models"))
+
+    @app.post("/v1/providers/headers")
+    def providers_headers(body: dict) -> dict[str, Any]:
+        name = (body or {}).get("name", "") or "openai"
+        return manager.set_provider_headers(name, (body or {}).get("headers"))
+
+    @app.post("/v1/providers/capabilities")
+    def providers_capabilities(body: dict) -> dict[str, Any]:
+        return manager.set_model_capabilities(
+            str((body or {}).get("model", "")),
+            (body or {}).get("override"),
+        )
+
     # -- settings (model API key) -----------------------------------------------
     @app.get("/v1/settings")
     def settings_get() -> dict[str, Any]:
