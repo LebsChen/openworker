@@ -46,6 +46,28 @@ def test_to_agent_carries_traits_and_tools(tmp_path):
     assert {"read_file", "grep", "run_shell", "todo_write"} <= names
 
 
+def test_fullstack_builtin_manifest_has_engineering_surface():
+    from pathlib import Path
+
+    from coworker.personas.manifest import load_manifest_file
+
+    manifest = load_manifest_file(
+        Path(__file__).parents[1] / "coworker/personas/builtin/fullstack.md",
+        builtin=True,
+    )
+    assert manifest.id == "fullstack"
+    assert manifest.family == "code"
+    assert manifest.needs_workspace is True
+    assert manifest.tools == ["code_files", "git", "search", "shell", "computer", "todo"]
+    assert manifest.messaging is False
+    assert manifest.connectors is False
+    agent = manifest.to_agent()
+    assert agent.name == "fullstack"
+    assert agent.family == "code"
+    assert agent.needs_workspace is True
+    assert agent.messaging is False and agent.connectors is False
+
+
 def test_list_field_accepts_comma_string():
     text = VALID.replace("tools: [files, search, shell, todo]", "tools: files, search")
     assert parse_manifest(text).tools == ["files", "search"]
