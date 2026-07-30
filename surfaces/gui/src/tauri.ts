@@ -93,9 +93,34 @@ export const bindSessionHost = (sessionId: string, hostId: string) =>
   invokeStrict<void>("bind_session_host", { session_id: sessionId, host_id: hostId });
 export const getSessionHost = (sessionId: string) =>
   invoke<string | null>("session_host", { session_id: sessionId });
-export const saveRemoteHost = (name: string, baseUrl: string, token: string) =>
-  invokeStrict<void>("save_remote_host", { name, base_url: baseUrl, token });
-export const deleteRemoteHost = (name: string) => invokeStrict<void>("delete_remote_host", { name });
+export const saveRemoteHost = async (name: string, baseUrl: string, token: string) => {
+  await invokeStrict<void>("save_remote_host", { name, base_url: baseUrl, token });
+  const hosts = Array.isArray((globalThis as any).__COWORKER_HOSTS__)
+    ? ((globalThis as any).__COWORKER_HOSTS__ as SessionHostInfo[])
+    : [];
+  const normalized = baseUrl.replace(/\/+$/, "");
+  const next: SessionHostInfo = {
+    id: name,
+    name,
+    base_url: normalized,
+    ws_url: normalized.replace(/^https:/, "wss:").replace(/^http:/, "ws:"),
+    token,
+    local: false,
+    active: false,
+  };
+  (globalThis as any).__COWORKER_HOSTS__ = [
+    ...hosts.filter((host) => host.id !== name),
+    next,
+  ];
+};
+export const deleteRemoteHost = async (name: string) => {
+  await invokeStrict<void>("delete_remote_host", { name });
+  (globalThis as any).__COWORKER_HOSTS__ = (
+    Array.isArray((globalThis as any).__COWORKER_HOSTS__)
+      ? (globalThis as any).__COWORKER_HOSTS__
+      : []
+  ).filter((host: SessionHostInfo) => host.id !== name);
+};
 export const activateRemoteHost = (name: string | null) =>
   invokeStrict<void>("activate_remote_host", { name });
 export const restartApp = () => invokeStrict<void>("restart_app");
