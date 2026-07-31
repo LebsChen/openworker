@@ -431,7 +431,6 @@
   "shell.connecting": "Connecting…",
   "shell.disconnected": "Disconnected",
   "shell.startNew": "Start a new shell",
-  "assets.agents": "AGENTS.md",
   "assets.knowledge": "Knowledge",
   "assets.playbook": "Playbook",
   "assets.skill": "Skill",
@@ -456,5 +455,13 @@
   "assets.secretName": "Secret name",
   "assets.secretValue": "Secret value (never displayed again)",
   "assets.saveSecret": "Store secret",
-  "assets.secretStored": "Stored locally"
+  "assets.secretStored": "Stored locally",
+  "assets.saved": "Saved",
+  "assets.deleted": "Deleted",
+  "assets.manual": "Manual",
+  "assets.always": "Always",
+  "assets.path": "Path",
+  "assets.writeOnlyNotice": "Secret values are write-only and are never shown after saving.",
+  "assets.globalAgentsTitle": "Global AGENTS.md",
+  "assets.globalAgentsSub": "This edits the global AGENTS.md only. A project AGENTS.md is read from that workspace."
 }

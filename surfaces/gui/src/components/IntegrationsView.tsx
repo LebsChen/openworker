@@ -96,7 +96,7 @@ export function IntegrationsView() {
           ) : tab === "secrets" ? (
             <section><PanelHead title={t("assets.secrets")} sub={t("assets.secretsSub")} /><SecretsEditor /></section>
           ) : (
-            <section><PanelHead title={tab === "agents" ? t("assets.agents") : t("assets.skill")} sub={t("assets.localSub")} /><TextAssetEditor skill={tab === "skill"} /></section>
+            <section><PanelHead title={tab === "agents" ? t("assets.globalAgentsTitle") : t("assets.skill")} sub={tab === "agents" ? t("assets.globalAgentsSub") : t("assets.localSub")} /><TextAssetEditor skill={tab === "skill"} /></section>
           )}
         </div>
       </div>

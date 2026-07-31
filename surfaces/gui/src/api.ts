@@ -916,13 +916,24 @@ export async function getAgentsMd(): Promise<{ name: string; body: string }> {
   return request("/v1/agents-md");
 }
 export async function saveAgentsMd(body: string) {
-  return request("/v1/agents-md", { method: "PUT", body: JSON.stringify({ body }) });
+  return request<{ name: string; body: string }>("/v1/agents-md", { method: "PUT", body: JSON.stringify({ body }) });
 }
-export async function saveSkill(name: string, body: string, enabled = true) {
-  return request(`/v1/skills/${encodeURIComponent(name)}`, { method: "PUT", body: JSON.stringify({ body, enabled }) });
+export async function saveSkill(name: string, body: string, enabled = true, description = "") {
+  return request<Skill>(`/v1/skills/${encodeURIComponent(name)}`, { method: "PUT", body: JSON.stringify({ body, enabled, description }) });
 }
 export async function deleteSkill(name: string) {
   return request(`/v1/skills/${encodeURIComponent(name)}`, { method: "DELETE" });
+}
+export interface Skill {
+  name: string;
+  description: string;
+  body?: string;
+  enabled: boolean;
+  path?: string;
+}
+export async function getSkills(): Promise<Skill[]> {
+  const data = await request<{ skills: Skill[] }>("/v1/skills");
+  return data.skills || [];
 }
 
 export async function connectConnector(
