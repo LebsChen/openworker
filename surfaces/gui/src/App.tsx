@@ -1,3 +1,4 @@
+import { t, useT } from "./i18n";
 import { useCallback, useEffect, useRef, useState, type PointerEvent } from "react";
 import {
   announceInboxUnlock,
@@ -168,6 +169,7 @@ function fallbackWorkspace(current: string | null, projects: RecentWorkspace[]):
 }
 
 export function App() {
+  useT();
   const [workspace, setWorkspace] = useState<string | null>(null);
   const [branch, setBranch] = useState<string | null>(null);
   const [showGate, setShowGate] = useState(false);
@@ -1505,7 +1507,7 @@ export function App() {
         {overlay && (
           <div className="titlebar-drag" data-tauri-drag-region>
             <span className="titlebar-brand brand-wordmark">
-              <Icon name="logo" size={13} className="mark" /> OpenWorker<span className="beta-tag">BETA</span>
+              <Icon name="logo" size={13} className="mark" /> OpenWorker<span className="beta-tag">{t("app.beta")}</span>
             </span>
           </div>
         )}
@@ -1521,7 +1523,7 @@ export function App() {
         </div>
         <div className="boot-text">
           {remoteError || (resumedExisting ? "Restoring your session…" : "Starting OpenWorker…")}
-          <span className="beta-tag">BETA</span>
+          <span className="beta-tag">{t("app.beta")}</span>
         </div>
         {remoteError && (
           <div className="mt-4 max-w-md text-center text-[12px] text-danger" role="alert">
@@ -1577,7 +1579,7 @@ export function App() {
             <button
               className="text-[12px] text-faint px-0.5"
               data-testid="toast-dismiss"
-              title="Dismiss"
+              title={t("app.dismiss")}
               onClick={() => setRunToast(null)}
             >
               ✕
@@ -1604,8 +1606,8 @@ export function App() {
           className="nav-reveal-btn"
           onClick={toggleNav}
           onMouseEnter={() => setNavPeek(true)}
-          title="Show sidebar (⌘B)"
-          aria-label="Show sidebar"
+          title={t("app.showSidebarB")}
+          aria-label={t("app.showSidebar")}
         >
           <Icon name="sidebar" size={16} />
         </button>
@@ -1709,24 +1711,24 @@ export function App() {
                 <button
                   className="topbar-icon-btn"
                   onClick={toggleNav}
-                  aria-label="Show sidebar"
-                  title="Show sidebar (⌘B)"
+                  aria-label={t("app.showSidebar")}
+                  title={t("app.showSidebarB")}
                 >
                   <Icon name="sidebar" size={16} />
                 </button>
                 <button
                   className="topbar-icon-btn"
                   onClick={() => startNewSession()}
-                  aria-label="New session"
-                  title="New session"
+                  aria-label={t("app.newSession")}
+                  title={t("app.newSession")}
                 >
                   <Icon name="plus" size={16} />
                 </button>
                 <button
                   className="topbar-icon-btn"
                   onClick={() => setSearchOpen(true)}
-                  aria-label="Search"
-                  title="Search"
+                  aria-label={t("app.search")}
+                  title={t("app.search")}
                 >
                   <Icon name="search" size={16} />
                 </button>
@@ -1759,7 +1761,7 @@ export function App() {
           <div className="main-topbar-side main-topbar-actions" onPointerDown={beginWindowDrag}>
             {sessionHosts().length > 1 && hostStatusVersion >= 0 && (
               <select
-                aria-label="Session host"
+                aria-label={t("app.sessionHost")}
                 value={sessionHost.id}
                 onChange={(e) => {
                   const host = sessionHosts().find((candidate) => candidate.id === e.target.value);
@@ -1781,7 +1783,7 @@ export function App() {
             )}
             {personas && personas.length > 1 && (
               <select
-                aria-label="Session persona"
+                aria-label={t("app.sessionPersona")}
                 value={agent}
                 disabled={running}
                 onChange={(e) => changePersona(e.target.value)}
@@ -1809,7 +1811,7 @@ export function App() {
                 Remote host "{sessionHost.name}" is {sessionHost.status === "auth_failed" ? "authentication failed" : "offline or untested"}; this session will not fall back to Local.
               </div>
             )}
-            <label className="flex items-center gap-1 text-[11px] text-muted" title="Create this session in an isolated workspace">
+            <label className="flex items-center gap-1 text-[11px] text-muted" title={t("app.createSessionIsolatedWorkspace")}>
               <input
                 type="checkbox"
                 checked={isolateWorkspace}
@@ -1822,10 +1824,10 @@ export function App() {
                 className="topbar-artifacts-btn"
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={() => setRailHidden(false)}
-                title="Show files this conversation produced"
+                title={t("app.showFilesConversationProduced")}
               >
                 <Icon name="file" size={14} />
-                <span>Artifacts</span>
+                <span>{t("app.artifacts")}</span>
                 <span className="topbar-artifacts-count">{artifactCount}</span>
               </button>
             )}
@@ -1905,9 +1907,9 @@ export function App() {
             <div className="main-scroll" ref={scrollRef} onScroll={handleScroll}>
               {idle && sessionHistoryUnavailable && !sessionHost.local ? (
                 <div className="session-history-unavailable">
-                  <h1>Can&apos;t load this session&apos;s history</h1>
+                  <h1>{t("app.historyLoadFailed")}</h1>
                   <p>Remote host &quot;{sessionHost.name}&quot; is offline.</p>
-                  <p>History remains on that host and will reload when it is available again.</p>
+                  <p>{t("app.historyReloadsWithHost")}</p>
                 </div>
               ) : idle ? (
                 agent === "cowork" ? (
@@ -1925,7 +1927,7 @@ export function App() {
                     </h1>
                     {needsWorkspace(agent) && (
                       <div className="suggestions">
-                        <div className="suggest-head">Try a task</div>
+                        <div className="suggest-head">{t("app.tryTask")}</div>
                         {SUGGESTIONS.map((s, i) => (
                           <div className="suggest" key={i} onClick={() => workspace && send(s.text)}>
                             <span className="ico">{s.ico}</span>
@@ -1963,7 +1965,7 @@ export function App() {
                   {streaming && streamMode(streaming, items, running) === "answer" && (
                     <div className="transcript">
                       <div className="bubble-assistant">
-                        <div className="who">assistant</div>
+                        <div className="who">{t("app.assistant")}</div>
                         <Markdown text={streaming} />
                         <span className="stream-cursor">▍</span>
                       </div>
@@ -2129,7 +2131,7 @@ function WaitingForAgent() {
     <div className="waiting-transcript">
       <div className="waiting-row" aria-live="polite">
         <span className="waiting-spinner" />
-        <span>Waiting for agent...</span>
+        <span>{t("app.waitingAgent")}</span>
       </div>
     </div>
   );

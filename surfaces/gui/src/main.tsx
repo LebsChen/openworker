@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { App } from "./App";
 import { initTheme } from "./theme";
 import { platformOS } from "./tauri";
+import { I18nProvider } from "./i18n";
 import "./tailwind.css";
 import "./styles.css";
 
@@ -19,6 +20,8 @@ window.addEventListener("drop", (e) => e.preventDefault());
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <App />
+    <I18nProvider>
+      <App />
+    </I18nProvider>
   </React.StrictMode>,
 );

@@ -1,3 +1,4 @@
+import { t, useT } from "../i18n";
 import { useEffect, useState } from "react";
 import { getConnectors, getSessionConnections, type SessionHost } from "../api";
 import type { Attachment } from "../types";
@@ -32,6 +33,7 @@ export function SessionIntro({
   onOpenSessionSettings: () => void;
   onPrefill: (text: string, attachments?: Attachment[]) => void;
 }) {
+  useT();
   const { roots, busy, error, addRoot } = useRoots(sessionId, host);
   const [live, setLive] = useState<Set<string>>(new Set());
   const [byName, setByName] = useState<ConnectorMap>({});
@@ -77,10 +79,10 @@ export function SessionIntro({
       <div className="intro-tasks">
         <button className="task-card" data-testid="intro-task-folder" onClick={pickFolder}>
           <span className="task-card-body">
-            <span className="task-card-title">Analyze the files in a directory</span>
-            <span className="task-card-sub">I'll read them and summarize what matters</span>
+            <span className="task-card-title">{t("session.intro.analyzeFilesDirectory")}</span>
+            <span className="task-card-sub">{t("session.intro.iLlReadThemSummarizeWhatMatters")}</span>
           </span>
-          <span className="task-card-act">Pick a folder →</span>
+          <span className="task-card-act">{t("session.intro.pickFolder")}</span>
         </button>
         {addingFolder && (
           <div className="intro-addfolder">
@@ -104,7 +106,7 @@ export function SessionIntro({
           onClick={() => (hubspotReady ? onPrefill(HUBSPOT_PROMPT) : onOpenSessionSettings())}
         >
           <span className="task-card-body">
-            <span className="task-card-title">Create a report from my HubSpot leads</span>
+            <span className="task-card-title">{t("session.intro.createReportMyHubspotLeads")}</span>
             <span className="task-card-sub">
               {dot("hubspot", hubspotReady)}
               Sources, stages, and who needs follow-up
@@ -119,7 +121,7 @@ export function SessionIntro({
           onClick={() => (ghSlackReady ? onPrefill(GH_SLACK_PROMPT) : onOpenSessionSettings())}
         >
           <span className="task-card-body">
-            <span className="task-card-title">Automate a weekly GitHub progress report to Slack</span>
+            <span className="task-card-title">{t("session.intro.weeklyGithubReport")}</span>
             <span className="task-card-sub">
               {dot("github", live.has("github"))}
               {dot("slack", live.has("slack"))}

@@ -1,3 +1,4 @@
+import { t, useT } from "../i18n";
 import { useEffect, useState } from "react";
 import { getRecentWorkspaces, openWorkspace, type RecentWorkspace } from "../api";
 import { chooseFolder } from "../tauri";
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export function FolderGate({ onChoose, onCancel, create }: Props) {
+  useT();
   const [recents, setRecents] = useState<RecentWorkspace[]>([]);
   const [path, setPath] = useState("");
   const [error, setError] = useState("");
@@ -49,13 +51,13 @@ export function FolderGate({ onChoose, onCancel, create }: Props) {
 
         <div className="gate-input">
           <input
-            placeholder="/path/to/your/project"
+            placeholder={t("workspace.trust.pathProject")}
             value={path}
             onChange={(e) => setPath(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && open(path, create)}
             autoFocus
           />
-          <button className="btn" onClick={browse} title="Pick a folder">
+          <button className="btn" onClick={browse} title={t("workspace.trust.pickFolder")}>
             Browse…
           </button>
           <button className="btn primary" onClick={() => open(path, create)} disabled={!path.trim()}>
@@ -66,7 +68,7 @@ export function FolderGate({ onChoose, onCancel, create }: Props) {
 
         {recents.length > 0 && (
           <>
-            <div className="gate-label">Recent</div>
+            <div className="gate-label">{t("workspace.trust.recent")}</div>
             <div className="gate-recents">
               {recents.map((w) => (
                 <div className="gate-recent" key={w.path} onClick={() => open(w.path)} title={w.path}>

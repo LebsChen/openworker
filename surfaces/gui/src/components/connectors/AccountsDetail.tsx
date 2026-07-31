@@ -1,3 +1,4 @@
+import { t, useT } from "../../i18n";
 import { useState } from "react";
 import {
   connectManaged,
@@ -47,7 +48,7 @@ export function AccountsDetail({ c, cloud, slack: _slack, onChanged }: DetailPro
                 </span>
               </>
             ) : (
-              <span>Not connected</span>
+              <span>{t("connectors.accounts.notConnected")}</span>
             )}
           </div>
         </div>
@@ -68,7 +69,7 @@ export function AccountsDetail({ c, cloud, slack: _slack, onChanged }: DetailPro
 
       {accounts.length > 0 && (
         <>
-          <div className={GRP_H + " !mt-0"}>Accounts</div>
+          <div className={GRP_H + " !mt-0"}>{t("connectors.accounts.accounts")}</div>
           <div className={GRP} data-testid="accounts-group">
             {accounts.map((a) => (
               <Row key={a.account_id} connector={c.name} a={a} onChanged={onChanged} />
@@ -115,6 +116,7 @@ function Row({
   a: AccountRow;
   onChanged: () => void;
 }) {
+  useT();
   const [busy, setBusy] = useState(false);
   return (
     <div className={ROW} data-testid={`account-${a.account_id}`}>
@@ -125,7 +127,7 @@ function Row({
             {a.account_id}
           </span>
         )}
-        {a.default && <span className={TAG_ACCENT}>Default</span>}
+        {a.default && <span className={TAG_ACCENT}>{t("connectors.accounts.default")}</span>}
       </span>
       {!a.default && (
         <button
@@ -141,7 +143,7 @@ function Row({
       )}
       <button
         className={XBTN}
-        title="Disconnect this account"
+        title={t("connectors.accounts.disconnectAccount")}
         data-testid={`account-disconnect-${a.account_id}`}
         disabled={busy}
         onClick={async () => {

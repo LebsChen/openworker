@@ -1,3 +1,4 @@
+import { t, useT } from "../i18n";
 import { useEffect, useRef, useState } from "react";
 import {
   checkForUpdate,
@@ -31,6 +32,7 @@ const RECHECK_MS = 30 * 60_000;
 type Phase = "downloading" | "ready" | "fallback" | "installing" | "error";
 
 export function UpdateBanner() {
+  useT();
   const [update, setUpdate] = useState<UpdateInfo | null>(null);
   const [phase, setPhase] = useState<Phase>("downloading");
   // Per-run, per-version dismissal — no localStorage, so a restart re-offers, and a
@@ -88,7 +90,7 @@ export function UpdateBanner() {
       role="status"
       data-testid="update-banner"
     >
-      <div className="text-[13px] font-semibold">Update available</div>
+      <div className="text-[13px] font-semibold">{t("update.updateAvailable")}</div>
       <div className="text-[12px] text-muted mt-0.5">
         OpenWorker v{update.version} is ready to install.
       </div>

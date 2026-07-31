@@ -1,3 +1,4 @@
+import { t, useT } from "../i18n";
 import { useState } from "react";
 import {
   addModel,
@@ -48,6 +49,7 @@ export function ModelChecklist({
   onCapabilitiesChanged?: (next: Record<string, Record<string, unknown>>) => void;
   onChanged: (next: { models: string[]; model: string }) => void;
 }) {
+  useT();
   const [draft, setDraft] = useState("");
   const families = MODEL_FAMILIES[provider];
   const [family, setFamily] = useState(families?.[0]?.value || "");
@@ -112,7 +114,7 @@ export function ModelChecklist({
               </span>
             </label>
             {isDefault ? (
-              <span className="mlist-default">default</span>
+              <span className="mlist-default">{t("settings.models.default")}</span>
             ) : (
               <button className="mlist-make" onClick={() => makeDefault(id)}>
                 Make default
@@ -133,7 +135,7 @@ export function ModelChecklist({
           <select
             value={family}
             onChange={(e) => setFamily(e.target.value)}
-            aria-label="Model family"
+            aria-label={t("settings.models.modelFamily")}
             data-testid="mlist-family"
           >
             {families.map((f) => (
@@ -144,7 +146,7 @@ export function ModelChecklist({
           </select>
         )}
         <input
-          placeholder="Add another model…"
+          placeholder={t("settings.models.addAnotherModel")}
           value={draft}
           spellCheck={false}
           autoComplete="off"
@@ -193,11 +195,11 @@ function CapabilityEditor({
         <div className="absolute z-10 right-0 top-7 rounded-lg border border-line bg-panel p-2.5 shadow-lg text-[11px]">
           <label className="flex gap-1.5"><input type="checkbox" checked={vision} onChange={(e) => setVision(e.target.checked)} /> vision</label>
           <label className="flex gap-1.5"><input type="checkbox" checked={pdf} onChange={(e) => setPdf(e.target.checked)} /> PDF</label>
-          <label className="flex gap-1.5"><input type="checkbox" checked={parallel} onChange={(e) => setParallel(e.target.checked)} /> parallel tools</label>
+          <label className="flex gap-1.5"><input type="checkbox" checked={parallel} onChange={(e) => setParallel(e.target.checked)} />{t("settings.models.parallelTools")}</label>
           <label className="mt-1 block">context tokens
             <input className="ml-1 w-24 rounded border border-line bg-paper px-1" value={context} onChange={(e) => setContext(e.target.value)} inputMode="numeric" />
           </label>
-          <button className="mt-2 rounded bg-accent px-2 py-1 text-white" onClick={() => void save()}>Save</button>
+          <button className="mt-2 rounded bg-accent px-2 py-1 text-white" onClick={() => void save()}>{t("settings.models.save")}</button>
         </div>
       )}
     </div>
