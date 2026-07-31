@@ -19,7 +19,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Callable, Optional
-from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit
+from urllib.parse import parse_qsl, unquote, urlencode, urljoin, urlsplit
 
 import httpx
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
@@ -310,6 +310,15 @@ def create_app(manager: SessionManager) -> FastAPI:
             if part.strip()
         }
         return any(token_matches(part, api_token) for part in protocols)
+
+    async def _accept_websocket(ws: WebSocket) -> None:
+        protocols = {
+            part.strip()
+            for part in ws.headers.get("sec-websocket-protocol", "").split(",")
+            if part.strip()
+        }
+        subprotocol = "openworker" if api_token and "openworker" in protocols else None
+        await ws.accept(subprotocol=subprotocol)
 
     @app.middleware("http")
     async def require_sidecar_token(request: Request, call_next):
@@ -862,21 +871,38 @@ def create_app(manager: SessionManager) -> FastAPI:
             if state["session_id"] == session_id:
                 ide_keys.pop(key, None)
 
+    def _sweep_ide_keys() -> None:
+        now = time.monotonic()
+        for key, state in list(ide_keys.items()):
+            if now - state["last_used"] > ide_key_ttl:
+                ide_keys.pop(key, None)
+
     async def _ide_bootstrap(session_id: str, request: Request) -> Response:
         resolved = _ide_target(session_id)
         if isinstance(resolved, JSONResponse):
             return resolved
         target, token = resolved
-        cookies: dict[str, str] = {}
+        folder = target.workspace
+        if request.query_params.get("folder") != folder:
+            location = f"/v1/sessions/{session_id}/ide/?" + urlencode({"folder": folder})
+            return RedirectResponse(location, status_code=307)
+        existing_key = request.cookies.get(ide_session_cookie)
+        existing_state = _ide_key_state(existing_key)
+        target_base_url = target.client.base_url.rstrip("/")
+        reuse_key = bool(
+            existing_key
+            and existing_state
+            and existing_state["session_id"] == session_id
+            and existing_state["host_id"] == target.host.id
+            and existing_state["base_url"] == target_base_url
+        )
+        if existing_state and not reuse_key:
+            _revoke_session_ide_keys(session_id)
+        key = existing_key if reuse_key else None
+        cookies: dict[str, str] = dict(existing_state["cookies"]) if reuse_key else {}
         try:
             if ide_http_client is None:
                 return _ide_error("Web IDE proxy is not running", 503)
-            folder = target.workspace
-            if request.query_params.get("folder") != folder:
-                location = f"/v1/sessions/{session_id}/ide/?" + urlencode(
-                    {"folder": folder}
-                )
-                return RedirectResponse(location, status_code=307)
             base_url = target.client.base_url.rstrip("/") + "/"
             url = urljoin(base_url, "ide/") + "?" + urlencode(
                 {"tkn": token, "folder": folder}
@@ -908,16 +934,21 @@ def create_app(manager: SessionManager) -> FastAPI:
                 ).geturl()
             if response.status_code < 200 or response.status_code >= 300:
                 return _ide_error("Remote Web IDE bootstrap failed", 502)
-            _revoke_session_ide_keys(session_id)
-            key = crypto_secrets.token_urlsafe(32)
-            ide_keys[key] = {
-                "host_id": target.host.id,
-                "session_id": session_id,
-                "base_url": target.client.base_url.rstrip("/"),
-                "workspace": target.workspace,
-                "cookies": cookies,
-                "last_used": time.monotonic(),
-            }
+            if key is None:
+                _revoke_session_ide_keys(session_id)
+                _sweep_ide_keys()
+                key = crypto_secrets.token_urlsafe(32)
+                ide_keys[key] = {
+                    "host_id": target.host.id,
+                    "session_id": session_id,
+                    "base_url": target_base_url,
+                    "workspace": target.workspace,
+                    "cookies": cookies,
+                    "last_used": time.monotonic(),
+                }
+            else:
+                existing_state["cookies"] = cookies
+                existing_state["last_used"] = time.monotonic()
             result = Response(
                 content=response.content,
                 status_code=response.status_code,
@@ -927,10 +958,12 @@ def create_app(manager: SessionManager) -> FastAPI:
                 ide_session_cookie,
                 key,
                 httponly=True,
-                samesite="lax",
+                secure=True,
+                samesite="none",
                 path="/",
                 max_age=int(ide_key_ttl),
             )
+            result.headers["set-cookie"] = result.headers["set-cookie"] + "; Partitioned"
             return result
         except httpx.TimeoutException:
             return _ide_error("Remote Web IDE bootstrap timed out", 503)
@@ -948,7 +981,16 @@ def create_app(manager: SessionManager) -> FastAPI:
         state: dict[str, Any],
         path: str,
     ) -> Response:
-        if any(segment == ".." for segment in path.split("/")):
+        try:
+            decoded_path = path
+            for _ in range(5):
+                next_path = unquote(decoded_path)
+                if next_path == decoded_path:
+                    break
+                decoded_path = next_path
+        except ValueError:
+            return _ide_error("Invalid Web IDE path", 400)
+        if any(segment == ".." for segment in re.split(r"[/\\]", decoded_path)):
             return _ide_error("Invalid Web IDE path", 400)
         token = manager.rvm_hosts.token(state["host_id"])
         if not token:
@@ -1945,7 +1987,7 @@ def create_app(manager: SessionManager) -> FastAPI:
         if not _origin_allowed(ws.headers.get("origin")):
             await ws.close(code=1008)
             return
-        await ws.accept(subprotocol="openworker" if api_token else None)
+        await _accept_websocket(ws)
         agent = ws.query_params.get("agent") or "code"
         requested_host_id = (ws.query_params.get("host_id") or "").strip() or None
         existing_record = manager.session_store.load(session_id)
@@ -2486,7 +2528,7 @@ def create_app(manager: SessionManager) -> FastAPI:
         if not _origin_allowed(ws.headers.get("origin")):
             await ws.close(code=1008, reason="WebSocket origin not allowed")
             return
-        await ws.accept(subprotocol="openworker" if api_token else None)
+        await _accept_websocket(ws)
 
         try:
             if target_override is not None and token_override is not None:
@@ -2675,7 +2717,7 @@ def create_app(manager: SessionManager) -> FastAPI:
         if not _origin_allowed(ws.headers.get("origin")):
             await ws.close(code=1008)
             return
-        await ws.accept(subprotocol="openworker" if api_token else None)
+        await _accept_websocket(ws)
         manager.register_event_client(ws.send_json)
         try:
             while True:
