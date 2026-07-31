@@ -31,6 +31,7 @@ from .remote.tools import (
     remote_computer_tools,
     remote_file_tools,
     remote_git_tools,
+    remote_lsp_tools,
     remote_search_tools,
 )
 
@@ -114,6 +115,7 @@ def _computer(context: AgentContext) -> list:
         return [
             *remote_computer_tools(context.remote_target),
             *remote_browser_tools(context.remote_target),
+            *remote_lsp_tools(context.remote_target),
         ]
     return []
 

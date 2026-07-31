@@ -9,6 +9,7 @@ from coworker.remote.tools import (
     remote_computer_tools,
     remote_file_tools,
     remote_git_tools,
+    remote_lsp_tools,
     remote_search_tools,
 )
 from coworker.permissions import Mode, PermissionEngine
@@ -114,6 +115,21 @@ class FakeClient:
 
     def info(self):
         return {"hostname": "devbox", "platform": "linux", "arch": "x64", "cpus": 4, "memory_gb": 8}
+
+    def lsp(self, **arguments):
+        self.calls.append(("lsp", arguments))
+        if arguments["op"] == "hover":
+            return {"contents": [{"language": "python", "value": "str"}]}
+        if arguments["op"] == "definition":
+            return [{"uri": "file:///workspace/lib.py", "range": {"start": {"line": 4, "character": 2}}}]
+        if arguments["op"] == "references":
+            return [
+                {"uri": "file:///workspace/main.py", "range": {"start": {"line": 0, "character": 0}}},
+                {"uri": "file:///workspace/lib.py", "range": {"start": {"line": 1, "character": 1}}},
+            ]
+        if arguments["op"] == "documentSymbol":
+            return [{"name": "main", "kind": 12, "uri": "file:///workspace/main.py", "range": {"start": {"line": 0, "character": 0}}, "children": []}]
+        return {"uri": "file:///workspace/main.py", "diagnostics": [{"range": {"start": {"line": 2, "character": 3}}, "message": "bad", "severity": 1}]}
 
 
 def target(client=None, *, style="posix"):
@@ -314,3 +330,24 @@ def test_remote_environment_context_and_offline_degradation():
 
     context = remote_environment_context(target(Offline()))
     assert "unavailable" in context
+
+
+def test_lsp_tools_are_capability_gated_normalized_and_remote_path_safe():
+    client = FakeClient()
+    remote = target(client)
+    assert remote_lsp_tools(remote) == []
+    remote.capabilities = {"lsp"}
+    tools = {tool.__name__: tool for tool in remote_lsp_tools(remote)}
+    assert tools["hover"]("main.py", 1, 1)["text"] == "str"
+    assert tools["definition"]("main.py", 1, 1)["items"][0]["line"] == 5
+    assert tools["references"]("main.py", 1, 1)["items"][1]["column"] == 2
+    assert tools["document_symbols"]("main.py")["items"][0]["line"] == 1
+    assert tools["diagnostics"]("main.py")["items"][0]["line"] == 3
+    assert "error" in tools["hover"]("../outside.py", 1, 1)
+
+    windows = target(FakeClient(), style="windows")
+    windows.capabilities = {"language_server"}
+    result = by_name(remote_lsp_tools(windows), "hover")(
+        r"C:\Workspace\main.py", 1, 1
+    )
+    assert result["text"] == "str"

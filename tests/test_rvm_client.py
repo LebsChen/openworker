@@ -102,6 +102,9 @@ def test_client_maps_screenshot_and_computer_routes():
                 return httpx.Response(200, json={"jsonrpc": "2.0", "id": body["id"], "result": {"content": [{"type": "text", "text": '{"result":{"value":"Example"}}'}]}})
             if name == "browser_screenshot":
                 return httpx.Response(200, json={"jsonrpc": "2.0", "id": body["id"], "result": {"content": [{"type": "image", "data": "png-data", "mimeType": "image/png"}]}})
+            if name == "lsp":
+                assert body["params"]["arguments"]["path"] == r"C:\Workspace\main.py"
+                return httpx.Response(200, json={"jsonrpc": "2.0", "id": body["id"], "result": {"content": [{"type": "text", "text": '{"result":[{"line":0,"character":0}]}' }]}})
             return httpx.Response(200, json={"jsonrpc": "2.0", "id": body["id"], "result": {"content": [{"type": "text", "text": "Browser closed"}]}})
         return httpx.Response(200, json={"ok": True})
 
@@ -117,6 +120,7 @@ def test_client_maps_screenshot_and_computer_routes():
     assert client.browser_eval("document.title")["result"]["value"] == "Example"
     assert client.browser_screenshot() == {"image": "png-data", "format": "png"}
     assert client.browser_close()["ok"] is True
+    assert client.lsp(op="hover", path=r"C:\Workspace\main.py")["result"][0]["line"] == 0
     assert seen[0].content == b"{}"
     assert seen[1].content == b'{"action":"left_click","coordinate":[1,2]}'
     assert seen[2].content == b'{"actions":[{"action":"mouse_move","coordinate":[1,2]}]}'
