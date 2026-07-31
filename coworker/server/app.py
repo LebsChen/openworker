@@ -605,6 +605,10 @@ def create_app(manager: SessionManager) -> FastAPI:
     def session_delete(session_id: str) -> dict[str, Any]:
         return manager.delete_session(session_id)
 
+    @app.post("/v1/sessions/{session_id}/workspace/archive")
+    def session_workspace_archive(session_id: str) -> dict[str, Any]:
+        return manager.archive_session_workspace(session_id)
+
     @app.get("/v1/sessions/{session_id}/roots")
     def session_roots(session_id: str) -> dict[str, Any]:
         return {"roots": manager.get_roots(session_id)}
@@ -1661,6 +1665,7 @@ def create_app(manager: SessionManager) -> FastAPI:
                 manager.inbox.resolve(pend[0].id, resolution)
 
         workspace = ws.query_params.get("workspace")
+        isolate = ws.query_params.get("isolate", "").lower() in {"1", "true", "yes"}
         mcp_tools = await manager.prepare_mcp_tools(
             session_id, workspace=workspace, agent=agent
         )
@@ -1668,6 +1673,7 @@ def create_app(manager: SessionManager) -> FastAPI:
             session_id,
             workspace=workspace,
             agent=agent,
+            isolate=isolate,
             approver=approver,
             extra_tools=mcp_tools,
             directory_requester=directory_requester,

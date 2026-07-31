@@ -121,7 +121,7 @@ interface Props {
   activeSession: string;
   onSwitchAgent: (agent: string) => void;
   onNewSession: (agent: string) => void;
-  onSelectSession: (id: string, workspace: string, agent: string) => void;
+  onSelectSession: (id: string, workspace: string, agent: string, hostId?: string) => void;
   onNewProject: (persona: string) => void;
   onRenameSession: (id: string, title: string) => void;
   onDeleteSession: (id: string) => void;
@@ -539,7 +539,7 @@ export function Sidebar(props: Props) {
             : "hover:bg-panel")
         }
         onClick={() => {
-          if (!editing) props.onSelectSession(s.session_id, s.workspace, s.agent);
+          if (!editing) props.onSelectSession(s.session_id, s.workspace, s.agent, s.host_id);
         }}
         title={editing ? undefined : title}
       >
@@ -567,6 +567,17 @@ export function Sidebar(props: Props) {
             >
               {s.pinned && <Icon name="pin" size={11} className="text-faint shrink-0" />}
               <span className="truncate">{title}</span>
+              {s.host_status === "offline" && (
+                <span className="text-[10px] text-red-500 shrink-0">offline</span>
+              )}
+              {s.host_id && (
+                <span className="text-[10px] text-muted shrink-0">{s.host_id}</span>
+              )}
+              {s.workspace_isolated && (
+                <span className="text-[10px] text-blue-500 shrink-0" title={s.workspace}>
+                  isolated{s.workspace_worktree ? " · worktree" : ""}
+                </span>
+              )}
             </span>
             <span
               className={
@@ -612,7 +623,7 @@ export function Sidebar(props: Props) {
         }
         title={editing ? undefined : title}
         onClick={() => {
-          if (!editing) props.onSelectSession(s.session_id, s.workspace, s.agent);
+          if (!editing) props.onSelectSession(s.session_id, s.workspace, s.agent, s.host_id);
         }}
       >
         {/* No leading glyph on session rows (Rohit's call 2026-07-07: the per-session icon
@@ -636,6 +647,14 @@ export function Sidebar(props: Props) {
             <span className="min-w-0 flex-1 block truncate text-[13px] font-medium">
               {title}
             </span>
+            {s.host_id && (
+              <span className="text-[10px] text-muted shrink-0">{s.host_id}</span>
+            )}
+            {s.workspace_isolated && (
+              <span className="text-[10px] text-blue-500 shrink-0" title={s.workspace}>
+                isolated{s.workspace_worktree ? " · worktree" : ""}
+              </span>
+            )}
             <span
               className={
                 "flex items-center gap-1.5 shrink-0 group-hover:hidden" +

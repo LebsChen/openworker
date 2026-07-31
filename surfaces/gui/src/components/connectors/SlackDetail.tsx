@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  hostForSession,
   addSlackApprovalOwner,
   allowUser,
   disallowUser,
@@ -612,7 +613,7 @@ function ListeningRows({ subs, onChanged }: { subs: Subscription[]; onChanged: (
               className={XBTN + " ml-auto"}
               title="Unsubscribe this session"
               onClick={async () => {
-                await unsubscribeChannel(s.session_id, s.channel);
+                await unsubscribeChannel(s.session_id, hostForSession(s.session_id), s.channel);
                 onChanged();
               }}
             >

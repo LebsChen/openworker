@@ -73,6 +73,7 @@ class ConversationStore:
         self._conn.executescript("""
             CREATE TABLE IF NOT EXISTS sessions (
                 session_id TEXT PRIMARY KEY, workspace TEXT, model TEXT, mode TEXT,
+                host_id TEXT DEFAULT 'local',
                 title TEXT, agent TEXT DEFAULT 'code', n_msgs INTEGER DEFAULT 0, messages TEXT,
                 extra_roots TEXT, pinned INTEGER DEFAULT 0, archived INTEGER DEFAULT 0,
                 origin TEXT, origin_label TEXT,
@@ -85,6 +86,7 @@ class ConversationStore:
             """)
         for ddl in (
             "ALTER TABLE sessions ADD COLUMN title TEXT",
+            "ALTER TABLE sessions ADD COLUMN host_id TEXT DEFAULT 'local'",
             "ALTER TABLE sessions ADD COLUMN n_msgs INTEGER DEFAULT 0",
             "ALTER TABLE sessions ADD COLUMN agent TEXT DEFAULT 'code'",
             "ALTER TABLE sessions ADD COLUMN extra_roots TEXT",
@@ -192,10 +194,10 @@ class ConversationStore:
             title = record.title or title_from(record.messages)
             self._conn.execute(
                 """
-                INSERT INTO sessions (session_id, workspace, model, mode, title, agent, n_msgs, messages, extra_roots, grants, compaction, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, CURRENT_TIMESTAMP)
+                INSERT INTO sessions (session_id, workspace, host_id, model, mode, title, agent, n_msgs, messages, extra_roots, grants, compaction, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, CURRENT_TIMESTAMP)
                 ON CONFLICT(session_id) DO UPDATE SET
-                    workspace = excluded.workspace, model = excluded.model, mode = excluded.mode,
+                    workspace = excluded.workspace, host_id = excluded.host_id, model = excluded.model, mode = excluded.mode,
                     title = COALESCE(sessions.title, excluded.title), agent = excluded.agent,
                     n_msgs = excluded.n_msgs, messages = NULL, extra_roots = excluded.extra_roots,
                     grants = excluded.grants, compaction = excluded.compaction,
@@ -204,6 +206,7 @@ class ConversationStore:
                 (
                     sid,
                     record.workspace,
+                    record.host_id,
                     record.model,
                     record.mode,
                     title,
@@ -233,6 +236,7 @@ class ConversationStore:
         return SessionRecord(
             session_id=session_id,
             workspace=row["workspace"],
+            host_id=row["host_id"] or "local",
             model=row["model"],
             mode=row["mode"],
             messages=messages,
@@ -279,6 +283,7 @@ class ConversationStore:
             SessionRecord(
                 session_id=r["session_id"],
                 workspace=r["workspace"],
+                host_id=r["host_id"] or "local",
                 model=r["model"],
                 mode=r["mode"],
                 messages=[],

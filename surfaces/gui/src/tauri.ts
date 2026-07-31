@@ -77,15 +77,59 @@ export const setKeepAwake = (enabled: boolean) => invoke<boolean>("set_keep_awak
 export type RemoteHostInfo = {
   name: string;
   base_url: string;
-  active: boolean;
+};
+
+export type SessionHostInfo = RemoteHostInfo & {
+  id: string;
+  ws_url: string;
+  token: string;
+  local: boolean;
 };
 
 export const listRemoteHosts = () => invoke<RemoteHostInfo[]>("list_remote_hosts");
-export const saveRemoteHost = (name: string, baseUrl: string, token: string) =>
-  invokeStrict<void>("save_remote_host", { name, base_url: baseUrl, token });
-export const deleteRemoteHost = (name: string) => invokeStrict<void>("delete_remote_host", { name });
-export const activateRemoteHost = (name: string | null) =>
-  invokeStrict<void>("activate_remote_host", { name });
+export const listSessionHosts = () => invoke<SessionHostInfo[]>("list_session_hosts");
+export const remoteHostConfigError = () => invoke<string | null>("remote_host_config_error");
+export const refreshSessionHosts = async () => {
+  const remote = (await listSessionHosts()) || [];
+  const current = Array.isArray((globalThis as any).__COWORKER_HOSTS__)
+    ? ((globalThis as any).__COWORKER_HOSTS__ as SessionHostInfo[])
+    : [];
+  const local = current.find((host) => host.local);
+  const hosts = [...(local ? [local] : []), ...remote];
+  (globalThis as any).__COWORKER_HOSTS__ = hosts;
+  return hosts;
+};
+export const bindSessionHost = (sessionId: string, hostId: string) =>
+  invokeStrict<void>("bind_session_host", { sessionId, hostId });
+export const getSessionHost = (sessionId: string) =>
+  invoke<string | null>("session_host", { sessionId });
+export const saveRemoteHost = async (name: string, baseUrl: string, token: string) => {
+  await invokeStrict<void>("save_remote_host", { name, baseUrl, token });
+  const hosts = Array.isArray((globalThis as any).__COWORKER_HOSTS__)
+    ? ((globalThis as any).__COWORKER_HOSTS__ as SessionHostInfo[])
+    : [];
+  const normalized = baseUrl.replace(/\/+$/, "");
+  const next: SessionHostInfo = {
+    id: name,
+    name,
+    base_url: normalized,
+    ws_url: normalized.replace(/^https:/, "wss:").replace(/^http:/, "ws:"),
+    token,
+    local: false,
+  };
+  (globalThis as any).__COWORKER_HOSTS__ = [
+    ...hosts.filter((host) => host.id !== name),
+    next,
+  ];
+};
+export const deleteRemoteHost = async (name: string) => {
+  await invokeStrict<void>("delete_remote_host", { name });
+  (globalThis as any).__COWORKER_HOSTS__ = (
+    Array.isArray((globalThis as any).__COWORKER_HOSTS__)
+      ? (globalThis as any).__COWORKER_HOSTS__
+      : []
+  ).filter((host: SessionHostInfo) => host.id !== name);
+};
 export const restartApp = () => invokeStrict<void>("restart_app");
 
 /** Begin native window dragging from a custom title/header region. */

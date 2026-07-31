@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
-import { addRoot, getRoots, removeRoot, type RootInfo } from "./api";
+import { addRoot, getRoots, removeRoot, type RootInfo, type SessionHost } from "./api";
 
 // Shared roots state for a session — used by the Session settings drawer's Working-directories
 // section, the settings row's folder glance, and the session start panel. Reads are live;
 // mutations go through the manager, which applies them to the running engine and persists them.
 // `reloadKey` bumps force a refetch (e.g. when the drawer reopens).
-export function useRoots(sessionId: string, reloadKey?: number) {
+export function useRoots(sessionId: string, host: SessionHost, reloadKey?: number) {
   const [roots, setRoots] = useState<RootInfo[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   const reload = useCallback(
-    () => getRoots(sessionId).then(setRoots).catch(() => setRoots([])),
-    [sessionId],
+    () => getRoots(sessionId, host).then(setRoots).catch(() => setRoots([])),
+    [sessionId, host.id],
   );
   useEffect(() => {
     reload();
@@ -43,33 +43,33 @@ export function useRoots(sessionId: string, reloadKey?: number) {
   const add = useCallback(
     async (path: string, writable: boolean): Promise<boolean> => {
       setBusy(true);
-      const ok = apply(await addRoot(sessionId, path, writable));
+      const ok = apply(await addRoot(sessionId, path, writable, host));
       setBusy(false);
       return ok;
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [sessionId],
+    [sessionId, host.id],
   );
 
   const toggleAccess = useCallback(
     async (r: RootInfo) => {
       if (r.primary) return;
       setBusy(true);
-      apply(await addRoot(sessionId, r.path, !r.writable)); // re-add updates access in place
+      apply(await addRoot(sessionId, r.path, !r.writable, host)); // re-add updates access in place
       setBusy(false);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [sessionId],
+    [sessionId, host.id],
   );
 
   const remove = useCallback(
     async (path: string) => {
       setBusy(true);
-      apply(await removeRoot(sessionId, path));
+      apply(await removeRoot(sessionId, path, host));
       setBusy(false);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [sessionId],
+    [sessionId, host.id],
   );
 
   return { roots, busy, error, reload, addRoot: add, toggleAccess, removeRoot: remove };

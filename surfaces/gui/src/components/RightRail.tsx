@@ -7,6 +7,7 @@ import {
   revealArtifact,
   type ArtifactContent,
   type ArtifactInfo,
+  type SessionHost,
 } from "../api";
 import type { TodoItem } from "../types";
 import { AccessSection } from "./AccessSection";
@@ -39,6 +40,7 @@ function kindFromPath(path: string): string {
 interface Props {
   active: boolean;
   sessionId: string;
+  host: SessionHost;
   refreshKey: number;
   toolNames: string[];
   todo: TodoItem[];
@@ -62,6 +64,7 @@ interface Props {
 export function RightRail({
   active,
   sessionId,
+  host,
   refreshKey,
   toolNames,
   todo,
@@ -84,12 +87,12 @@ export function RightRail({
   const [selected, setSelected] = useState<ArtifactInfo | null>(null);
   const [content, setContent] = useState<ArtifactContent | null>(null);
 
-  const refreshArtifacts = () => getArtifacts(sessionId).then(setArtifacts).catch(() => setArtifacts([]));
+  const refreshArtifacts = () => getArtifacts(sessionId, host).then(setArtifacts).catch(() => setArtifacts([]));
 
   useEffect(() => {
     if (!active) return;
     if (showArtifacts) refreshArtifacts();
-  }, [active, sessionId, refreshKey, showArtifacts]);
+  }, [active, sessionId, host.id, refreshKey, showArtifacts]);
 
   // Switching conversations closes any open artifact — it belongs to the previous session's
   // workspace, which the new session can't (and shouldn't) read.
@@ -101,8 +104,8 @@ export function RightRail({
   useEffect(() => {
     setContent(null);
     if (!selected) return;
-    readArtifact(sessionId, selected.path).then(setContent).catch(() => setContent(null));
-  }, [selected?.path, sessionId]);
+    readArtifact(sessionId, selected.path, host).then(setContent).catch(() => setContent(null));
+  }, [selected?.path, sessionId, host.id]);
 
   // Notify the app when a preview opens/closes (drives the left-nav auto-collapse).
   useEffect(() => {
@@ -112,7 +115,7 @@ export function RightRail({
   const reloadSelected = () => {
     if (!selected) return Promise.resolve();
     setContent(null);
-    return readArtifact(sessionId, selected.path).then(setContent).catch(() => setContent(null));
+    return readArtifact(sessionId, selected.path, host).then(setContent).catch(() => setContent(null));
   };
 
   // §34 (UX-016): [Title](artifact:path) chips in the transcript open the viewer directly.
@@ -137,7 +140,7 @@ export function RightRail({
         setSelected(found);
         return;
       }
-      getArtifacts(sessionId)
+      getArtifacts(sessionId, host)
         .then((list) => {
           setArtifacts(list);
           setSelected(match(list, path) ?? minimal(path));
@@ -146,7 +149,7 @@ export function RightRail({
     };
     window.addEventListener(OPEN_ARTIFACT_EVENT, onOpen);
     return () => window.removeEventListener(OPEN_ARTIFACT_EVENT, onOpen);
-  }, [active, sessionId, artifacts]);
+  }, [active, sessionId, host.id, artifacts]);
 
   if (!active) return null;
 
@@ -155,6 +158,7 @@ export function RightRail({
       {selected ? (
         <ArtifactViewer
           sessionId={sessionId}
+          host={host}
           artifact={selected}
           content={content}
           onReload={reloadSelected}
@@ -176,7 +180,7 @@ export function RightRail({
                 {artifacts.length > 0 && (
                   <button
                     className="rail-mini-btn"
-                    onClick={(e) => { e.stopPropagation(); revealArtifact(sessionId, artifacts[0].path, "reveal"); }}
+                    onClick={(e) => { e.stopPropagation(); revealArtifact(sessionId, artifacts[0].path, host, "reveal"); }}
                     title="Show the folder where these files are saved"
                   >
                     <Icon name="folder" size={13} />
@@ -212,6 +216,7 @@ export function RightRail({
           <AccessSection
             key={sessionId}
             sessionId={sessionId}
+            host={host}
             personaId={personaId}
             projectScoped={projectScoped}
             workspace={workspace}
@@ -287,12 +292,14 @@ function RailSection({
 
 function ArtifactViewer({
   sessionId,
+  host,
   artifact,
   content,
   onReload,
   onBack,
 }: {
   sessionId: string;
+  host: SessionHost;
   artifact: ArtifactInfo;
   content: ArtifactContent | null;
   onReload: () => Promise<void>;
@@ -330,7 +337,7 @@ function ArtifactViewer({
           {isApp && (
             <button
               className="artifact-icon-btn"
-              onClick={() => revealArtifact(sessionId, artifact.path, "open")}
+              onClick={() => revealArtifact(sessionId, artifact.path, host, "open")}
               aria-label="Open in default app"
               title="Open in default app"
             >
@@ -349,7 +356,7 @@ function ArtifactViewer({
           </button>
           <button
             className="artifact-icon-btn"
-            onClick={() => revealArtifact(sessionId, artifact.path, "reveal")}
+            onClick={() => revealArtifact(sessionId, artifact.path, host, "reveal")}
             aria-label="Show in folder"
             title="Show in folder"
           >
@@ -385,7 +392,7 @@ function ArtifactViewer({
           <div className="artifact-open-prompt">
             <Icon name="panelOpen" size={28} />
             <p>This {/\.pptx?$/i.test(artifact.name) ? "PowerPoint" : "Word"} file can’t be previewed here.</p>
-            <button className="btn sm" onClick={() => revealArtifact(sessionId, artifact.path, "open")}>
+            <button className="btn sm" onClick={() => revealArtifact(sessionId, artifact.path, host, "open")}>
               Open in default app
             </button>
           </div>

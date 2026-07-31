@@ -13,6 +13,8 @@ import {
   getPersonas,
   getInbox,
   getUnattended,
+  hostForSession,
+  rememberSessionHost,
   isRemoteMode,
   PERSONAS_CHANGED,
   resolveInboxItem,
@@ -22,6 +24,8 @@ import {
   setSessionFlags,
   setUnattended,
   Session,
+  sessionHosts,
+  type SessionHost,
   type InboxItem,
   type MessageSource,
   type Persona,
@@ -44,7 +48,7 @@ import { itemsFromMessages } from "./itemsFromMessages";
 import { addTurnUsage, emptyUsage, usageFromMessages } from "./usage";
 import { streamMode } from "./streamGate";
 import { InboxItemCard } from "./components/InboxItemCard";
-import { isTauri, platformOS, startWindowDrag } from "./tauri";
+import { bindSessionHost, isTauri, platformOS, refreshSessionHosts, startWindowDrag } from "./tauri";
 import { Icon } from "./components/Icon";
 import { Sidebar } from "./components/Sidebar";
 import { ThinkingBlock, Transcript } from "./components/Transcript";
@@ -172,6 +176,7 @@ export function App() {
   const [surfaces, setSurfaces] = useState<SurfaceVisibility>({ cowork: true, chat: false, code: false });
   const [mode, setMode] = useState("interactive");
   const [connected, setConnected] = useState(false);
+  const [sessionOffline, setSessionOffline] = useState(false);
   const [running, setRunning] = useState(false);
   const [items, setItems] = useState<Item[]>([]);
   const [streaming, setStreamingState] = useState("");
@@ -194,6 +199,8 @@ export function App() {
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [projects, setProjects] = useState<RecentWorkspace[]>([]);
   const [sessionId, setSessionId] = useState<string>(newId());
+  const [sessionHost, setSessionHost] = useState<SessionHost>(() => sessionHosts()[0]);
+  const [isolateWorkspace, setIsolateWorkspace] = useState(false);
   // Automation-run context (§ owner ask 2026-07-04): which task an open __run__ session belongs
   // to, driving the banner + "Back to runs". Best-effort — a run session without context still
   // shows a generic banner (detected by its __run__ id).
@@ -222,6 +229,17 @@ export function App() {
   // A remembered Scheduled-detail target must not outlive the surface (see the
   // scheduledOpenId comment above): nav re-entry lands on the list, never a
   // possibly-deleted automation's dead detail.
+  useEffect(() => {
+    if (isTauri()) {
+      refreshSessionHosts()
+        .then((hosts) => {
+          const selected = hosts.find((host) => host.id === sessionHost.id) || hosts[0];
+          if (selected) setSessionHost(selected);
+        })
+        .catch(() => {});
+    }
+  }, []);
+
   useEffect(() => {
     if (surface !== "scheduled") setScheduledOpenId(null);
   }, [surface]);
@@ -329,14 +347,14 @@ export function App() {
   }, []);
   // The Mode menu's "Send approvals to Inbox" toggle (§22 — the old InboxControl, folded in).
   const toggleUnattended = async (on: boolean) => {
-    await setUnattended(sessionId, on);
+    await setUnattended(sessionId, on, sessionHost);
     markUnattended(on);
     // First Unattended enable = Inbox machinery engaged → the account row's chip unlocks (§26).
     if (on) announceInboxUnlock();
   };
   const resolveSessionInbox = async (id: string, resolution: string) => {
-    await resolveInboxItem(id, resolution);
-    getInbox(sessionId, "pending").then(setSessionInbox).catch(() => setSessionInbox([]));
+    await resolveInboxItem(id, resolution, sessionHost);
+    getInbox(sessionId, "pending", sessionHost).then(setSessionInbox).catch(() => setSessionInbox([]));
     refreshSessions(); // attention badge should drop right away
   };
   // Shows a working-area chip / project grouping. Persona's needs_workspace; fallback before load.
@@ -383,6 +401,8 @@ export function App() {
   // server may not answer for a second or two. Only fall back to the gate once it's truly up.
   const [booting, setBooting] = useState(true);
   const [remoteError, setRemoteError] = useState<string | null>(null);
+  const [localServerError, setLocalServerError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [onboarding, setOnboarding] = useState(false);
   // True once we've resumed a prior conversation on boot (drives the splash wording).
   const [resumedExisting, setResumedExisting] = useState(false);
@@ -403,13 +423,20 @@ export function App() {
       const last = [...sess].sort((a, b) => ts(b) - ts(a))[0];
       if (last) {
         setResumedExisting(true);
+        const restoredHost =
+          sessionHosts().find((host) => host.id === last.host_id) || sessionHosts()[0];
+        if (restoredHost) {
+          setSessionHost(restoredHost);
+          rememberSessionHost(last.session_id, restoredHost);
+          setSessionOffline(last.host_status === "offline");
+        }
         if (last.agent) setAgent(last.agent);
         if (last.workspace) {
           setWorkspace(last.workspace);
           setBranch(null);
         }
         try {
-          const messages = await getSessionMessages(last.session_id);
+          const messages = await getSessionMessages(last.session_id, restoredHost || sessionHosts()[0]);
           setItems(itemsFromMessages(messages));
           setUsage(usageFromMessages(messages));
         } catch {
@@ -476,6 +503,15 @@ export function App() {
                   ? error.message
                   : "Remote host connection failed. Check the selected profile address and token.",
               );
+            } else {
+              const stateDir = (globalThis as any).__COWORKER_STATE_DIR__;
+              setLocalServerError(
+                `Local server failed to start. Check ${
+                  stateDir
+                    ? `${stateDir}/logs/openworker-server.log`
+                    : "the state directory's logs/openworker-server.log"
+                }.`,
+              );
             }
             setBooting(false);
             setShowGate(true);
@@ -489,6 +525,28 @@ export function App() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (booting || isRemoteMode()) return;
+    const check = () => {
+      getHealth()
+        .then(() => setLocalServerError(null))
+        .catch(() => {
+          const stateDir = (globalThis as any).__COWORKER_STATE_DIR__;
+          setLocalServerError(
+            `Local server stopped responding. Check ${
+              stateDir
+                ? `${stateDir}/logs/openworker-server.log`
+                : "the state directory's logs/openworker-server.log"
+            }.`,
+          );
+          setConnected(false);
+        });
+    };
+    check();
+    const timer = window.setInterval(check, 3000);
+    return () => window.clearInterval(timer);
+  }, [booting]);
 
   // Reveal the UI once boot has settled AND the restored session is connected (or we're showing
   // the folder gate). Latched, so later reconnects never flash the splash again.
@@ -559,7 +617,7 @@ export function App() {
     if (surface === "session") rememberLastSession(agent, sessionId, workspace);
   }, [surface, agent, sessionId, workspace]);
 
-  // (re)connect when workspace, session, or agent changes
+  // (re)connect when workspace, session, agent, or selected host changes
   useEffect(() => {
     if (booting) return; // wait until boot/resume settles the session before connecting
     if (gatesWorkspace(agent) && !workspace) return; // Code needs a folder (gate handles it)
@@ -762,6 +820,7 @@ export function App() {
       onEvent: handleEvent,
       onOpen: () => {
         setConnected(true);
+        setSessionOffline(false);
         // Auto-send the task prompt once a "Run now" session connects.
         const p = pendingPromptRef.current;
         if (p) {
@@ -770,8 +829,11 @@ export function App() {
           sessionRef.current?.userMessage(p);
         }
       },
-      onClose: () => setConnected(false),
-    });
+      onClose: () => {
+        setConnected(false);
+        if (!sessionHost.local) setSessionOffline(true);
+      },
+    }, sessionHost, isolateWorkspace);
     sessionRef.current = session;
     return () => session.close();
     // NOTE: `workspace` is intentionally NOT a dependency. Every real workspace change
@@ -782,7 +844,7 @@ export function App() {
     // first connect, dropping the user's first message (the "send twice" bug). The scratch
     // dir is deterministic from `sessionId` server-side, so skipping that reconnect is safe.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [booting, sessionId, agent, refreshSessions]);
+  }, [booting, sessionId, agent, sessionHost.id, refreshSessions]);
 
   // Stream-following (FB-004): auto-scroll only while the user is AT the bottom, so scrolling
   // up to read during a streaming turn sticks. `atBottomRef` is the live truth (per scroll
@@ -840,23 +902,32 @@ export function App() {
       setArtifactCount(0);
       return;
     }
-    getArtifacts(sessionId).then((a) => setArtifactCount(a.length)).catch(() => {});
-  }, [agent, surface, sessionId, browserRefreshKey]);
+    getArtifacts(sessionId, sessionHost).then((a) => setArtifactCount(a.length)).catch(() => {});
+  }, [agent, surface, sessionId, sessionHost.id, browserRefreshKey]);
 
   // Keep the active session's pending Inbox items fresh (answer-in-context card). Loads on session
   // change + after each turn, plus a slow poll so an unattended agent's new question surfaces.
   useEffect(() => {
     if (surface !== "session") return;
     const load = () => {
-      getInbox(sessionId, "pending").then(setSessionInbox).catch(() => setSessionInbox([]));
-      getUnattended(sessionId).then(markUnattended).catch(() => markUnattended(false));
+      getInbox(sessionId, "pending", sessionHost).then(setSessionInbox).catch(() => setSessionInbox([]));
+      getUnattended(sessionId, sessionHost).then(markUnattended).catch(() => markUnattended(false));
     };
     load();
     const t = setInterval(load, 4000);
     return () => clearInterval(t);
-  }, [surface, sessionId, browserRefreshKey, markUnattended]);
+  }, [surface, sessionId, sessionHost.id, browserRefreshKey, markUnattended]);
 
   const send = (text: string, attachments?: Attachment[]) => {
+    if (!connected) {
+      setActionError(
+        sessionHost.local
+          ? "Local agent is not connected."
+          : `Remote host "${sessionHost.name}" is offline. This session remains bound to that host and will not fall back to Local.`,
+      );
+      return;
+    }
+    setActionError(null);
     setItems((p) => [...p, { kind: "user", text, attachments, ts: Date.now() / 1000 }]);
     // The visible model rides along with the message (single source of truth per turn).
     sessionRef.current?.userMessage(text, attachments, model);
@@ -931,7 +1002,10 @@ export function App() {
     // Knowledge family: a new conversation starts fresh (orphan) — clear the workspace so the
     // server provisions a NEW scratch dir for the new session id. Code keeps its repo.
     if (!gatesWorkspace(target)) setWorkspace(null);
-    setSessionId(newId());
+    const id = newId();
+    setSessionId(id);
+    rememberSessionHost(id, sessionHost);
+    if (isTauri()) bindSessionHost(id, sessionHost.id).catch(() => {});
   };
   // Inbox → session: the item carries its session's workspace/agent, so open it directly.
   // UX-026: 5s top-right toast when a SCHEDULED automation run starts (never for
@@ -962,12 +1036,19 @@ export function App() {
   }, [runToast]);
 
   const openSessionFromInbox = (sid: string, ws: string, ag: string) => selectSession(sid, ws, ag);
-  const selectSession = async (id: string, ws: string, ag: string) => {
+  const selectSession = async (id: string, ws: string, ag: string, hostId?: string) => {
     setSurface("session"); // selecting a conversation always returns to the conversation view
     setTodo([]);
     setStreaming("");
     setRunning(false);
     if (ag) setAgent(ag);
+    const selectedHost = sessionHosts().find((host) => host.id === hostId) || sessionHosts()[0];
+    if (selectedHost) setSessionHost(selectedHost);
+    if (selectedHost) rememberSessionHost(id, selectedHost);
+    const selectedInfo = sessions.find((item) => item.session_id === id);
+    setSessionOffline(selectedInfo?.host_status === "offline");
+    setIsolateWorkspace(Boolean(selectedInfo?.workspace_isolated));
+    if (isTauri()) bindSessionHost(id, selectedHost?.id || "local").catch(() => {});
     if (!gatesWorkspace(ag)) setShowGate(false);
     if (ws && ws !== workspace) {
       setWorkspace(ws); // switch project to the session's folder
@@ -975,12 +1056,11 @@ export function App() {
     }
     setSessionId(id);
     try {
-      const messages = await getSessionMessages(id);
+      const messages = await getSessionMessages(id, selectedHost);
       setItems(itemsFromMessages(messages));
       setUsage(usageFromMessages(messages));
     } catch {
-      setItems([]);
-      setUsage(emptyUsage());
+      setSessionOffline(!selectedHost?.local);
     }
   };
   const switchAgent = async (name: string) => {
@@ -1022,7 +1102,7 @@ export function App() {
       else setShowGate(true);
       setSessionId(target.sessionId);
       try {
-        const messages = await getSessionMessages(target.sessionId);
+        const messages = await getSessionMessages(target.sessionId, sessionHost);
         setItems(itemsFromMessages(messages));
         setUsage(usageFromMessages(messages));
       } catch {
@@ -1076,16 +1156,31 @@ export function App() {
     setShowGate(true);
   };
   const renameConversation = async (id: string, title: string) => {
-    const res = await renameSession(id, title);
-    if (res.ok) refreshSessions();
+    try {
+      const res = await renameSession(id, title, hostForSession(id));
+      if (res.ok) refreshSessions();
+      else setActionError(res.error || "Could not rename session.");
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Could not rename session.");
+    }
   };
   const togglePinned = async (id: string, pinned: boolean) => {
-    await setSessionFlags(id, { pinned });
-    refreshSessions();
+    try {
+      const res = await setSessionFlags(id, { pinned }, hostForSession(id));
+      if (res.ok) refreshSessions();
+      else setActionError(res.error || "Could not update session.");
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Could not update session.");
+    }
   };
   const toggleArchived = async (id: string, archived: boolean) => {
-    await setSessionFlags(id, { archived });
-    refreshSessions();
+    try {
+      const res = await setSessionFlags(id, { archived }, hostForSession(id));
+      if (!res.ok) {
+        setActionError(res.error || "Could not update session.");
+        return;
+      }
+      refreshSessions();
     // Archiving the open chat: leave it and start fresh (it moves to the Archived section).
     if (archived && id === sessionId) {
       setItems([]);
@@ -1095,18 +1190,28 @@ export function App() {
       setRunning(false);
       setSessionId(newId());
     }
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Could not update session.");
+    }
   };
   const deleteConversation = async (id: string) => {
-    const res = await deleteSession(id);
-    if (!res.ok) return;
-    refreshSessions();
-    if (id === sessionId) {
-      setItems([]);
-      setUsage(emptyUsage());
-      setStreaming("");
-      setTodo([]);
-      setRunning(false);
-      setSessionId(newId());
+    try {
+      const res = await deleteSession(id, hostForSession(id));
+      if (!res.ok) {
+        setActionError(res.error || "Could not delete session.");
+        return;
+      }
+      refreshSessions();
+      if (id === sessionId) {
+        setItems([]);
+        setUsage(emptyUsage());
+        setStreaming("");
+        setTodo([]);
+        setRunning(false);
+        setSessionId(newId());
+      }
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Could not delete session.");
     }
   };
 
@@ -1426,6 +1531,29 @@ export function App() {
           {/* Right: session-settings icon (§23) + panel toggle. Model/mode/persona chrome is
               gone — the facts live in the subtitle, the controls in the composer (§22). */}
           <div className="main-topbar-side main-topbar-actions" onPointerDown={beginWindowDrag}>
+            {sessionHosts().length > 1 && (
+              <select
+                aria-label="Session host"
+                value={sessionHost.id}
+                onChange={(e) => {
+                  const host = sessionHosts().find((candidate) => candidate.id === e.target.value);
+                  if (host) setSessionHost(host);
+                }}
+                className="text-[12px] bg-transparent border border-line rounded px-1.5 py-1 text-muted"
+              >
+                {sessionHosts().map((host) => (
+                  <option key={host.id} value={host.id}>{host.name}</option>
+                ))}
+              </select>
+            )}
+            <label className="flex items-center gap-1 text-[11px] text-muted" title="Create this session in an isolated workspace">
+              <input
+                type="checkbox"
+                checked={isolateWorkspace}
+                onChange={(e) => setIsolateWorkspace(e.target.checked)}
+              />
+              Isolate workspace
+            </label>
             {agent === "cowork" && railHidden && artifactCount > 0 && (
               <button
                 className="topbar-artifacts-btn"
@@ -1486,11 +1614,37 @@ export function App() {
                 </button>
               </div>
             )}
+            {sessionOffline && !sessionHost.local && (
+              <div
+                role="alert"
+                className="mx-4 mb-2 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-[12px] text-danger"
+              >
+                Remote host "{sessionHost.name}" is offline. This session remains bound to that
+                host and will not fall back to Local.
+              </div>
+            )}
+            {localServerError && (
+              <div
+                role="alert"
+                className="mx-4 mb-2 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-[12px] text-danger"
+              >
+                {localServerError}
+              </div>
+            )}
+            {actionError && (
+              <div
+                role="alert"
+                className="mx-4 mb-2 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-[12px] text-danger"
+              >
+                {actionError}
+              </div>
+            )}
             <div className="main-scroll" ref={scrollRef} onScroll={handleScroll}>
               {idle ? (
                 agent === "cowork" ? (
                   <SessionIntro
                     sessionId={sessionId}
+                    host={sessionHost}
                     onOpenSessionSettings={openAccess}
                     onPrefill={prefillComposer}
                   />
@@ -1634,6 +1788,7 @@ export function App() {
           <RightRail
             active={surface === "session" && agent !== "chat" && !railHidden}
             sessionId={sessionId}
+            host={sessionHost}
             refreshKey={browserRefreshKey}
             toolNames={items.filter((i) => i.kind === "tool").map((i: any) => i.name)}
             todo={todo}

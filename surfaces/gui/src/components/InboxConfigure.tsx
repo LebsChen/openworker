@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   getConnectors,
+  hostForSession,
   getDmRoute,
   getInboxRouting,
   getRecentChannels,
@@ -177,7 +178,7 @@ function DmRouteCard() {
   const real = sessions.filter((s) => !s.session_id.startsWith("__"));
   const choose = async (sessionId: string) => {
     setDm(sessionId);
-    await setDmRoute(sessionId);
+    await setDmRoute(sessionId, hostForSession(sessionId));
     load();
   };
 
@@ -227,12 +228,12 @@ function SubscriptionsCard() {
   const real = sessions.filter((s) => !s.session_id.startsWith("__"));
   const add = async () => {
     if (!addSession || !addChannel.trim()) return;
-    await subscribeChannel(addSession, addChannel.trim());
+    await subscribeChannel(addSession, hostForSession(addSession), addChannel.trim());
     setAddChannel("");
     load();
   };
   const remove = async (sessionId: string, channel: string) => {
-    await unsubscribeChannel(sessionId, channel);
+    await unsubscribeChannel(sessionId, hostForSession(sessionId), channel);
     load();
   };
 

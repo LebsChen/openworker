@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  hostForSession,
   addMcpServer,
   allowUser,
   connectConnector,
@@ -620,7 +621,7 @@ export function ListeningSessionsBlock({ c }: { c: Connector }) {
                 className="ml-auto text-faint hover:text-danger shrink-0"
                 title="Unsubscribe this session"
                 onClick={async () => {
-                  await unsubscribeChannel(s.session_id, s.channel);
+                  await unsubscribeChannel(s.session_id, hostForSession(s.session_id), s.channel);
                   load();
                 }}
               >

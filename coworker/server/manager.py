@@ -82,6 +82,7 @@ from ..providers import (
 )
 from ..secrets import SecretStore, state_dir
 from ..sessions import SessionRecord
+from ..session_workspaces import SessionWorkspaceManager
 from ..skills import SkillLoader
 
 _SCOPES = {s.value for s in Scope}
@@ -114,10 +115,12 @@ class SessionManager:
         model: str = "gpt-5.6-sol",
         mode: Mode = Mode.INTERACTIVE,
         provider: Optional[ProviderClient] = None,
+        host_id: str = "local",
     ) -> None:
         self.default_workspace = (
             str(Path(workspace).expanduser().resolve()) if workspace else None
         )
+        self.host_id = host_id or "local"
         self.model = model
         self.mode = mode
         self.provider = provider
@@ -160,6 +163,7 @@ class SessionManager:
         self._mcp_errors: dict[str, str] = {}
         self.gateway: Optional[Gateway] = None
         self._data_base = base
+        self.session_workspaces = SessionWorkspaceManager(base / "session-workspaces")
         # Desktop/UI prefs (default model, onboarding state) — not secrets; a plain JSON file.
         self._prefs = self._load_prefs()
         if self._prefs.get("default_model"):
@@ -365,6 +369,7 @@ class SessionManager:
         *,
         workspace: Optional[str] = None,
         agent: str = "code",
+        isolate: bool = False,
         approver: Optional[Approver] = None,
         extra_tools: Optional[list[Any]] = None,
         directory_requester: Optional[Any] = None,
@@ -387,12 +392,43 @@ class SessionManager:
         is_new_session = record is None
         agent_name = (record.agent if record else agent) or "code"
         ag = get_agent(agent_name)
+        managed_workspace = False
 
         if record:
             ws = record.workspace or None
+            if ws:
+                try:
+                    managed = self.session_workspaces.attach(session_id)
+                    if managed.path == Path(ws).resolve():
+                        ws = str(managed.path)
+                        managed_workspace = True
+                except (KeyError, FileNotFoundError, ValueError):
+                    # Legacy sessions point at user-owned folders and must not
+                    # be migrated or rewritten.
+                    pass
             model, mode, messages = record.model, Mode(record.mode), record.messages
         else:
             ws = self.resolve_workspace(workspace) if ag.needs_workspace else None
+            if ag.needs_workspace and (isolate or ag.family == "knowledge"):
+                try:
+                    repository = (
+                        ws
+                        if workspace is not None
+                        and ws
+                        and (Path(ws) / ".git").exists()
+                        else None
+                    )
+                    managed = self.session_workspaces.create(
+                        session_id,
+                        repository=repository,
+                    )
+                    ws = str(managed.path)
+                    managed_workspace = True
+                except (FileExistsError, RuntimeError, ValueError) as exc:
+                    if isolate:
+                        raise ValueError(
+                            f"workspace isolation failed for session {session_id}: {exc}"
+                        ) from exc
             model, mode, messages = self.model, self.mode, None
 
         if ag.needs_workspace and (not ws or not Path(ws).is_dir()):
@@ -405,6 +441,11 @@ class SessionManager:
                 return None
 
         if ws:
+            if managed_workspace:
+                # Validate the authoritative workspace through the same
+                # containment helper used by lifecycle operations before it
+                # becomes the engine's primary root.
+                ws = str(self.session_workspaces.assert_owned(session_id, ws))
             self.session_store.touch_workspace(ws)
         # Orphan surfaces are multi-root: the scratch (ws) is the primary writable root, plus any
         # folders the user added (persisted per session). Code/Chat stay single-root (roots=None).
@@ -3311,6 +3352,7 @@ class SessionManager:
                 workspace=workspace,
                 model=engine.model,
                 mode=engine.permissions.mode.value,
+                host_id=self.host_id,
                 messages=engine.messages,
                 title=title_from(engine.messages),
                 agent=getattr(engine, "agent_name", "code"),
@@ -3664,6 +3706,19 @@ class SessionManager:
                 pass  # a stale/foreign path must not fail the delete
         return {"ok": ok, "session_id": session_id}
 
+    def archive_session_workspace(self, session_id: str) -> dict[str, Any]:
+        try:
+            workspace = self.session_workspaces.archive(session_id)
+        except (KeyError, FileNotFoundError, ValueError, RuntimeError) as exc:
+            return {"ok": False, "session_id": session_id, "error": str(exc)}
+        self.session_store.set_flags(session_id, archived=True)
+        return {
+            "ok": True,
+            "session_id": session_id,
+            "workspace": str(workspace.path),
+            "archived": True,
+        }
+
     # -- provider proxy ---------------------------------------------------------
     def provider_complete(self, model, messages, tools=None):
         return self.provider.complete(model=model, messages=messages, tools=tools)
@@ -3678,11 +3733,19 @@ class SessionManager:
     # -- read models ------------------------------------------------------------
     def list_sessions(self, workspace: Optional[str] = None) -> list[dict[str, Any]]:
         ws = self.resolve_workspace(workspace) if workspace else None
-        return [
-            {
+        out = []
+        for r in self.session_store.list(workspace=ws):
+            if r.session_id.startswith("__"):
+                continue
+            managed = self.session_workspaces.get(r.session_id)
+            out.append({
                 "session_id": r.session_id,
                 "title": r.title or "New session",
                 "workspace": r.workspace,
+                "workspace_isolated": bool(managed and not managed.archived),
+                "workspace_worktree": bool(managed and managed.worktree and not managed.archived),
+                "workspace_branch": managed.branch if managed and not managed.archived else None,
+                "host_id": r.host_id,
                 "agent": r.agent,
                 "model": r.model,
                 "mode": r.mode,
@@ -3704,10 +3767,8 @@ class SessionManager:
                 "subscriptions": [
                     s.channel for s in self.subscriptions.for_session(r.session_id)
                 ],
-            }
-            for r in self.session_store.list(workspace=ws)
-            if not r.session_id.startswith("__")  # hide internal threads
-        ]
+            })
+        return out
 
     def _session_liveness(self, session_id: str) -> str:
         if self.is_running(session_id):

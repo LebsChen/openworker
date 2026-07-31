@@ -60,6 +60,11 @@ export interface SessionUsage {
 
 export interface SessionInfo {
   session_id: string;
+  host_id?: string;
+  host_status?: "online" | "offline";
+  workspace_isolated?: boolean;
+  workspace_worktree?: boolean;
+  workspace_branch?: string | null;
   title?: string;
   workspace: string;
   agent: string;
