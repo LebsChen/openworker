@@ -17,18 +17,9 @@ from __future__ import annotations
 
 import json
 import threading
-import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Optional
-
-_PLAYBOOK_MENTION = re.compile(r"@playbook\s+([A-Za-z0-9_.-]+)", re.IGNORECASE)
-
-
-def playbook_mentions(text: str) -> list[str]:
-    """Return explicit ``@playbook name`` invocations in user text."""
-    return list(dict.fromkeys(m.group(1) for m in _PLAYBOOK_MENTION.finditer(text)))
-
 
 @dataclass
 class MentionThread:

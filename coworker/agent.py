@@ -318,11 +318,14 @@ def build_engine(
     workspace_style = remote_target.style.name if remote_target is not None else None
     always_notes = [
         note.body
-            for note in knowledge.iter_matching(workspace=workspace_key, path_style=workspace_style)
+        for note in knowledge.iter_matching(
+            workspace=workspace_key, path_style=workspace_style
+        )
         if note.trigger == "always"
     ]
     if always_notes:
         instructions = f"{instructions}\n\nKnowledge notes:\n\n" + "\n\n".join(always_notes)
+
     def make_asset_loader(store: AssetStore, tool_name: str):
         def load_asset(name: str) -> dict[str, Any]:
             asset = store.get(name, workspace=workspace_key)
