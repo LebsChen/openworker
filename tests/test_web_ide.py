@@ -81,6 +81,7 @@ def test_ide_bootstrap_keeps_rvm_token_server_side(monkeypatch, tmp_path):
     with TestClient(create_app(manager)) as client:
         response = client.get("/v1/sessions/session-1/ide/")
         assert response.status_code == 200
+        assert "folder=C%3A%5CUsers%5CTeam" in str(response.request.url)
         assert response.text == "<html>IDE</html>"
         assert "server-token" not in response.text
         assert "server-token" not in response.headers.get("location", "")
@@ -91,6 +92,7 @@ def test_ide_bootstrap_keeps_rvm_token_server_side(monkeypatch, tmp_path):
         assert client.get("/ide/%2E%2E/secret").status_code == 400
 
     assert any("tkn=server-token" in url for url in FakeAsyncClient.requests)
+    assert any("folder=C%3A%5CUsers%5CTeam" in url for url in FakeAsyncClient.requests)
 
 
 def test_ide_proxy_requires_random_key_for_http_and_root_websocket(monkeypatch, tmp_path):

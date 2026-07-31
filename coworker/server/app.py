@@ -19,12 +19,12 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Callable, Optional
-from urllib.parse import urlencode, urljoin, urlsplit
+from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit
 
 import httpx
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response, StreamingResponse
+from fastapi.responses import JSONResponse, RedirectResponse, Response, StreamingResponse
 from websockets.asyncio.client import connect as rvm_ws_connect
 from websockets.exceptions import ConnectionClosed, InvalidStatus
 
@@ -862,7 +862,7 @@ def create_app(manager: SessionManager) -> FastAPI:
             if state["session_id"] == session_id:
                 ide_keys.pop(key, None)
 
-    async def _ide_bootstrap(session_id: str) -> Response:
+    async def _ide_bootstrap(session_id: str, request: Request) -> Response:
         resolved = _ide_target(session_id)
         if isinstance(resolved, JSONResponse):
             return resolved
@@ -871,8 +871,16 @@ def create_app(manager: SessionManager) -> FastAPI:
         try:
             if ide_http_client is None:
                 return _ide_error("Web IDE proxy is not running", 503)
+            folder = target.workspace
+            if request.query_params.get("folder") != folder:
+                location = f"/v1/sessions/{session_id}/ide/?" + urlencode(
+                    {"folder": folder}
+                )
+                return RedirectResponse(location, status_code=307)
             base_url = target.client.base_url.rstrip("/") + "/"
-            url = urljoin(base_url, "ide/") + "?" + urlencode({"tkn": token})
+            url = urljoin(base_url, "ide/") + "?" + urlencode(
+                {"tkn": token, "folder": folder}
+            )
             for _ in range(4):
                 response = await ide_http_client.get(
                     url,
@@ -889,7 +897,15 @@ def create_app(manager: SessionManager) -> FastAPI:
                     break
                 location_url = urljoin(url, location)
                 parts = urlsplit(location_url)
-                url = parts._replace(query="", fragment="").geturl()
+                query = [
+                    (name, value)
+                    for name, value in parse_qsl(parts.query, keep_blank_values=True)
+                    if name not in {"tkn", "token", "folder"}
+                ]
+                query.append(("folder", folder))
+                url = parts._replace(
+                    query=urlencode(query), fragment=""
+                ).geturl()
             if response.status_code < 200 or response.status_code >= 300:
                 return _ide_error("Remote Web IDE bootstrap failed", 502)
             _revoke_session_ide_keys(session_id)
@@ -924,8 +940,8 @@ def create_app(manager: SessionManager) -> FastAPI:
             target.client.close()
 
     @app.get("/v1/sessions/{session_id}/ide/")
-    async def session_ide_bootstrap(session_id: str) -> Response:
-        return await _ide_bootstrap(session_id)
+    async def session_ide_bootstrap(request: Request, session_id: str) -> Response:
+        return await _ide_bootstrap(session_id, request)
 
     async def _ide_proxy(
         request: Request,
