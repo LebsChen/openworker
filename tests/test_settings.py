@@ -174,3 +174,33 @@ def test_ollama_models_gated_on_liveness(tmp_path, monkeypatch):
 
     monkeypatch.setattr(SessionManager, "_ollama_alive", lambda self: True)
     assert "ollama:llama3.3" in manager.get_settings()["models"]
+
+
+def test_openai_imported_models_are_removed_when_endpoint_changes(tmp_path, monkeypatch):
+    monkeypatch.setenv("COWORKER_STATE_DIR", str(tmp_path / "state"))
+    from coworker.server.manager import SessionManager
+
+    manager = SessionManager(data_dir=tmp_path)
+    manager.secrets.put(
+        "provider:openai",
+        {"api_key": "key", "base_url": "https://one.example/v1"},
+    )
+    assert manager.import_provider_models("openai", ["vendor/model:v1", "vendor.model.v2"])["ok"]
+    assert "vendor/model:v1" in manager.get_settings()["models"]
+    manager.set_provider("openai", {"base_url": "https://two.example/v1"})
+    assert "vendor/model:v1" not in manager.get_settings()["models"]
+    assert manager.get_providers()[0]["imported_models"] == []
+
+
+def test_openai_header_values_are_not_returned_in_provider_metadata(tmp_path, monkeypatch):
+    monkeypatch.setenv("COWORKER_STATE_DIR", str(tmp_path / "state"))
+    from coworker.server.manager import SessionManager
+
+    manager = SessionManager(data_dir=tmp_path)
+    manager.secrets.put(
+        "provider:openai",
+        {"api_key": "key", "headers": [{"name": "X-Project", "value": "secret-value"}]},
+    )
+    provider = next(item for item in manager.get_providers() if item["name"] == "openai")
+    assert provider["header_names"] == ["X-Project"]
+    assert "secret-value" not in repr(provider)

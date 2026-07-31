@@ -115,4 +115,10 @@ class ProviderRouter(ProviderClient):
         )
 
     def capabilities(self, model: str):
-        return capabilities_for(model)
+        overrides: dict[str, object] = {}
+        if self._secrets is not None:
+            profile = self._secrets.get("provider:openai") or {}
+            raw = profile.get("capability_overrides")
+            if isinstance(raw, dict):
+                overrides = raw
+        return capabilities_for(model, overrides)

@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { addModel, getSettings, removeModel, setDefaultModel } from "../api";
+import {
+  addModel,
+  getSettings,
+  removeModel,
+  setDefaultModel,
+  setModelCapabilities,
+} from "../api";
 
 // Cloud-account providers dispatch by a family segment baked into the model id
 // (`bedrock:claude/…`, `vertex:openweight/…`). The add-model row shows a dropdown so
@@ -28,6 +34,8 @@ export function ModelChecklist({
   curated,
   defaultModel,
   labels,
+  capabilityOverrides,
+  onCapabilitiesChanged,
   onChanged,
 }: {
   provider: string; // decides the id prefix; OpenAI models stay bare
@@ -36,6 +44,8 @@ export function ModelChecklist({
   curated: string[]; // the full curated list (all providers, full ids)
   defaultModel: string;
   labels?: Record<string, string>; // curated display names (full id → label); raw id when absent
+  capabilityOverrides?: Record<string, Record<string, unknown>>;
+  onCapabilitiesChanged?: (next: Record<string, Record<string, unknown>>) => void;
   onChanged: (next: { models: string[]; model: string }) => void;
 }) {
   const [draft, setDraft] = useState("");
@@ -108,6 +118,13 @@ export function ModelChecklist({
                 Make default
               </button>
             )}
+            {provider === "openai" && !labels?.[id] && (
+              <CapabilityEditor
+                model={id}
+                override={capabilityOverrides?.[id]}
+                onSaved={(next) => onCapabilitiesChanged?.(next)}
+              />
+            )}
           </div>
         );
       })}
@@ -138,6 +155,51 @@ export function ModelChecklist({
           Add
         </button>
       </div>
+    </div>
+  );
+}
+
+function CapabilityEditor({
+  model,
+  override,
+  onSaved,
+}: {
+  model: string;
+  override?: Record<string, unknown>;
+  onSaved: (next: Record<string, Record<string, unknown>>) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [vision, setVision] = useState(Boolean(override?.vision));
+  const [pdf, setPdf] = useState(Boolean(override?.pdf));
+  const [parallel, setParallel] = useState(Boolean(override?.parallel_tool_calls));
+  const [context, setContext] = useState(
+    override?.context_window ? String(override.context_window) : "",
+  );
+  const save = async () => {
+    const next: Record<string, unknown> = { vision, pdf, parallel_tool_calls: parallel };
+    if (context.trim()) next.context_window = Number(context);
+    const result = await setModelCapabilities(model, next);
+    if (result.ok) {
+      setOpen(false);
+      onSaved(result.model_capabilities || {});
+    }
+  };
+  return (
+    <div className="mlist-cap">
+      <button className="mlist-make" onClick={() => setOpen((value) => !value)}>
+        capabilities
+      </button>
+      {open && (
+        <div className="absolute z-10 right-0 top-7 rounded-lg border border-line bg-panel p-2.5 shadow-lg text-[11px]">
+          <label className="flex gap-1.5"><input type="checkbox" checked={vision} onChange={(e) => setVision(e.target.checked)} /> vision</label>
+          <label className="flex gap-1.5"><input type="checkbox" checked={pdf} onChange={(e) => setPdf(e.target.checked)} /> PDF</label>
+          <label className="flex gap-1.5"><input type="checkbox" checked={parallel} onChange={(e) => setParallel(e.target.checked)} /> parallel tools</label>
+          <label className="mt-1 block">context tokens
+            <input className="ml-1 w-24 rounded border border-line bg-paper px-1" value={context} onChange={(e) => setContext(e.target.value)} inputMode="numeric" />
+          </label>
+          <button className="mt-2 rounded bg-accent px-2 py-1 text-white" onClick={() => void save()}>Save</button>
+        </div>
+      )}
     </div>
   );
 }

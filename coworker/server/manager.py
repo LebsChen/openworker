@@ -80,8 +80,10 @@ from ..providers import (
     ProviderClient,
     ProviderRouter,
     descriptor_configured,
+    fetch_openai_models,
     get_descriptor,
     provider_descriptors,
+    validate_extra_headers,
     verify_provider_key,
 )
 from ..secrets import SecretStore, state_dir
@@ -1550,8 +1552,7 @@ class SessionManager:
                 for f in d.fields
                 if not f.secret and profile.get(f.key)
             }
-            out.append(
-                {
+            row = {
                     **d.to_dict(),
                     "configured": configured,
                     "values": values,
@@ -1564,7 +1565,14 @@ class SessionManager:
                         d.name
                     ),
                 }
-            )
+            if d.name == "openai":
+                row["imported_models"] = list(profile.get("imported_models") or [])
+                row["header_names"] = [
+                    item.get("name")
+                    for item in (profile.get("headers") or [])
+                    if isinstance(item, dict) and isinstance(item.get("name"), str)
+                ]
+            out.append(row)
         return out
 
     def pick_native_folder(self) -> dict[str, Any]:
@@ -1658,6 +1666,21 @@ class SessionManager:
             return {"ok": False, "error": f"unknown provider: {name}"}
         fields = fields or {}
         profile = dict(self.secrets.get(f"provider:{name}") or {})
+        old_base_url = str(profile.get("base_url") or "").strip().rstrip("/")
+        old_imported = list(profile.get("imported_models") or []) if name == "openai" else []
+        if name == "openai" and "headers" in fields:
+            raw_headers = fields.get("headers")
+            if isinstance(raw_headers, str):
+                import json
+
+                try:
+                    raw_headers = json.loads(raw_headers)
+                except json.JSONDecodeError:
+                    return {"ok": False, "error": "extra headers must be valid JSON"}
+            try:
+                profile["headers"] = validate_extra_headers(raw_headers)
+            except ValueError as exc:
+                return {"ok": False, "error": str(exc)}
         for f in d.fields:
             if f.key not in fields:
                 continue
@@ -1671,6 +1694,11 @@ class SessionManager:
         missing = [f.label for f in d.fields if f.required and not profile.get(f.key)]
         if missing:
             return {"ok": False, "error": "missing: " + ", ".join(missing)}
+        if name == "openai":
+            new_base_url = str(profile.get("base_url") or "").strip().rstrip("/")
+            if old_base_url != new_base_url and old_imported:
+                self._remove_imported_models(old_imported)
+                profile.pop("imported_models", None)
         # A (re)pasted key stamps its save date — Settings shows "key added <date>" so stale
         # keys are visible. Endpoint-only saves keep the original stamp.
         if isinstance(fields.get("api_key"), str) and fields["api_key"].strip():
@@ -1693,6 +1721,143 @@ class SessionManager:
         if added and not self._provider_configured(self._model_provider(self.model)):
             self.set_default_model(added)
         return {"ok": True, "provider": name, "recommended_model": rec}
+
+    def _remove_imported_models(self, models: list[str]) -> None:
+        """Remove endpoint-discovered IDs from the picker without touching matrix models."""
+        if not models:
+            return
+        existing = self._prefs.get("models")
+        if not isinstance(existing, list):
+            return
+        removed = set(models)
+        self._prefs["models"] = [model for model in existing if model not in removed]
+        self._save_prefs()
+
+    def _openai_request_fields(self, fields: Optional[dict[str, Any]]) -> dict[str, Any]:
+        import os
+
+        supplied = fields or {}
+        profile = self.secrets.get("provider:openai") or {}
+        base_url = supplied.get("base_url") or profile.get("base_url") or ""
+        api_key = supplied.get("api_key") or profile.get("api_key") or os.environ.get(
+            "OPENAI_API_KEY", ""
+        )
+        headers = supplied.get("headers", profile.get("headers"))
+        if isinstance(headers, str):
+            import json
+
+            try:
+                headers = json.loads(headers)
+            except json.JSONDecodeError:
+                raise ValueError("extra headers must be valid JSON") from None
+        if isinstance(headers, list):
+            previous = {
+                item.get("name").lower(): item.get("value")
+                for item in (profile.get("headers") or [])
+                if isinstance(item, dict) and isinstance(item.get("name"), str)
+            }
+            headers = [
+                {
+                    **item,
+                    "value": item.get("value") or previous.get(str(item.get("name", "")).lower(), ""),
+                }
+                for item in headers
+                if isinstance(item, dict)
+            ]
+        return {"base_url": str(base_url).strip(), "api_key": str(api_key).strip(), "headers": headers}
+
+    def discover_provider_models(
+        self, name: str, fields: Optional[dict[str, Any]]
+    ) -> dict[str, Any]:
+        if name != "openai":
+            return {"ok": False, "error": "model discovery is only supported for OpenAI-compatible endpoints"}
+        try:
+            request = self._openai_request_fields(fields)
+            models = fetch_openai_models(**request)
+        except (ValueError, RuntimeError) as exc:
+            return {"ok": False, "error": str(exc)}
+        return {"ok": True, "models": models}
+
+    def import_provider_models(self, name: str, models: Any) -> dict[str, Any]:
+        if name != "openai":
+            return {"ok": False, "error": "model import is only supported for OpenAI-compatible endpoints"}
+        if not isinstance(models, list) or any(not isinstance(model, str) or not model.strip() for model in models):
+            return {"ok": False, "error": "models must be a list of non-empty ids"}
+        ids = list(dict.fromkeys(model.strip() for model in models))
+        profile = dict(self.secrets.get("provider:openai") or {})
+        imported = list(dict.fromkeys([*(profile.get("imported_models") or []), *ids]))
+        profile["imported_models"] = imported
+        self.secrets.put("provider:openai", profile)
+        existing = self._prefs.get("models")
+        existing = existing if isinstance(existing, list) else []
+        self._prefs["models"] = list(dict.fromkeys([*existing, *ids]))
+        self._save_prefs()
+        return {"ok": True, "models": self.get_settings()["models"], "imported_models": imported}
+
+    def set_provider_headers(self, name: str, headers: Any) -> dict[str, Any]:
+        if name != "openai":
+            return {"ok": False, "error": "extra headers are only supported for OpenAI-compatible endpoints"}
+        if not isinstance(headers, list):
+            return {"ok": False, "error": "extra headers must be a list"}
+        profile = dict(self.secrets.get("provider:openai") or {})
+        previous = {
+            item.get("name").lower(): item.get("value")
+            for item in (profile.get("headers") or [])
+            if isinstance(item, dict) and isinstance(item.get("name"), str)
+        }
+        resolved: list[dict[str, str]] = []
+        for item in headers:
+            if not isinstance(item, dict) or not isinstance(item.get("name"), str):
+                return {"ok": False, "error": "each extra header must be an object"}
+            name_value = item["name"]
+            value = item.get("value")
+            if value == "":
+                value = previous.get(name_value.lower())
+            if value is None:
+                return {"ok": False, "error": f"enter a value for extra header '{name_value}'"}
+            resolved.append({"name": name_value, "value": value})
+        try:
+            profile["headers"] = validate_extra_headers(resolved)
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
+        if not profile["headers"]:
+            profile.pop("headers", None)
+        self.secrets.put("provider:openai", profile)
+        self._refresh_provider("openai")
+        return {"ok": True}
+
+    def set_model_capabilities(
+        self, model: str, override: Optional[dict[str, Any]]
+    ) -> dict[str, Any]:
+        model = (model or "").strip()
+        if not model:
+            return {"ok": False, "error": "model required"}
+        profile = dict(self.secrets.get("provider:openai") or {})
+        overrides = dict(profile.get("capability_overrides") or {})
+        if override is None:
+            overrides.pop(model, None)
+        else:
+            if not isinstance(override, dict):
+                return {"ok": False, "error": "capability override must be an object"}
+            normalized: dict[str, Any] = {}
+            for key in ("vision", "pdf", "parallel_tool_calls"):
+                if key in override:
+                    if not isinstance(override[key], bool):
+                        return {"ok": False, "error": f"{key} must be a boolean"}
+                    normalized[key] = override[key]
+            if "context_window" in override:
+                value = override["context_window"]
+                if not isinstance(value, int) or value <= 0:
+                    return {"ok": False, "error": "context_window must be a positive integer"}
+                normalized["context_window"] = value
+            overrides[model] = normalized
+        if overrides:
+            profile["capability_overrides"] = overrides
+        else:
+            profile.pop("capability_overrides", None)
+        self.secrets.put("provider:openai", profile)
+        self._refresh_provider("openai")
+        return {"ok": True, "model_capabilities": overrides}
 
     def remove_provider(self, name: str) -> dict[str, Any]:
         """Forget a provider's stored config (Settings ▸ Models "Remove key"). The whole
@@ -1718,6 +1883,14 @@ class SessionManager:
             return {"ok": False, "error": f"unknown provider: {name}"}
         fields = fields or {}
         profile = self.secrets.get(f"provider:{name}") or {}
+        supplied_headers = fields.get("headers") if name == "openai" else None
+        if isinstance(supplied_headers, str):
+            import json
+
+            try:
+                supplied_headers = json.loads(supplied_headers)
+            except json.JSONDecodeError:
+                return {"ok": False, "error": "extra headers must be valid JSON"}
         merged = {}
         for f in d.fields:
             val = fields.get(f.key) or profile.get(f.key) or ""
@@ -1737,8 +1910,37 @@ class SessionManager:
             missing = [f.label for f in d.fields if f.required and not merged.get(f.key)]
             if missing:
                 return {"ok": False, "error": "missing: " + ", ".join(missing)}
+        if name == "openai":
+            try:
+                if supplied_headers is None:
+                    headers = profile.get("headers") or []
+                else:
+                    previous = {
+                        item.get("name").lower(): item.get("value")
+                        for item in (profile.get("headers") or [])
+                        if isinstance(item, dict) and isinstance(item.get("name"), str)
+                    }
+                    headers = [
+                        {
+                            **item,
+                            "value": item.get("value") or previous.get(
+                                str(item.get("name", "")).lower(), ""
+                            ),
+                        }
+                        for item in supplied_headers
+                        if isinstance(item, dict)
+                    ]
+                headers = validate_extra_headers(headers)
+            except ValueError as exc:
+                return {"ok": False, "error": str(exc)}
+        else:
+            headers = None
         return verify_provider_key(
-            name, api_key=api_key, base_url=merged.get("base_url", ""), fields=merged
+            name,
+            api_key=api_key,
+            base_url=merged.get("base_url", ""),
+            fields=merged,
+            headers=headers,
         )
 
     def _model_provider(self, model: str) -> str:
@@ -1905,6 +2107,12 @@ class SessionManager:
         if self.model not in selectable:
             selectable.insert(0, self.model)
         from ..providers.matrix import model_context_windows, model_labels
+        openai_profile = self.secrets.get("provider:openai") or {}
+        capability_overrides = openai_profile.get("capability_overrides") or {}
+        context_windows = model_context_windows()
+        for model, override in capability_overrides.items():
+            if isinstance(override, dict) and isinstance(override.get("context_window"), int):
+                context_windows[model] = override["context_window"]
 
         return {
             "provider": "openai",
@@ -1915,7 +2123,8 @@ class SessionManager:
             "model_labels": model_labels(),
             # {full id → context window in tokens}, verified matrix entries only —
             # drives the composer's context-fill meter (absent id → meter hides).
-            "model_context_windows": model_context_windows(),
+            "model_context_windows": context_windows,
+            "model_capabilities": capability_overrides,
             "has_key": env_key or stored,
             # Provider-agnostic "can this default model actually run?" — true when the default
             # model's provider is configured (any provider, not just OpenAI). Drives the GUI's

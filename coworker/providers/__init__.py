@@ -20,6 +20,8 @@ from .registry import (
     provider_descriptors,
     provider_names,
     verify_provider_key,
+    fetch_openai_models,
+    validate_extra_headers,
 )
 from .router import ProviderRouter
 from .vertex_provider import VertexProvider
@@ -47,4 +49,6 @@ __all__ = [
     "descriptor_configured",
     "detect_provider",
     "verify_provider_key",
+    "fetch_openai_models",
+    "validate_extra_headers",
 ]

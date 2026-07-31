@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
+  discoverProviderModels,
   getProviders,
+  importProviderModels,
   removeProvider,
   setProvider,
+  setProviderHeaders,
   verifyProvider,
   type ProviderField as ProviderFieldT,
   type ProviderInfo,
@@ -319,6 +322,13 @@ export function ProviderForm({
   footer?: ReactNode;
 }) {
   const { info, sel } = ps;
+  const [headerRows, setHeaderRows] = useState<{ name: string; value: string }[]>([]);
+  const [discoveredModels, setDiscoveredModels] = useState<string[]>([]);
+  const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set());
+  const [discoveryState, setDiscoveryState] = useState<"idle" | "loading" | "error">("idle");
+  const [discoveryError, setDiscoveryError] = useState<string | null>(null);
+  const [headersState, setHeadersState] = useState<"idle" | "saving" | "error">("idle");
+  const [headersError, setHeadersError] = useState<string | null>(null);
   const label = "block text-[12px] text-muted mt-3 mb-1";
   const input =
     "w-full px-3 py-2 rounded-lg border bg-panel text-[13.5px] outline-none focus:border-accent";
@@ -340,6 +350,15 @@ export function ProviderForm({
   // the first field for keyless providers (Ollama's Detect).
   const requiredSecret = fieldsAll.find((x) => x.secret && x.required);
   const testKey = requiredSecret ? requiredSecret.key : fieldsAll[0]?.key;
+  useEffect(() => {
+    if (info?.name === "openai") {
+      setHeaderRows((info.header_names || []).map((name) => ({ name, value: "" })));
+      setDiscoveredModels([]);
+      setSelectedModels(new Set());
+      setDiscoveryState("idle");
+      setDiscoveryError(null);
+    }
+  }, [info?.name, info?.header_names]);
   if (!sel) return null;
 
   const fieldRow = (f: ProviderFieldT, testable: boolean) => (
@@ -552,6 +571,120 @@ export function ProviderForm({
           </div>
         );
       })()}
+
+      {info?.name === "openai" && (
+        <div className="mt-5 rounded-xl border border-line bg-paper/50 px-3.5 pb-3.5 pt-2.5">
+          <div className="text-[12px] font-semibold text-ink">Extra request headers</div>
+          <p className="mt-1 text-[11.5px] leading-relaxed text-faint">
+            Optional gateway headers. Values are stored securely and never shown after saving.
+          </p>
+          <div className="mt-2 space-y-1.5">
+            {headerRows.map((row, index) => (
+              <div className="flex gap-1.5" key={`${row.name}-${index}`}>
+                <input
+                  className={input + " border-line"}
+                  placeholder="Header name"
+                  value={row.name}
+                  onChange={(e) => setHeaderRows((rows) => rows.map((r, i) => i === index ? { ...r, name: e.target.value } : r))}
+                />
+                <input
+                  className={input + " border-line"}
+                  type="password"
+                  placeholder={info.header_names?.includes(row.name) ? "••••••••" : "Header value"}
+                  value={row.value}
+                  onChange={(e) => setHeaderRows((rows) => rows.map((r, i) => i === index ? { ...r, value: e.target.value } : r))}
+                />
+                <button className="px-2 text-muted" onClick={() => setHeaderRows((rows) => rows.filter((_, i) => i !== index))}>×</button>
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 flex items-center gap-2">
+            <button className="text-[12px] text-muted hover:text-ink" onClick={() => setHeaderRows((rows) => [...rows, { name: "", value: "" }])}>+ Add header</button>
+            <button
+              className="rounded-lg border border-line px-3 py-1 text-[12px] disabled:opacity-40"
+              disabled={headersState === "saving"}
+              onClick={async () => {
+                setHeadersState("saving");
+                setHeadersError(null);
+                const result = await setProviderHeaders("openai", headerRows).catch(() => ({ ok: false, error: "unreachable" }));
+                if (!result.ok) setHeadersError(result.error || "couldn't save headers");
+                else {
+                  setHeadersState("idle");
+                  await ps.refreshProviders();
+                }
+                if (!result.ok) setHeadersState("error");
+              }}
+            >
+              {headersState === "saving" ? "Saving…" : "Save headers"}
+            </button>
+          </div>
+          {headersError && <p className="mt-1 text-[11.5px] text-warnInk">{headersError}</p>}
+        </div>
+      )}
+
+      {info?.name === "openai" && (
+        <div className="mt-5 rounded-xl border border-line bg-paper/50 px-3.5 pb-3.5 pt-2.5">
+          <div className="text-[12px] font-semibold text-ink">Discover endpoint models</div>
+          <p className="mt-1 text-[11.5px] leading-relaxed text-faint">
+            Fetch raw IDs from this endpoint. Discovery is optional; manually added models remain supported.
+          </p>
+          <button
+            className="mt-2 rounded-lg border border-line px-3 py-1 text-[12px] disabled:opacity-40"
+            disabled={discoveryState === "loading"}
+            onClick={async () => {
+              setDiscoveryState("loading");
+              setDiscoveryError(null);
+              const result = await discoverProviderModels("openai", {
+                ...ps.fields,
+                headers: headerRows,
+              }).catch(() => ({ ok: false, error: "unreachable", models: [] }));
+              if (result.ok) {
+                setDiscoveredModels(result.models || []);
+                setSelectedModels(new Set());
+                setDiscoveryState("idle");
+              } else {
+                setDiscoveryState("error");
+                setDiscoveryError(result.error || "couldn't fetch models");
+              }
+            }}
+          >
+            {discoveryState === "loading" ? "Fetching…" : "Fetch models"}
+          </button>
+          {discoveryError && <p className="mt-1 text-[11.5px] text-warnInk">{discoveryError}</p>}
+          {discoveredModels.length > 0 && (
+            <div className="mt-2 space-y-1">
+              {discoveredModels.map((model) => (
+                <label className="flex items-center gap-2 text-[12px]" key={model} title={model}>
+                  <input
+                    type="checkbox"
+                    checked={selectedModels.has(model)}
+                    onChange={(e) => setSelectedModels((current) => {
+                      const next = new Set(current);
+                      if (e.target.checked) next.add(model); else next.delete(model);
+                      return next;
+                    })}
+                  />
+                  <span className="font-mono">{model}</span>
+                </label>
+              ))}
+              <button
+                className="mt-2 rounded-lg bg-accent px-3 py-1 text-[12px] text-white disabled:opacity-40"
+                disabled={!selectedModels.size}
+                onClick={async () => {
+                  const result = await importProviderModels("openai", [...selectedModels]);
+                  if (result.ok) {
+                    setDiscoveredModels([]);
+                    setSelectedModels(new Set());
+                    await ps.refreshProviders();
+                  } else setDiscoveryError(result.error || "couldn't import models");
+                }}
+              >
+                Import selected
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Error line: fixed height so failures never reflow the form. */}
       <div className="mt-3 min-h-[19px] text-[12.5px]">

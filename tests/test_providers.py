@@ -403,6 +403,20 @@ def test_matrix_labels_and_custom_model_fallback():
     assert caps.tools and not caps.parallel_tool_calls
 
 
+def test_capability_override_beats_unknown_model_heuristics():
+    caps = capabilities_for(
+        "private-model",
+        {
+            "private-model": {
+                "vision": True,
+                "pdf": True,
+                "parallel_tool_calls": True,
+            }
+        },
+    )
+    assert caps.vision and caps.pdf and caps.parallel_tool_calls
+
+
 def test_reseller_descriptors_and_matrix_stay_in_lockstep():
     """Reseller suggested models derive from the matrix, and each descriptor's
     recommended model must be one of them (set_provider's auto-add depends on it)."""
