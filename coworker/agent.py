@@ -322,14 +322,18 @@ def build_engine(
     ]
     if always_notes:
         instructions = f"{instructions}\n\nKnowledge notes:\n\n" + "\n\n".join(always_notes)
-    for store, tool_name in ((knowledge, "load_knowledge"), (playbooks, "load_playbook")):
-        def load_asset(name: str, _store=store, _tool_name=tool_name) -> dict[str, Any]:
-            asset = _store.get(name, workspace=workspace_key)
+    def make_asset_loader(store: AssetStore, tool_name: str):
+        def load_asset(name: str) -> dict[str, Any]:
+            asset = store.get(name, workspace=workspace_key)
             if asset is None or not asset.enabled:
-                return {"error": f"unknown {_tool_name.removeprefix('load_')}: {name}"}
+                return {"error": f"unknown {tool_name.removeprefix('load_')}: {name}"}
             return {"name": asset.name, "description": asset.description, "body": asset.body}
 
         load_asset.__name__ = tool_name
+        return load_asset
+
+    for store, tool_name in ((knowledge, "load_knowledge"), (playbooks, "load_playbook")):
+        load_asset = make_asset_loader(store, tool_name)
         registry.register(
             ai.tool(
                 load_asset,
