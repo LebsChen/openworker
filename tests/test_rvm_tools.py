@@ -351,3 +351,35 @@ def test_lsp_tools_are_capability_gated_normalized_and_remote_path_safe():
         r"C:\Workspace\main.py", 1, 1
     )
     assert result["text"] == "str"
+
+
+def test_lsp_locations_accept_flattened_rvm_positions_and_windows_uris():
+    class Flattened(FakeClient):
+        def lsp(self, **arguments):
+            if arguments["op"] == "definition":
+                return [{
+                    "uri": "file:///c%3A/Workspace/lib.py",
+                    "path": "/c:/Workspace/lib.py",
+                    "line": 1,
+                    "character": 5,
+                }]
+            return [
+                {
+                    "uri": "file:///c%3A/Workspace/main.py",
+                    "path": "/c:/Workspace/main.py",
+                    "line": 3,
+                    "character": 10,
+                },
+            ]
+
+    remote = target(Flattened(), style="windows")
+    remote.capabilities = {"lsp"}
+    tools = {tool.__name__: tool for tool in remote_lsp_tools(remote)}
+    assert tools["definition"]("main.py", 4, 11, "python") == {
+        "items": [{"file": "lib.py", "line": 1, "column": 5}],
+        "count": 1,
+    }
+    assert tools["references"]("lib.py", 2, 6, "python") == {
+        "items": [{"file": "main.py", "line": 3, "column": 10}],
+        "count": 1,
+    }

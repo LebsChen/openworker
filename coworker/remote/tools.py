@@ -634,11 +634,19 @@ def _lsp_location(target: RemoteTarget, item: Any) -> dict[str, Any] | None:
     if not isinstance(item, dict):
         return None
     location = item.get("location") if isinstance(item.get("location"), dict) else item
-    uri = location.get("uri") or location.get("targetUri")
+    uri = location.get("uri") or location.get("targetUri") or location.get("path")
     range_value = location.get("range") or location.get("targetRange") or location.get("selectionRange")
-    if not isinstance(uri, str) or not isinstance(range_value, dict):
+    if not isinstance(uri, str):
         return None
-    start = range_value.get("start") or {}
+    if isinstance(range_value, dict):
+        start = range_value.get("start") or {}
+    elif "line" in location or "character" in location:
+        start = {
+            "line": max(0, int(location.get("line", 0)) - 1),
+            "character": max(0, int(location.get("character", 0)) - 1),
+        }
+    else:
+        return None
     raw_path = unquote(urlparse(uri).path) if uri.startswith("file://") else uri
     if target.style.name == "windows" and re.match(r"^/[A-Za-z]:", raw_path):
         raw_path = raw_path[1:].replace("/", "\\")
