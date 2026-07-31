@@ -74,6 +74,38 @@ def test_agents_and_memory_rest(tmp_path):
     )
 
 
+def test_new_session_unknown_host_is_reported_without_local_fallback(tmp_path):
+    manager = SessionManager(workspace=tmp_path, provider=ScriptedProvider([]))
+    with TestClient(create_app(manager)) as client:
+        with client.websocket_connect(
+            "/ws/session/new-remote?workspace="
+            + str(tmp_path)
+            + "&host_id=does-not-exist"
+        ) as ws:
+            event = ws.receive_json()
+            assert event["type"] == "error"
+            assert "unknown RVM host" in event["data"]["error"]
+    assert manager.session_store.load("new-remote") is None
+
+
+def test_unsaved_host_probe_does_not_register_host(tmp_path, monkeypatch):
+    import coworker.server.app as server_app
+
+    manager = SessionManager(workspace=tmp_path, provider=ScriptedProvider([]))
+    monkeypatch.setattr(
+        server_app,
+        "_probe_rvm",
+        lambda base_url, token: {"status": "online", "base_url": base_url},
+    )
+    with TestClient(create_app(manager)) as client:
+        response = client.post(
+            "/v1/rvm/hosts/test",
+            json={"base_url": "http://candidate", "token": "candidate-token"},
+        )
+    assert response.json()["status"] == "online"
+    assert manager.rvm_hosts.list() == []
+
+
 def test_disable_persona_archives_its_sessions(tmp_path):
     """Disable = "put this coworker and its history away": the persona's real sessions are
     archived atomically server-side (so its sidebar section disappears with it), internal

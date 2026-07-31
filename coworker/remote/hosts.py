@@ -19,6 +19,7 @@ class RvmHost:
     base_url: str
     platform: str | None = None
     workspace: str | None = None
+    offline: bool = False
 
 
 class RvmHostStore:
@@ -34,12 +35,37 @@ class RvmHostStore:
             raw = json.loads(self.path.read_text(encoding="utf-8")) if self.path.is_file() else {}
         except (OSError, ValueError):
             raw = {}
+        if not raw and self.path.name == "rvm-hosts.json":
+            legacy_path = self.path.with_name("remote-hosts.json")
+            try:
+                legacy = json.loads(legacy_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                legacy = {}
+            if isinstance(legacy, dict):
+                for item in legacy.get("hosts", []):
+                    if not isinstance(item, dict) or not item.get("name") or not item.get("url"):
+                        continue
+                    host_id = str(item["name"])
+                    host = RvmHost(
+                        id=host_id,
+                        name=host_id,
+                        base_url=str(item["url"]).rstrip("/"),
+                        offline=bool(item.get("offline", False)),
+                    )
+                    self._hosts[host_id] = host
+                    token = item.get("token")
+                    self.put(
+                        host,
+                        str(token) if token else None,
+                        str(item.get("vnc_password") or item.get("vncPassword") or ""),
+                    )
+                return
         for item in raw.get("hosts", []) if isinstance(raw, dict) else []:
             if isinstance(item, dict) and item.get("id") and item.get("base_url"):
                 self._hosts[str(item["id"])] = RvmHost(
                     id=str(item["id"]), name=str(item.get("name") or item["id"]),
                     base_url=str(item["base_url"]), platform=item.get("platform"),
-                    workspace=item.get("workspace"),
+                    workspace=item.get("workspace"), offline=bool(item.get("offline", False)),
                 )
 
     def _save(self) -> None:
@@ -56,16 +82,44 @@ class RvmHostStore:
         with self._lock:
             return self._hosts.get(host_id)
 
-    def token(self, host_id: str) -> str | None:
+    def _secret(self, host_id: str) -> dict[str, object]:
         data = self.secrets.get(self._profile(host_id))
-        return str(data["token"]) if data and data.get("token") else None
+        return data if isinstance(data, dict) else {}
 
-    def put(self, host: RvmHost, token: str | None = None) -> None:
+    def token(self, host_id: str) -> str | None:
+        value = self._secret(host_id).get("token")
+        return str(value) if value else None
+
+    def vnc_password(self, host_id: str) -> str | None:
+        value = self._secret(host_id).get("vnc_password")
+        return str(value) if value else None
+
+    def put(
+        self,
+        host: RvmHost,
+        token: str | None = None,
+        vnc_password: str | None = None,
+    ) -> None:
         with self._lock:
             self._hosts[host.id] = host
             self._save()
+            secret = self._secret(host.id)
             if token is not None:
-                self.secrets.put(self._profile(host.id), {"type": "rvm", "host_id": host.id, "token": token})
+                secret["token"] = token
+            if vnc_password is not None:
+                secret["vnc_password"] = vnc_password
+            if secret:
+                secret.update({"type": "rvm", "host_id": host.id})
+                self.secrets.put(self._profile(host.id), secret)
+
+    def set_offline(self, host_id: str, offline: bool) -> bool:
+        with self._lock:
+            host = self._hosts.get(host_id)
+            if host is None:
+                return False
+            host.offline = offline
+            self._save()
+            return True
 
     def delete(self, host_id: str) -> bool:
         with self._lock:

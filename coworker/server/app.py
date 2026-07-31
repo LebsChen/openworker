@@ -164,6 +164,7 @@ from ..inbox import VIS_INBOX, VIS_INLINE, args_preview
 from ..permissions import Mode
 from ..providers import AssistantTurn
 from ..remote.client import (
+    RvmClient,
     RvmUnauthorizedError,
     RvmUnreachableError,
     RvmTimeoutError,
@@ -176,6 +177,30 @@ from .manager import (
     UnknownSessionError,
 )
 from .token import token_matches
+
+
+def _probe_rvm(base_url: str, token: str) -> dict[str, Any]:
+    started = time.monotonic()
+    client = RvmClient(base_url, token, host_label="probe")
+    try:
+        health = client.health()
+        try:
+            info = client.info()
+        except RvmUnauthorizedError as exc:
+            return {"status": "auth_failed", "latency_ms": round((time.monotonic() - started) * 1000), "error": str(exc), "capabilities": health.get("capabilities", [])}
+        except (RvmUnreachableError, RvmTimeoutError) as exc:
+            return {"status": "offline", "latency_ms": round((time.monotonic() - started) * 1000), "error": str(exc), "capabilities": health.get("capabilities", [])}
+        except Exception as exc:
+            return {"status": "offline", "latency_ms": round((time.monotonic() - started) * 1000), "error": str(exc), "capabilities": health.get("capabilities", [])}
+        return {"status": "online", "latency_ms": round((time.monotonic() - started) * 1000), "capabilities": health.get("capabilities", []), "platform": health.get("platform"), "workspace": health.get("workspace"), "info": info}
+    except RvmUnauthorizedError as exc:
+        return {"status": "auth_failed", "latency_ms": round((time.monotonic() - started) * 1000), "error": str(exc)}
+    except (RvmUnreachableError, RvmTimeoutError) as exc:
+        return {"status": "offline", "latency_ms": round((time.monotonic() - started) * 1000), "error": str(exc)}
+    except Exception as exc:
+        return {"status": "offline", "latency_ms": round((time.monotonic() - started) * 1000), "error": str(exc)}
+    finally:
+        client.close()
 
 
 def create_app(manager: SessionManager) -> FastAPI:
@@ -1524,6 +1549,22 @@ def create_app(manager: SessionManager) -> FastAPI:
             return
         await ws.accept(subprotocol="openworker" if api_token else None)
         agent = ws.query_params.get("agent") or "code"
+        requested_host_id = (ws.query_params.get("host_id") or "").strip() or None
+        existing_record = manager.session_store.load(session_id)
+        if existing_record is not None and requested_host_id and requested_host_id != (existing_record.host_id or "local"):
+            await ws.send_json(
+                {
+                    "type": "error",
+                    "data": {
+                        "error": (
+                            f"Session is permanently bound to {existing_record.host_id or 'local'}; "
+                            "start a new session to use another host."
+                        )
+                    },
+                }
+            )
+            await ws.close(code=1008)
+            return
 
         # All four interactive prompts (approval / question / directory / plan) are parked as Inbox
         # items and awaited via inbox.wait — so they survive a dropped socket (redelivered on
@@ -1743,17 +1784,28 @@ def create_app(manager: SessionManager) -> FastAPI:
         mcp_tools = await manager.prepare_mcp_tools(
             session_id, workspace=workspace, agent=agent
         )
-        engine = manager.get_engine(
-            session_id,
-            workspace=workspace,
-            agent=agent,
-            isolate=isolate,
-            approver=approver,
-            extra_tools=mcp_tools,
-            directory_requester=directory_requester,
-            plan_approver=plan_approver,
-            question_asker=question_asker,
-        )
+        try:
+            engine = manager.get_engine(
+                session_id,
+                workspace=workspace,
+                agent=agent,
+                host_id=requested_host_id,
+                isolate=isolate,
+                approver=approver,
+                extra_tools=mcp_tools,
+                directory_requester=directory_requester,
+                plan_approver=plan_approver,
+                question_asker=question_asker,
+            )
+        except (
+            UnknownRvmHostError,
+            RvmHostOfflineError,
+            RvmHostUnauthorizedError,
+            ValueError,
+        ) as exc:
+            await ws.send_json({"type": "error", "data": {"error": str(exc)}})
+            await ws.close(code=1011)
+            return
         if engine is None:
             await ws.send_json(
                 {
@@ -2144,6 +2196,8 @@ def create_app(manager: SessionManager) -> FastAPI:
                     "platform": h.platform,
                     "workspace": h.workspace,
                     "has_token": manager.rvm_hosts.token(h.id) is not None,
+                    "offline": h.offline,
+                    "status": "configured",
                 }
                 for h in manager.rvm_hosts.list()
             ]
@@ -2160,11 +2214,16 @@ def create_app(manager: SessionManager) -> FastAPI:
             base_url=str(body.get("base_url") or "").rstrip("/"),
             platform=body.get("platform"),
             workspace=body.get("workspace"),
+            offline=manager.rvm_hosts.get(host_id).offline if manager.rvm_hosts.get(host_id) else False,
         )
         if not host.base_url:
             return JSONResponse({"ok": False, "error": "base_url required"}, status_code=400)
-        manager.rvm_hosts.put(host, str(body.get("token")) if body.get("token") is not None else None)
-        return {"ok": True, "host": {"id": host.id, "name": host.name, "base_url": host.base_url, "platform": host.platform, "workspace": host.workspace, "has_token": manager.rvm_hosts.token(host.id) is not None}}
+        manager.rvm_hosts.put(
+            host,
+            str(body.get("token")) if body.get("token") is not None else None,
+            str(body.get("vnc_password") or ""),
+        )
+        return {"ok": True, "host": {"id": host.id, "name": host.name, "base_url": host.base_url, "platform": host.platform, "workspace": host.workspace, "offline": host.offline, "has_token": manager.rvm_hosts.token(host.id) is not None}}
 
     @app.put("/v1/rvm/hosts/{host_id}")
     def rvm_host_update(host_id: str, body: dict[str, Any]) -> dict[str, Any]:
@@ -2179,9 +2238,20 @@ def create_app(manager: SessionManager) -> FastAPI:
             base_url=str(body.get("base_url", old.base_url)).rstrip("/"),
             platform=body.get("platform", old.platform),
             workspace=body.get("workspace", old.workspace),
+            offline=old.offline,
         )
-        manager.rvm_hosts.put(host, str(body["token"]) if "token" in body else None)
-        return {"ok": True, "host": {"id": host.id, "name": host.name, "base_url": host.base_url, "platform": host.platform, "workspace": host.workspace, "has_token": manager.rvm_hosts.token(host.id) is not None}}
+        manager.rvm_hosts.put(
+            host,
+            str(body["token"]) if "token" in body else None,
+            str(body["vnc_password"]) if "vnc_password" in body else None,
+        )
+        return {"ok": True, "host": {"id": host.id, "name": host.name, "base_url": host.base_url, "platform": host.platform, "workspace": host.workspace, "offline": host.offline, "has_token": manager.rvm_hosts.token(host.id) is not None}}
+
+    @app.post("/v1/rvm/hosts/{host_id}/offline")
+    def rvm_host_offline(host_id: str, body: dict[str, Any]) -> dict[str, Any]:
+        if not manager.rvm_hosts.set_offline(host_id, bool(body.get("offline"))):
+            return JSONResponse({"error": "host not found"}, status_code=404)
+        return {"ok": True, "offline": bool(body.get("offline"))}
 
     @app.delete("/v1/rvm/hosts/{host_id}")
     def rvm_host_delete(host_id: str) -> dict[str, Any]:
@@ -2192,29 +2262,17 @@ def create_app(manager: SessionManager) -> FastAPI:
         host = manager.rvm_hosts.get(host_id)
         if host is None:
             return JSONResponse({"status": "offline", "error": "host not found"}, status_code=404)
-        started = time.monotonic()
-        client = None
-        try:
-            client = manager.rvm_hosts.client(host_id)
-            health = client.health()
-            try:
-                info = client.info()
-            except RvmUnauthorizedError as exc:
-                return {"status": "auth-failed", "latency_ms": round((time.monotonic() - started) * 1000), "error": str(exc), "capabilities": health.get("capabilities", [])}
-            except (RvmUnreachableError, RvmTimeoutError) as exc:
-                return {"status": "offline", "latency_ms": round((time.monotonic() - started) * 1000), "error": str(exc), "capabilities": health.get("capabilities", [])}
-            except Exception as exc:
-                return {"status": "offline", "latency_ms": round((time.monotonic() - started) * 1000), "error": str(exc), "capabilities": health.get("capabilities", [])}
-            return {"status": "online", "latency_ms": round((time.monotonic() - started) * 1000), "capabilities": health.get("capabilities", []), "platform": health.get("platform"), "workspace": health.get("workspace"), "info": info}
-        except RvmUnauthorizedError as exc:
-            return {"status": "auth-failed", "latency_ms": round((time.monotonic() - started) * 1000), "error": str(exc)}
-        except (RvmUnreachableError, RvmTimeoutError) as exc:
-            return {"status": "offline", "latency_ms": round((time.monotonic() - started) * 1000), "error": str(exc)}
-        except Exception as exc:
-            return {"status": "offline", "latency_ms": round((time.monotonic() - started) * 1000), "error": str(exc)}
-        finally:
-            if client is not None:
-                client.close()
+        if host.offline:
+            return {"status": "offline", "error": "host is marked offline"}
+        return _probe_rvm(host.base_url, manager.rvm_hosts.token(host_id) or "")
+
+    @app.post("/v1/rvm/hosts/test")
+    def rvm_host_probe(body: dict[str, Any]) -> dict[str, Any]:
+        base_url = str(body.get("base_url") or "").rstrip("/")
+        token = str(body.get("token") or "")
+        if not base_url or not token:
+            return JSONResponse({"status": "unknown", "error": "base_url and token are required"}, status_code=400)
+        return _probe_rvm(base_url, token)
 
     return app
 

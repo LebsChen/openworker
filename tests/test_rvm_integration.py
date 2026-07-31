@@ -96,12 +96,49 @@ def test_host_store_keeps_token_private(tmp_path):
     host_file = tmp_path / "rvm-hosts.json"
     secrets = SecretStore(tmp_path / "secrets.json")
     store = RvmHostStore(host_file, secrets=secrets)
-    store.put(RvmHost("h", "DevBox", "http://rvm"), "super-secret")
+    store.put(RvmHost("h", "DevBox", "http://rvm"), "super-secret", "vnc-secret")
     assert "super-secret" not in host_file.read_text()
     assert oct(host_file.stat().st_mode & 0o777) == "0o600"
     assert "super-secret" in json.dumps(secrets.get("rvm:h"))
+    assert store.vnc_password("h") == "vnc-secret"
     assert "super-secret" not in repr(store.get("h"))
     assert "super-secret" not in repr(store.client("h"))
+
+
+def test_host_store_migrates_desktop_profiles_into_secret_store(tmp_path):
+    legacy = tmp_path / "remote-hosts.json"
+    legacy.write_text(
+        json.dumps(
+            {
+                "hosts": [
+                    {
+                        "name": "win-antec",
+                        "url": "http://rvm.example",
+                        "token": "desktop-token",
+                        "vncPassword": "vnc-secret",
+                        "offline": True,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    secrets = SecretStore(tmp_path / "secrets.json")
+    store = RvmHostStore(tmp_path / "rvm-hosts.json", secrets=secrets)
+
+    assert store.get("win-antec").base_url == "http://rvm.example"
+    assert store.token("win-antec") == "desktop-token"
+    assert store.vnc_password("win-antec") == "vnc-secret"
+    assert store.get("win-antec").offline is True
+
+
+def test_host_store_offline_toggle_is_persisted(tmp_path):
+    store = RvmHostStore(tmp_path / "rvm-hosts.json", secrets=SecretStore(tmp_path / "secrets.json"))
+    store.put(RvmHost("h", "DevBox", "http://rvm"), "token")
+    assert store.set_offline("h", True)
+    reloaded = RvmHostStore(tmp_path / "rvm-hosts.json", secrets=store.secrets)
+    assert reloaded.get("h").offline is True
+    assert "desktop-token" not in (tmp_path / "rvm-hosts.json").read_text()
 
 
 def test_unknown_host_is_hard_failure_without_local_fallback(tmp_path, monkeypatch):

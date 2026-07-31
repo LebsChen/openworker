@@ -843,14 +843,13 @@ pub fn run() {
         serde_json::json!({
             "id": host.name,
             "name": host.name,
-            "base_url": host.url,
-            "url": host.url,
-            "ws_url": host.url
-                .replacen("https://", "wss://", 1)
-                .replacen("http://", "ws://", 1),
-            "token": host.token,
-            "vnc_password": host.vnc_password,
-            "offline": host.offline,
+            "base_url": http,
+            "url": http,
+            "ws_url": ws,
+            "token": api_token,
+            // The Python sidecar's RvmHostStore is authoritative. Legacy desktop
+            // profile state is migrated there and must not override a server probe.
+            "offline": false,
             "local": false
         })
     }));
