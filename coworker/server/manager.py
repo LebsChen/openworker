@@ -87,6 +87,7 @@ from ..providers import (
     verify_provider_key,
 )
 from ..secrets import SecretStore, state_dir
+from ..assets import AssetStore, PLAYBOOK_TEMPLATE
 from ..sessions import SessionRecord
 from ..session_workspaces import SessionWorkspaceManager
 from ..skills import SkillLoader
@@ -171,6 +172,10 @@ class SessionManager:
         self._autotitle_attempts: dict[str, int] = {}
         self.workspace_trust = WorkspaceTrustStore()
         self.secrets = SecretStore()
+        self.asset_stores = {
+            "knowledge": AssetStore("knowledge"),
+            "playbooks": AssetStore("playbooks"),
+        }
         self.rvm_hosts = RvmHostStore(secrets=self.secrets)
         # No explicit provider injected → route by the model's `provider:` prefix (OpenAI default,
         # Ollama, …). Tests inject a provider directly and bypass the router. The same router is
@@ -4222,6 +4227,29 @@ class SessionManager:
     def list_skills(self) -> list[dict[str, Any]]:
         loader = SkillLoader([state_dir() / "skills"])
         return loader.catalog()
+
+    def list_assets(self, kind: str, *, workspace: str | None = None) -> list[dict[str, Any]]:
+        return self.asset_stores[kind].list(workspace=workspace)
+
+    def get_asset(self, kind: str, name: str, *, workspace: str | None = None) -> dict[str, Any] | None:
+        asset = self.asset_stores[kind].get(name, workspace=workspace)
+        return (asset.metadata() | {"body": asset.body}) if asset else None
+
+    def save_asset(self, kind: str, body: dict[str, Any], *, existing: str | None = None) -> dict[str, Any]:
+        return self.asset_stores[kind].save(body, existing=existing)
+
+    def delete_asset(self, kind: str, name: str) -> dict[str, Any]:
+        return {"ok": self.asset_stores[kind].delete(name)}
+
+    def list_secrets(self) -> list[dict[str, Any]]:
+        return self.secrets.status()
+
+    def save_secret(self, profile: str, value: dict[str, Any]) -> dict[str, Any]:
+        self.secrets.put(profile, value)
+        return {"ok": True, "secrets": self.list_secrets()}
+
+    def delete_secret(self, profile: str) -> dict[str, Any]:
+        return {"ok": self.secrets.delete(profile), "secrets": self.list_secrets()}
 
     def list_memory(self) -> list[dict[str, Any]]:
         return [

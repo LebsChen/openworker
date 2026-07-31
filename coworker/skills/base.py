@@ -23,6 +23,7 @@ class Skill:
     instructions: str = ""  # full body — loaded on demand
     path: Optional[str] = None
     allowed_tools: list[str] = field(default_factory=list)
+    enabled: bool = True
 
 
 class SkillLoader:
@@ -38,7 +39,8 @@ class SkillLoader:
             md = sub / "SKILL.md"
             if md.is_file():
                 skill = _parse_skill(md)
-                self._skills[skill.name] = skill
+                if skill.enabled:
+                    self._skills[skill.name] = skill
 
     def names(self) -> list[str]:
         return list(self._skills)
@@ -55,7 +57,7 @@ class SkillLoader:
 
 def _parse_skill(md: Path) -> Skill:
     text = md.read_text(encoding="utf-8")
-    name, description, allowed, body = md.parent.name, "", [], text
+    name, description, allowed, body, enabled = md.parent.name, "", [], text, True
     if text.startswith("---"):
         end = text.find("\n---", 3)
         if end != -1:
@@ -72,12 +74,15 @@ def _parse_skill(md: Path) -> Skill:
                     description = value
                 elif key in ("allowed-tools", "allowed_tools"):
                     allowed = [t.strip() for t in value.split(",") if t.strip()]
+                elif key == "enabled":
+                    enabled = value.lower() not in {"false", "0", "no"}
     return Skill(
         name=name,
         description=description,
         instructions=body.strip(),
         path=str(md.parent),
         allowed_tools=allowed,
+        enabled=enabled,
     )
 
 

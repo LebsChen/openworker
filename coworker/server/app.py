@@ -595,6 +595,55 @@ def create_app(manager: SessionManager) -> FastAPI:
     def skills() -> dict[str, Any]:
         return {"skills": manager.list_skills()}
 
+    @app.get("/v1/assets/{kind}")
+    def assets(kind: str, workspace: str | None = None) -> dict[str, Any]:
+        if kind not in {"knowledge", "playbooks"}:
+            return {"ok": False, "error": "unknown asset kind"}
+        return {"assets": manager.list_assets(kind, workspace=workspace)}
+
+    @app.get("/v1/assets/{kind}/{name}")
+    def asset_detail(kind: str, name: str, workspace: str | None = None) -> dict[str, Any]:
+        if kind not in {"knowledge", "playbooks"}:
+            return {"ok": False, "error": "unknown asset kind"}
+        item = manager.get_asset(kind, name, workspace=workspace)
+        return item or {"ok": False, "error": "asset not found"}
+
+    @app.post("/v1/assets/{kind}")
+    def asset_create(kind: str, body: dict) -> dict[str, Any]:
+        if kind not in {"knowledge", "playbooks"}:
+            return {"ok": False, "error": "unknown asset kind"}
+        try:
+            return manager.save_asset(kind, body or {})
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
+
+    @app.patch("/v1/assets/{kind}/{name}")
+    def asset_update(kind: str, name: str, body: dict) -> dict[str, Any]:
+        if kind not in {"knowledge", "playbooks"}:
+            return {"ok": False, "error": "unknown asset kind"}
+        try:
+            return manager.save_asset(kind, body or {}, existing=name)
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
+
+    @app.delete("/v1/assets/{kind}/{name}")
+    def asset_delete(kind: str, name: str) -> dict[str, Any]:
+        if kind not in {"knowledge", "playbooks"}:
+            return {"ok": False, "error": "unknown asset kind"}
+        return manager.delete_asset(kind, name)
+
+    @app.get("/v1/secrets")
+    def secrets() -> dict[str, Any]:
+        return {"secrets": manager.list_secrets()}
+
+    @app.put("/v1/secrets/{profile}")
+    def secret_save(profile: str, body: dict) -> dict[str, Any]:
+        return manager.save_secret(profile, body or {})
+
+    @app.delete("/v1/secrets/{profile}")
+    def secret_delete(profile: str) -> dict[str, Any]:
+        return manager.delete_secret(profile)
+
     @app.get("/v1/workspaces/recent")
     def recent_workspaces() -> dict[str, Any]:
         return {"workspaces": manager.recent_workspaces()}
