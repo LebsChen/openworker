@@ -1534,6 +1534,40 @@ class SessionManager:
         return target, None
 
     def read_artifact(self, session_id: str, path: str) -> dict[str, Any]:
+        record = self.session_store.load(session_id)
+        if record is not None and record.host_id and record.host_id != "local":
+            target = self.resolve_remote_target(session_id)
+            try:
+                try:
+                    remote_path = target.resolve(path)
+                except Exception as exc:
+                    return {"ok": False, "error": str(exc)}
+                metadata = target.client.stat(remote_path)
+                if not metadata.get("exists", True):
+                    return {"ok": False, "error": "not found"}
+                kind = _artifact_kind(Path(remote_path))
+                if kind == "office":
+                    return {"ok": True, "path": path, "kind": "office"}
+                remote = target.client.read(remote_path)
+                if isinstance(remote.get("data_url"), str):
+                    return {
+                        "ok": True,
+                        "path": path,
+                        "kind": kind,
+                        "data_url": remote["data_url"],
+                    }
+                content = remote.get("content")
+                if not isinstance(content, str):
+                    return {"ok": False, "error": "remote file cannot be previewed"}
+                return {
+                    "ok": True,
+                    "path": path,
+                    "kind": kind,
+                    "content": content[:500000],
+                    "truncated": len(content) > 500000,
+                }
+            finally:
+                target.client.close()
         target, err = self._artifact_target(session_id, path)
         if target is None:
             return {"ok": False, "error": err}
@@ -1590,6 +1624,26 @@ class SessionManager:
         import subprocess
         import sys
 
+        record = self.session_store.load(session_id)
+        if record is not None and record.host_id and record.host_id != "local":
+            target = self.resolve_remote_target(session_id)
+            try:
+                remote_path = target.resolve(path)
+                if target.style.name == "windows":
+                    command = (
+                        f'explorer.exe /select,"{remote_path}"'
+                        if mode == "reveal"
+                        else f'start "" "{remote_path}"'
+                    )
+                else:
+                    command = f'xdg-open "{remote_path}"'
+                result = target.client.exec_sync(command)
+                return {
+                    "ok": result.get("exit_code", 0) == 0,
+                    **({"error": result.get("stderr")} if result.get("exit_code", 0) else {}),
+                }
+            finally:
+                target.client.close()
         target, err = self._artifact_target(session_id, path)
         if target is None:
             return {"ok": False, "error": err}

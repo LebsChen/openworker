@@ -766,7 +766,12 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function formatTime(epochSeconds: number): string {
-  if (!epochSeconds) return "";
+export function formatTime(value: number | string): string {
+  if (!value) return "";
+  const epochSeconds =
+    typeof value === "number"
+      ? value
+      : (Date.parse(value) / 1000);
+  if (!Number.isFinite(epochSeconds) || epochSeconds <= 0) return "";
   return new Date(epochSeconds * 1000).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }

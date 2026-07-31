@@ -294,6 +294,48 @@ def test_remote_artifacts_use_rvm_listing(monkeypatch, tmp_path):
     assert artifacts[0]["abs_path"].endswith(r"\report.txt")
 
 
+def test_remote_artifact_read_uses_rvm_client(monkeypatch, tmp_path):
+    class Client:
+        def health(self):
+            return {"platform": "windows"}
+
+        def stat(self, path):
+            return {"exists": True, "size": 8}
+
+        def read(self, path):
+            assert path.endswith(r"\ws-check.txt")
+            return {"content": "remote!\n"}
+
+        def close(self):
+            pass
+
+    manager = SessionManager(data_dir=tmp_path)
+    manager.rvm_hosts.put(
+        RvmHost("winrvm", "Windows", "http://rvm", platform="windows", workspace=r"C:\Users\Team"),
+        "token",
+    )
+    monkeypatch.setattr(manager.rvm_hosts, "client", lambda _host_id: Client())
+    manager.session_store.save(
+        SessionRecord(
+            session_id="remote-read",
+            workspace=r"C:\Users\Team\.coworker\sessions\remote-read",
+            model="m",
+            mode="interactive",
+            host_id="winrvm",
+        )
+    )
+
+    result = manager.read_artifact("remote-read", "ws-check.txt")
+
+    assert result == {
+        "ok": True,
+        "path": "ws-check.txt",
+        "kind": "text",
+        "content": "remote!\n",
+        "truncated": False,
+    }
+
+
 def test_cached_remote_session_rejects_host_marked_offline(tmp_path):
     manager = SessionManager(data_dir=tmp_path)
     host = RvmHost("rvm", "Remote", "http://rvm", platform="linux", workspace="/remote")

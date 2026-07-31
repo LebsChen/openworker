@@ -475,15 +475,32 @@ export function App() {
         const restoredHost =
           sessionHosts().find((host) => host.id === last.host_id) || sessionHosts()[0];
         if (restoredHost) {
+          let historyHost = restoredHost;
           activeSessionRef.current = last.session_id;
-          activeHostRef.current = restoredHost.id;
-          setSessionHost(restoredHost);
-          rememberSessionHost(last.session_id, restoredHost);
+          activeHostRef.current = historyHost.id;
+          setSessionHost(historyHost);
+          rememberSessionHost(last.session_id, historyHost);
           setSessionOffline(last.host_status === "offline");
+          if (!historyHost.local) {
+            setHostProbeResult(historyHost.id, { status: "checking", error: "Checking connection…" });
+            try {
+              const result = await testRvmHost(historyHost.id);
+              setHostProbeResult(historyHost.id, result);
+              historyHost = {
+                ...historyHost,
+                status: result.status === "checking" ? "unknown" : result.status,
+                offline: result.status === "offline" || result.status === "auth_failed",
+              };
+              setSessionHost(historyHost);
+              setSessionOffline(historyHost.offline || last.host_status === "offline");
+            } catch {
+              setSessionHistoryUnavailable(true);
+            }
+          }
           setSessionHistoryUnavailable(
-            !restoredHost.local &&
-              (Boolean(restoredHost.offline) ||
-                restoredHost.status !== "online" ||
+            !historyHost.local &&
+              (Boolean(historyHost.offline) ||
+                historyHost.status !== "online" ||
                 last.host_status === "offline"),
           );
         }

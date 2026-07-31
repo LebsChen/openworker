@@ -486,7 +486,7 @@ export interface ArtifactInfo {
   name: string;
   kind: "markdown" | "html" | "image" | "code" | "text" | string;
   size: number;
-  modified_at: number;
+  modified_at: number | string;
 }
 
 export interface ArtifactContent {

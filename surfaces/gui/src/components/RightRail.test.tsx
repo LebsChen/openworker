@@ -1,11 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { isRvmPanelTab, RightRail } from "./RightRail";
+import { formatTime, isRvmPanelTab, RightRail } from "./RightRail";
 
 vi.mock("./AccessSection", () => ({ AccessSection: () => <div data-testid="access-section" /> }));
 vi.mock("./Markdown", () => ({ Markdown: () => null, OPEN_ARTIFACT_EVENT: "open-artifact" }));
 
 describe("right panel tab model", () => {
+  it("formats ISO artifact timestamps without producing Invalid Date", () => {
+    expect(formatTime("2026-01-02T03:04:05.000Z")).not.toContain("Invalid");
+    expect(formatTime("2026-01-02T03:04:05.000Z")).not.toBe("");
+  });
+
   it("keeps RVM-only tabs distinct from local data tabs", () => {
     expect(isRvmPanelTab("shell")).toBe(true);
     expect(isRvmPanelTab("ide")).toBe(true);
