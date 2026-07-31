@@ -753,7 +753,13 @@ def create_app(manager: SessionManager) -> FastAPI:
 
     @app.get("/v1/sessions/{session_id}/artifacts")
     def session_artifacts(session_id: str) -> dict[str, Any]:
-        return {"artifacts": manager.list_artifacts(session_id)}
+        try:
+            return {"artifacts": manager.list_artifacts(session_id)}
+        except RvmHostOfflineError as exc:
+            return JSONResponse(
+                {"artifacts": [], "status": "offline", "error": str(exc)},
+                status_code=503,
+            )
 
     @app.get("/v1/sessions/{session_id}/artifacts/read")
     def session_artifact_read(session_id: str, path: str) -> dict[str, Any]:
