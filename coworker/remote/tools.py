@@ -665,7 +665,12 @@ def _lsp_truncate(items: list[dict[str, Any]], limit: int) -> dict[str, Any]:
 
 
 def _lsp_hover(value: Any) -> dict[str, Any]:
-    contents = value.get("contents") if isinstance(value, dict) else value
+    if isinstance(value, dict) and "contents" in value:
+        contents = value["contents"]
+    elif isinstance(value, dict) and ("value" in value or "language" in value):
+        contents = value
+    else:
+        contents = value
     parts: list[str] = []
     values = contents if isinstance(contents, list) else [contents]
     for item in values:
