@@ -883,24 +883,28 @@ def create_app(manager: SessionManager) -> FastAPI:
             return resolved
         target, token = resolved
         folder = target.workspace
-        if request.query_params.get("folder") != folder:
-            location = f"/v1/sessions/{session_id}/ide/?" + urlencode({"folder": folder})
-            return RedirectResponse(location, status_code=307)
-        existing_key = request.cookies.get(ide_session_cookie)
-        existing_state = _ide_key_state(existing_key)
-        target_base_url = target.client.base_url.rstrip("/")
-        reuse_key = bool(
-            existing_key
-            and existing_state
-            and existing_state["session_id"] == session_id
-            and existing_state["host_id"] == target.host.id
-            and existing_state["base_url"] == target_base_url
-        )
-        if existing_state and not reuse_key:
-            _revoke_session_ide_keys(session_id)
-        key = existing_key if reuse_key else None
-        cookies: dict[str, str] = dict(existing_state["cookies"]) if reuse_key else {}
         try:
+            if request.query_params.get("folder") != folder:
+                location = f"/v1/sessions/{session_id}/ide/?" + urlencode(
+                    {"folder": folder}
+                )
+                return RedirectResponse(location, status_code=307)
+            existing_key = request.cookies.get(ide_session_cookie)
+            existing_state = _ide_key_state(existing_key)
+            target_base_url = target.client.base_url.rstrip("/")
+            reuse_key = bool(
+                existing_key
+                and existing_state
+                and existing_state["session_id"] == session_id
+                and existing_state["host_id"] == target.host.id
+                and existing_state["base_url"] == target_base_url
+            )
+            if existing_state and not reuse_key:
+                _revoke_session_ide_keys(session_id)
+            key = existing_key if reuse_key else None
+            cookies: dict[str, str] = (
+                dict(existing_state["cookies"]) if reuse_key else {}
+            )
             if ide_http_client is None:
                 return _ide_error("Web IDE proxy is not running", 503)
             base_url = target.client.base_url.rstrip("/") + "/"
