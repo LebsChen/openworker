@@ -39,6 +39,26 @@ export type RvmHostInfo = {
   base_url?: string;
   has_token?: boolean;
   status?: "online" | "offline" | "auth_failed" | "unknown" | "configured";
+  offline?: boolean;
+};
+
+export type RemoteHostProbeResult = {
+  status: "online" | "offline" | "auth_failed" | "checking" | "unknown";
+  latency_ms?: number;
+  health?: {
+    platform?: string;
+    host?: string;
+    version?: string;
+    capabilities?: string[];
+    vnc_port?: number | null;
+    ide_port?: number | null;
+  };
+  info?: {
+    hostname?: string;
+    cpus?: number;
+    memory_gb?: number;
+  };
+  error?: string;
 };
 
 export const sessionHosts = (): SessionHost[] => {
@@ -63,12 +83,21 @@ export async function listRvmHosts(): Promise<RvmHostInfo[]> {
   return ((await res.json()).hosts ?? []) as RvmHostInfo[];
 }
 
-export async function testRvmHost(hostId: string): Promise<Record<string, unknown>> {
+export async function testRvmHost(hostId: string): Promise<RemoteHostProbeResult> {
   const res = await fetch(`${httpBase()}/v1/rvm/hosts/${encodeURIComponent(hostId)}/test`, {
     method: "POST",
     headers: { "X-OpenWorker-Token": apiToken() },
   });
-  return (await res.json()) as Record<string, unknown>;
+  return (await res.json()) as RemoteHostProbeResult;
+}
+
+export async function probeRvmHost(baseUrl: string, token: string): Promise<RemoteHostProbeResult> {
+  const res = await fetch(`${httpBase()}/v1/rvm/hosts/test`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-OpenWorker-Token": apiToken() },
+    body: JSON.stringify({ base_url: baseUrl, token }),
+  });
+  return (await res.json()) as RemoteHostProbeResult;
 }
 
 export async function saveRvmHost(
@@ -76,15 +105,26 @@ export async function saveRvmHost(
   name: string,
   baseUrl: string,
   token: string,
+  vncPassword = "",
   platform?: string,
   workspace?: string,
 ): Promise<void> {
   const res = await fetch(`${httpBase()}/v1/rvm/hosts`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-OpenWorker-Token": apiToken() },
-    body: JSON.stringify({ id, name, base_url: baseUrl, token, platform, workspace }),
+    body: JSON.stringify({ id, name, base_url: baseUrl, token, vnc_password: vncPassword, platform, workspace }),
   });
   if (!res.ok) throw new Error((await res.json()).error || `Unable to save remote host (HTTP ${res.status}).`);
+  window.dispatchEvent(new Event("coworker-hosts-changed"));
+}
+
+export async function setRvmHostOffline(id: string, offline: boolean): Promise<void> {
+  const res = await fetch(`${httpBase()}/v1/rvm/hosts/${encodeURIComponent(id)}/offline`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-OpenWorker-Token": apiToken() },
+    body: JSON.stringify({ offline }),
+  });
+  if (!res.ok) throw new Error(`Unable to update remote host (HTTP ${res.status}).`);
   window.dispatchEvent(new Event("coworker-hosts-changed"));
 }
 
@@ -117,6 +157,7 @@ export async function refreshSessionHostsFromServer(): Promise<SessionHost[]> {
       token: apiToken(),
       local: false,
       status: host.status === "configured" ? "unknown" : host.status,
+      offline: host.offline,
     })),
   ];
   (globalThis as any).__COWORKER_HOSTS__ = hosts;

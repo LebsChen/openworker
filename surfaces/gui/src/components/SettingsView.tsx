@@ -5,8 +5,11 @@ import {
   deleteRvmHost,
   listRvmHosts,
   saveRvmHost,
+  probeRvmHost,
+  setRvmHostOffline,
   testRvmHost,
   type RvmHostInfo,
+  type RemoteHostProbeResult,
   getTrustedWorkspaces,
   setCompactionSettings,
   setOnboarded,
@@ -34,7 +37,6 @@ import {
   pickFolder,
   setAutostart,
   setKeepAwake,
-  type RemoteHostProbeResult,
   startDictation,
   stopDictation,
   verifyDictationModel,
@@ -174,7 +176,7 @@ function RemoteHostsSection() {
   const save = async () => {
     setError(null);
     try {
-      await saveRvmHost(name, name, url, token);
+      await saveRvmHost(name, name, url, token, vncPassword);
       setToken("");
       setEditing(null);
       setSaved(true);
@@ -197,7 +199,7 @@ function RemoteHostsSection() {
     }));
     setTesting(hostName);
     try {
-      const result = await testRvmHost(hostName) as RemoteHostProbeResult;
+      const result = await testRvmHost(hostName);
       if (result.status === "online") setLastSeen((current) => ({ ...current, [hostName]: Date.now() }));
       setProbeState((current) => ({ ...current, [hostName]: result }));
       setHostProbeResult(hostName, result);
@@ -232,7 +234,7 @@ function RemoteHostsSection() {
                 <span className="ml-2 text-[11px] text-muted">
                   {probeState[host.id]?.error === "Checking connection…"
                     ? "checking"
-                    : statusLabel(probeState[host.id]?.status || "unknown")}
+                    : host.offline ? "offline" : statusLabel(probeState[host.id]?.status || "unknown")}
                 </span>
               </div>
               <div className="text-[12px] text-muted truncate">{host.base_url || "Configured remote host"}</div>
@@ -273,6 +275,9 @@ function RemoteHostsSection() {
             }}>
               Edit
             </button>
+            <button className="text-[12px]" onClick={() => setRvmHostOffline(host.id, !host.offline).then(refresh)}>
+              {host.offline ? "Online" : "Offline"}
+            </button>
             <button className="text-[12px] text-danger" onClick={() => deleteRvmHost(host.id).then(refresh)}>
               Delete
             </button>
@@ -287,8 +292,17 @@ function RemoteHostsSection() {
           className={BTN_BORDERED}
           disabled={!name || !url || !token || testing === name}
           onClick={async () => {
-            await save();
-            await test(name);
+            setError(null);
+            setTesting(name);
+            try {
+              const result = await probeRvmHost(url, token);
+              setProbeState((current) => ({ ...current, [name]: result }));
+              setHostProbeResult(name, result);
+            } catch (error) {
+              setError(error instanceof Error ? error.message : "Connection test failed.");
+            } finally {
+              setTesting(null);
+            }
           }}
         >
           {testing === name ? "Testing…" : "Test connection"}

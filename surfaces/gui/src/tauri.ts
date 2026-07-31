@@ -80,29 +80,7 @@ export type RemoteHostInfo = {
   offline?: boolean;
 };
 
-export type RemoteHostProbeResult = {
-  status: "online" | "offline" | "auth_failed" | "checking" | "unknown";
-  latency_ms?: number;
-  health?: {
-    status?: string;
-    service?: string;
-    version?: string;
-    platform?: string;
-    host?: string;
-    capabilities?: string[];
-    vnc_port?: number | null;
-    ide_port?: number | null;
-  };
-  info?: {
-    hostname?: string;
-    platform?: string;
-    arch?: string;
-    cpus?: number;
-    memory_gb?: number;
-    uptime_hours?: number;
-  };
-  error?: string;
-};
+export type { RemoteHostProbeResult } from "./api";
 
 export type SessionHostInfo = RemoteHostInfo & {
   id: string;

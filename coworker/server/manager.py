@@ -580,6 +580,10 @@ class SessionManager:
             raise UnknownRvmHostError(
                 f"unknown RVM host for session {session_id}: {host_id}"
             )
+        if host.offline:
+            raise RvmHostOfflineError(
+                f"RVM host {host.name} ({host_id}) is marked offline; enable it in Settings"
+            )
         client = self.rvm_hosts.client(host_id)
         try:
             health = client.health()

@@ -847,7 +847,9 @@ pub fn run() {
             "url": http,
             "ws_url": ws,
             "token": api_token,
-            "offline": host.offline,
+            // The Python sidecar's RvmHostStore is authoritative. Legacy desktop
+            // profile state is migrated there and must not override a server probe.
+            "offline": false,
             "local": false
         })
     }));

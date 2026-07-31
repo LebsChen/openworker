@@ -256,7 +256,7 @@ export function App() {
             if (!host.local) {
               setHostProbeResult(host.id, { status: "checking", error: "Checking connection…" });
               void testRvmHost(host.id).then((result) => {
-                setHostProbeResult(host.id, result as any);
+                setHostProbeResult(host.id, result);
                 setHostStatusVersion((version) => version + 1);
               });
             }
