@@ -11,7 +11,6 @@ import asyncio
 import json
 import os
 import re
-import secrets
 import time
 import uuid
 from collections import deque
@@ -20,9 +19,10 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 from urllib.parse import urlencode
 
+import httpx
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from websockets.asyncio.client import connect as rvm_ws_connect
 from websockets.exceptions import ConnectionClosed, InvalidStatus
 
@@ -177,6 +177,7 @@ from .manager import (
     UnknownSessionError,
 )
 from .token import token_matches
+from .web_ide import IdeProxyRegistry, IdeTarget
 
 
 def _probe_rvm(base_url: str, token: str) -> dict[str, Any]:
@@ -218,8 +219,23 @@ def _probe_rvm(base_url: str, token: str) -> dict[str, Any]:
 
 
 def create_app(manager: SessionManager) -> FastAPI:
+    ide_http_client: httpx.AsyncClient | None = None
+    ide_proxies: IdeProxyRegistry | None = None
+    ide_sweep_task: asyncio.Task[None] | None = None
+
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
+        nonlocal ide_http_client, ide_proxies, ide_sweep_task
+        ide_http_client = httpx.AsyncClient(follow_redirects=False, timeout=None)
+        ide_proxies = IdeProxyRegistry(ide_http_client)
+
+        async def sweep_ide_proxies() -> None:
+            while True:
+                await asyncio.sleep(60)
+                if ide_proxies is not None:
+                    await ide_proxies.sweep()
+
+        ide_sweep_task = asyncio.create_task(sweep_ide_proxies())
         try:
             live = (
                 await manager.start_gateway()
@@ -231,6 +247,16 @@ def create_app(manager: SessionManager) -> FastAPI:
 
             traceback.print_exc()
         yield
+        if ide_sweep_task is not None:
+            ide_sweep_task.cancel()
+            await asyncio.gather(ide_sweep_task, return_exceptions=True)
+            ide_sweep_task = None
+        if ide_proxies is not None:
+            await ide_proxies.close_all()
+            ide_proxies = None
+        if ide_http_client is not None:
+            await ide_http_client.aclose()
+            ide_http_client = None
         await manager.aclose()  # stop gateway + close MCP connections on shutdown
 
     app = FastAPI(title="coworker", version="0.0.0", lifespan=lifespan)
@@ -255,6 +281,15 @@ def create_app(manager: SessionManager) -> FastAPI:
             if part.strip()
         }
         return any(token_matches(part, api_token) for part in protocols)
+
+    async def _accept_websocket(ws: WebSocket) -> None:
+        protocols = {
+            part.strip()
+            for part in ws.headers.get("sec-websocket-protocol", "").split(",")
+            if part.strip()
+        }
+        subprotocol = "openworker" if api_token and "openworker" in protocols else None
+        await ws.accept(subprotocol=subprotocol)
 
     @app.middleware("http")
     async def require_sidecar_token(request: Request, call_next):
@@ -758,6 +793,70 @@ def create_app(manager: SessionManager) -> FastAPI:
         except RvmHostOfflineError as exc:
             return JSONResponse(
                 {"artifacts": [], "status": "offline", "error": str(exc)},
+                status_code=503,
+            )
+
+    def _ide_target(session_id: str) -> IdeTarget | JSONResponse:
+        try:
+            target = manager.resolve_remote_target(session_id)
+        except UnknownSessionError:
+            return JSONResponse({"status": "offline", "error": "Unknown session"}, status_code=404)
+        except UnknownRvmHostError:
+            return JSONResponse({"status": "offline", "error": "Unknown RVM host"}, status_code=503)
+        except RvmHostOfflineError as exc:
+            return JSONResponse({"status": "offline", "error": str(exc)}, status_code=503)
+        except RvmHostUnauthorizedError as exc:
+            return JSONResponse({"status": "offline", "error": str(exc)}, status_code=503)
+        if target is None:
+            return JSONResponse(
+                {"status": "offline", "error": "Web IDE requires a remote RVM session"},
+                status_code=400,
+            )
+        token = manager.rvm_hosts.token(target.host.id)
+        if not token:
+            target.client.close()
+            return JSONResponse(
+                {"status": "offline", "error": "RVM host has no configured token"},
+                status_code=503,
+            )
+        resolved = IdeTarget(
+            session_id=session_id,
+            host_id=target.host.id,
+            base_url=target.client.base_url.rstrip("/"),
+            workspace=target.workspace,
+            token=token,
+        )
+        target.client.close()
+        return resolved
+
+    @app.post("/v1/sessions/{session_id}/ide/session")
+    async def session_ide_session(request: Request, session_id: str) -> Response:
+        del request
+        resolved = _ide_target(session_id)
+        if isinstance(resolved, JSONResponse):
+            if ide_proxies is not None:
+                await ide_proxies.close(session_id)
+            return resolved
+        if ide_proxies is None:
+            return JSONResponse(
+                {"status": "offline", "error": "Web IDE proxy is not running"},
+                status_code=503,
+            )
+        try:
+            proxy = await ide_proxies.get_or_create(resolved)
+            return {"url": proxy.url()}
+        except Exception as exc:
+            detail = str(exc).replace(resolved.token, "[redacted]").strip()
+            try:
+                parsed = json.loads(detail)
+            except json.JSONDecodeError:
+                parsed = None
+            if isinstance(parsed, dict) and isinstance(parsed.get("error"), str):
+                detail = parsed["error"]
+            if not detail:
+                detail = "Unable to start the Web IDE proxy"
+            return JSONResponse(
+                {"status": "offline", "error": detail},
                 status_code=503,
             )
 
@@ -1640,7 +1739,7 @@ def create_app(manager: SessionManager) -> FastAPI:
         if not _origin_allowed(ws.headers.get("origin")):
             await ws.close(code=1008)
             return
-        await ws.accept(subprotocol="openworker" if api_token else None)
+        await _accept_websocket(ws)
         agent = ws.query_params.get("agent") or "code"
         requested_host_id = (ws.query_params.get("host_id") or "").strip() or None
         existing_record = manager.session_store.load(session_id)
@@ -2165,12 +2264,14 @@ def create_app(manager: SessionManager) -> FastAPI:
 
     async def proxy_rvm_websocket(
         ws: WebSocket,
-        session_id: str,
+        session_id: str | None,
         *,
         endpoint: str,
         surface_name: str,
         unavailable_reason: str,
         query_builder: Callable[[Any], str] | None = None,
+        target_override: Any | None = None,
+        token_override: str | None = None,
     ) -> None:
         """Proxy a bound remote RVM WebSocket without exposing the RVM token."""
         if not _websocket_authenticated(ws):
@@ -2179,17 +2280,24 @@ def create_app(manager: SessionManager) -> FastAPI:
         if not _origin_allowed(ws.headers.get("origin")):
             await ws.close(code=1008, reason="WebSocket origin not allowed")
             return
-        await ws.accept(subprotocol="openworker" if api_token else None)
+        await _accept_websocket(ws)
 
         try:
-            target = manager.resolve_remote_target(session_id)
-            if target is None:
-                await ws.close(code=1008, reason=unavailable_reason)
-                return
-            token = manager.rvm_hosts.token(target.host.id)
-            if not token:
-                await ws.close(code=1008, reason="RVM host has no configured token")
-                return
+            if target_override is not None and token_override is not None:
+                target = target_override
+                token = token_override
+            else:
+                if not session_id:
+                    await ws.close(code=1008, reason="No active remote session")
+                    return
+                target = manager.resolve_remote_target(session_id)
+                if target is None:
+                    await ws.close(code=1008, reason=unavailable_reason)
+                    return
+                token = manager.rvm_hosts.token(target.host.id)
+                if not token:
+                    await ws.close(code=1008, reason="RVM host has no configured token")
+                    return
         except UnknownSessionError:
             reason = "Unknown session"
             await ws.close(code=1008, reason=reason)
@@ -2330,7 +2438,7 @@ def create_app(manager: SessionManager) -> FastAPI:
         if not _origin_allowed(ws.headers.get("origin")):
             await ws.close(code=1008)
             return
-        await ws.accept(subprotocol="openworker" if api_token else None)
+        await _accept_websocket(ws)
         manager.register_event_client(ws.send_json)
         try:
             while True:
