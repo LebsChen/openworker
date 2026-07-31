@@ -120,10 +120,19 @@ def test_ide_bootstrap_reuses_valid_key(monkeypatch, tmp_path):
     monkeypatch.setattr(app_module.httpx, "AsyncClient", FakeAsyncClient)
 
     with TestClient(create_app(manager)) as client:
-        first = client.get("/v1/sessions/session-1/ide/")
+        redirect = client.get(
+            "/v1/sessions/session-1/ide/", follow_redirects=False
+        )
+        assert redirect.status_code == 307
+        assert redirect.headers["location"] == (
+            "/v1/sessions/session-1/ide/?folder=C%3A%5CUsers%5CTeam"
+        )
+        assert "set-cookie" not in redirect.headers
+
+        first = client.get(redirect.headers["location"])
         first_key = first.cookies["openworker_ide_key"]
         client.cookies.set("openworker_ide_key", first_key)
-        second = client.get("/v1/sessions/session-1/ide/")
+        second = client.get(redirect.headers["location"])
         second_key = second.cookies["openworker_ide_key"]
 
         assert first.status_code == second.status_code == 200
