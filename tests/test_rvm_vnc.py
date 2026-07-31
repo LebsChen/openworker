@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import urlsplit
 
 import pytest
 from fastapi.testclient import TestClient
@@ -20,10 +20,11 @@ from coworker.sessions import SessionRecord
 
 
 class FakeUpstream:
-    def __init__(self) -> None:
+    def __init__(self, *, ready_after: int = 1) -> None:
         self.sent: list[bytes | str] = []
         self.history: list[bytes | str] = []
         self.ready = asyncio.Event()
+        self.ready_after = ready_after
         self.yielded = False
 
     async def __aenter__(self):
@@ -35,7 +36,7 @@ class FakeUpstream:
     async def send(self, message):
         self.sent.append(message)
         self.history.append(message)
-        if len(self.sent) >= 2:
+        if len(self.sent) >= self.ready_after:
             self.ready.set()
 
     def __aiter__(self):
@@ -46,7 +47,7 @@ class FakeUpstream:
         if self.sent and not self.yielded:
             self.yielded = True
             self.sent.clear()
-            return b"remote-output"
+            return b"remote-frame"
         raise StopAsyncIteration
 
 
@@ -66,7 +67,7 @@ def _manager(tmp_path, monkeypatch):
     return manager
 
 
-def test_pty_proxy_auth_and_transparent_framing(tmp_path, monkeypatch):
+def test_vnc_proxy_auth_and_binary_round_trip(tmp_path, monkeypatch):
     manager = _manager(tmp_path, monkeypatch)
     upstream = FakeUpstream()
     observed = {}
@@ -80,80 +81,91 @@ def test_pty_proxy_auth_and_transparent_framing(tmp_path, monkeypatch):
     monkeypatch.setattr("coworker.server.app.rvm_ws_connect", connect)
     with TestClient(create_app(manager)) as client:
         with client.websocket_connect(
-            "/ws/rvm/pty/session-1?cols=120&rows=40",
+            "/ws/rvm/vnc/session-1",
             subprotocols=["openworker", "browser-secret"],
         ) as socket:
-            socket.send_bytes(b"stdin")
-            socket.send_text('{"type":"resize","cols":120,"rows":40}')
-            assert socket.receive_bytes() == b"remote-output"
+            socket.send_bytes(b"rfb-client-frame")
+            assert socket.receive_bytes() == b"remote-frame"
 
-    query = parse_qs(urlsplit(observed["url"]).query)
-    assert query == {"cols": ["120"], "rows": ["40"], "cwd": ["/workspace/session-1"]}
+    assert urlsplit(observed["url"]).query == ""
+    assert observed["url"].endswith("/vnc-ws")
     assert observed["headers"] == {"Authorization": "Bearer rvm-secret"}
     assert observed["ping_interval"] is None
     assert "rvm-secret" not in observed["url"]
-    assert upstream.history == [b"stdin", '{"type":"resize","cols":120,"rows":40}']
+    assert upstream.history == [b"rfb-client-frame"]
 
 
-def test_pty_proxy_rejects_browser_auth(tmp_path, monkeypatch):
+def test_vnc_proxy_rejects_browser_auth(tmp_path, monkeypatch):
     manager = _manager(tmp_path, monkeypatch)
     with TestClient(create_app(manager)) as client:
         with pytest.raises(WebSocketDisconnect):
             with client.websocket_connect(
-                "/ws/rvm/pty/session-1",
+                "/ws/rvm/vnc/session-1",
                 subprotocols=["openworker", "wrong"],
             ):
                 pass
 
 
-def test_pty_proxy_unknown_host_never_creates_local_shell(tmp_path, monkeypatch):
-    manager = SessionManager(data_dir=tmp_path)
-    manager.session_store.save(
-        SessionRecord(
-            session_id="s",
-            workspace="/workspace",
-            model="test",
-            mode="auto",
-            host_id="missing",
-        )
-    )
-    with TestClient(create_app(manager)) as client:
-        with client.websocket_connect("/ws/rvm/pty/s?agent=cowork") as socket:
-            with pytest.raises(WebSocketDisconnect) as error:
-                socket.receive_text()
-    assert error.value.reason == "Unknown RVM host"
-    assert manager.session_store.load("stray") is None
-
-
-def test_pty_proxy_unknown_session_never_materializes_session(tmp_path):
+def test_vnc_proxy_unknown_session_never_materializes_session(tmp_path):
     manager = SessionManager(data_dir=tmp_path)
     with TestClient(create_app(manager)) as client:
-        with client.websocket_connect("/ws/rvm/pty/not-created?agent=cowork") as socket:
+        with client.websocket_connect("/ws/rvm/vnc/not-created") as socket:
             with pytest.raises(WebSocketDisconnect) as error:
                 socket.receive_text()
     assert error.value.reason == "Unknown session"
     assert manager.session_store.load("not-created") is None
 
 
+def test_vnc_proxy_local_session_never_falls_back_to_local(tmp_path):
+    manager = SessionManager(data_dir=tmp_path)
+    manager.session_store.save(
+        SessionRecord(
+            session_id="local-session",
+            workspace=str(tmp_path),
+            model="test",
+            mode="auto",
+            host_id="local",
+        )
+    )
+    with TestClient(create_app(manager)) as client:
+        with client.websocket_connect("/ws/rvm/vnc/local-session") as socket:
+            with pytest.raises(WebSocketDisconnect) as error:
+                socket.receive_text()
+    assert error.value.reason == "VNC requires a remote RVM session"
+
+
+def test_vnc_proxy_unknown_host_never_falls_back_to_local(tmp_path):
+    manager = SessionManager(data_dir=tmp_path)
+    manager.session_store.save(
+        SessionRecord(
+            session_id="unknown-host",
+            workspace=str(tmp_path),
+            model="test",
+            mode="auto",
+            host_id="missing",
+        )
+    )
+    with TestClient(create_app(manager)) as client:
+        with client.websocket_connect("/ws/rvm/vnc/unknown-host") as socket:
+            with pytest.raises(WebSocketDisconnect) as error:
+                socket.receive_text()
+    assert error.value.reason == "Unknown RVM host"
+
+
 @pytest.mark.parametrize(
-    ("message", "reason"),
+    ("failure", "reason"),
     [
-        ("RVM host Linux RVM is offline or unreachable", "RVM host offline or unreachable"),
-        ("RVM host Linux RVM is unauthorized", "RVM host unauthorized"),
+        (RvmHostOfflineError("offline"), "RVM host offline or unreachable"),
+        (RvmHostUnauthorizedError("unauthorized"), "RVM host unauthorized"),
     ],
 )
-def test_pty_proxy_host_health_failures_are_explicit(
-    tmp_path, monkeypatch, message, reason
+def test_vnc_proxy_host_health_failures_are_explicit(
+    tmp_path, monkeypatch, failure, reason
 ):
     manager = SessionManager(data_dir=tmp_path)
-    failure = (
-        RvmHostOfflineError(message)
-        if "offline" in message
-        else RvmHostUnauthorizedError(message)
-    )
     manager.resolve_remote_target = lambda *_args, **_kwargs: (_ for _ in ()).throw(failure)
     with TestClient(create_app(manager)) as client:
-        with client.websocket_connect("/ws/rvm/pty/s") as socket:
+        with client.websocket_connect("/ws/rvm/vnc/session-1") as socket:
             with pytest.raises(WebSocketDisconnect) as error:
                 socket.receive_text()
     assert error.value.reason == reason

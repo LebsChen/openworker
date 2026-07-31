@@ -17,14 +17,14 @@ import uuid
 from collections import deque
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 from urllib.parse import urlencode
 
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from websockets.asyncio.client import connect as rvm_ws_connect
-from websockets.exceptions import InvalidStatus
+from websockets.exceptions import ConnectionClosed, InvalidStatus
 
 # Origins allowed to talk to the local sidecar. It binds to 127.0.0.1, but a page in the
 # user's own browser can still reach loopback — so without an origin gate, any website they
@@ -753,7 +753,13 @@ def create_app(manager: SessionManager) -> FastAPI:
 
     @app.get("/v1/sessions/{session_id}/artifacts")
     def session_artifacts(session_id: str) -> dict[str, Any]:
-        return {"artifacts": manager.list_artifacts(session_id)}
+        try:
+            return {"artifacts": manager.list_artifacts(session_id)}
+        except RvmHostOfflineError as exc:
+            return JSONResponse(
+                {"artifacts": [], "status": "offline", "error": str(exc)},
+                status_code=503,
+            )
 
     @app.get("/v1/sessions/{session_id}/artifacts/read")
     def session_artifact_read(session_id: str, path: str) -> dict[str, Any]:
@@ -2157,9 +2163,16 @@ def create_app(manager: SessionManager) -> FastAPI:
         finally:
             manager.unregister_session_client(session_id, ws.send_json)
 
-    @app.websocket("/ws/rvm/pty/{session_id}")
-    async def ws_rvm_pty(ws: WebSocket, session_id: str) -> None:
-        """Proxy a bound remote RVM PTY without exposing the RVM token to the browser."""
+    async def proxy_rvm_websocket(
+        ws: WebSocket,
+        session_id: str,
+        *,
+        endpoint: str,
+        surface_name: str,
+        unavailable_reason: str,
+        query_builder: Callable[[Any], str] | None = None,
+    ) -> None:
+        """Proxy a bound remote RVM WebSocket without exposing the RVM token."""
         if not _websocket_authenticated(ws):
             await ws.close(code=1008, reason="OpenWorker authentication failed")
             return
@@ -2171,7 +2184,7 @@ def create_app(manager: SessionManager) -> FastAPI:
         try:
             target = manager.resolve_remote_target(session_id)
             if target is None:
-                await ws.close(code=1008, reason="PTY requires a remote RVM session")
+                await ws.close(code=1008, reason=unavailable_reason)
                 return
             token = manager.rvm_hosts.token(target.host.id)
             if not token:
@@ -2194,20 +2207,18 @@ def create_app(manager: SessionManager) -> FastAPI:
             await ws.close(code=1008, reason=reason)
             return
         except Exception:
-            await ws.close(code=1011, reason="Unable to prepare the remote RVM PTY")
+            await ws.close(
+                code=1011,
+                reason=f"Unable to prepare the remote RVM {surface_name}",
+            )
             return
 
-        try:
-            cols = max(2, int(ws.query_params.get("cols") or 80))
-            rows = max(2, int(ws.query_params.get("rows") or 24))
-        except ValueError:
-            cols, rows = 80, 24
-        query = urlencode({"cols": cols, "rows": rows, "cwd": target.workspace})
+        query = query_builder(target) if query_builder is not None else ""
         base_url = target.client.base_url.rstrip("/")
         upstream_url = (
             base_url.replace("https://", "wss://", 1).replace("http://", "ws://", 1)
-            + "/pty-ws?"
-            + query
+            + f"/{endpoint}"
+            + (f"?{query}" if query else "")
         )
 
         try:
@@ -2215,23 +2226,32 @@ def create_app(manager: SessionManager) -> FastAPI:
                 upstream_url,
                 additional_headers={"Authorization": f"Bearer {token}"},
                 max_size=None,
+                ping_interval=None,
             ) as upstream:
                 async def client_to_rvm() -> None:
                     while True:
                         message = await ws.receive()
                         if message["type"] == "websocket.disconnect":
                             return
-                        if message.get("bytes") is not None:
-                            await upstream.send(message["bytes"])
-                        elif message.get("text") is not None:
-                            await upstream.send(message["text"])
+                        try:
+                            if message.get("bytes") is not None:
+                                await upstream.send(message["bytes"])
+                            elif message.get("text") is not None:
+                                await upstream.send(message["text"])
+                        except (ConnectionClosed, RuntimeError):
+                            return
 
                 async def rvm_to_client() -> None:
                     async for message in upstream:
-                        if isinstance(message, bytes):
-                            await ws.send_bytes(message)
-                        else:
-                            await ws.send_text(message)
+                        if ws.client_state.name != "CONNECTED":
+                            return
+                        try:
+                            if isinstance(message, bytes):
+                                await ws.send_bytes(message)
+                            else:
+                                await ws.send_text(message)
+                        except (WebSocketDisconnect, RuntimeError):
+                            return
 
                 client_task = asyncio.create_task(client_to_rvm())
                 rvm_task = asyncio.create_task(rvm_to_client())
@@ -2244,7 +2264,10 @@ def create_app(manager: SessionManager) -> FastAPI:
                 if pending:
                     await asyncio.gather(*pending, return_exceptions=True)
                 if rvm_task in done and ws.client_state.name == "CONNECTED":
-                    await ws.close(code=1000, reason="Remote RVM PTY closed")
+                    await ws.close(
+                        code=1000,
+                        reason=f"Remote RVM {surface_name} closed",
+                    )
                 for task in done:
                     if not task.cancelled() and task.exception() is not None:
                         raise task.exception()
@@ -2255,12 +2278,46 @@ def create_app(manager: SessionManager) -> FastAPI:
                 reason = (
                     "RVM host unauthorized"
                     if getattr(exc.response, "status_code", None) in (401, 403)
-                    else "Remote RVM PTY unavailable"
+                    else f"Remote RVM {surface_name} unavailable"
                 )
                 await ws.close(code=1011, reason=reason)
         except Exception:
             if ws.client_state.name == "CONNECTED":
-                await ws.close(code=1011, reason="Remote RVM PTY disconnected")
+                await ws.close(
+                    code=1011,
+                    reason=f"Remote RVM {surface_name} disconnected",
+                )
+
+    @app.websocket("/ws/rvm/pty/{session_id}")
+    async def ws_rvm_pty(ws: WebSocket, session_id: str) -> None:
+        """Proxy a bound remote RVM PTY without exposing the RVM token to the browser."""
+        try:
+            cols = max(2, int(ws.query_params.get("cols") or 80))
+            rows = max(2, int(ws.query_params.get("rows") or 24))
+        except ValueError:
+            cols, rows = 80, 24
+
+        await proxy_rvm_websocket(
+            ws,
+            session_id,
+            endpoint="pty-ws",
+            surface_name="PTY",
+            unavailable_reason="PTY requires a remote RVM session",
+            query_builder=lambda target: urlencode(
+                {"cols": cols, "rows": rows, "cwd": target.workspace}
+            ),
+        )
+
+    @app.websocket("/ws/rvm/vnc/{session_id}")
+    async def ws_rvm_vnc(ws: WebSocket, session_id: str) -> None:
+        """Proxy a bound remote RVM VNC stream without exposing the RVM token."""
+        await proxy_rvm_websocket(
+            ws,
+            session_id,
+            endpoint="vnc-ws",
+            surface_name="VNC",
+            unavailable_reason="VNC requires a remote RVM session",
+        )
 
     @app.websocket("/ws/events")
     async def ws_events(ws: WebSocket) -> None:

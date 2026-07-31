@@ -12,6 +12,7 @@ from coworker.providers import (
     ToolCall,
 )
 from coworker.server import SessionManager, create_app
+from coworker.server.manager import RvmHostOfflineError
 from coworker.sessions import SessionRecord
 
 
@@ -234,6 +235,32 @@ def test_artifacts_list_and_read_previewable_files(tmp_path):
     assert html["ok"] is True
     assert html["kind"] == "html"
     assert "<h1>Preview</h1>" in html["content"]
+
+
+def test_remote_artifacts_report_offline_host(tmp_path):
+    manager = SessionManager(workspace=tmp_path, provider=ScriptedProvider([]))
+    manager.session_store.save(
+        SessionRecord(
+            session_id="offline-artifacts",
+            workspace=r"C:\Users\Team\.coworker\sessions\offline-artifacts",
+            model="gpt-5.5",
+            mode="interactive",
+            host_id="offline-rvm",
+        )
+    )
+    manager.resolve_remote_target = lambda _session_id: (_ for _ in ()).throw(
+        RvmHostOfflineError("RVM host offline or unreachable")
+    )
+
+    with TestClient(create_app(manager)) as client:
+        response = client.get("/v1/sessions/offline-artifacts/artifacts")
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "artifacts": [],
+        "status": "offline",
+        "error": "RVM host offline or unreachable",
+    }
 
 
 def test_artifact_read_rejects_path_escape(tmp_path):

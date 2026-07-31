@@ -256,6 +256,9 @@ export const openRvmPty = (
     `${wsBase()}/ws/rvm/pty/${encodeURIComponent(sessionId)}?cols=${Math.max(2, Math.round(cols))}&rows=${Math.max(2, Math.round(rows))}`,
   );
 
+export const openRvmVnc = (sessionId: string): WebSocket =>
+  openWebSocket(`${wsBase()}/ws/rvm/vnc/${encodeURIComponent(sessionId)}`);
+
 export const isRemoteMode = (): boolean => Boolean((globalThis as any).__COWORKER_REMOTE_MODE__);
 export const remoteProfileName = (): string | null =>
   typeof (globalThis as any).__COWORKER_REMOTE_NAME__ === "string"

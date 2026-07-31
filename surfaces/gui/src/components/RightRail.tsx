@@ -17,6 +17,7 @@ import { Icon } from "./Icon";
 import { Markdown, OPEN_ARTIFACT_EVENT } from "./Markdown";
 import { hostProbeResult, HOST_STATUS_CHANGED } from "../hostStatus";
 import { selectWorklog, type WorklogEntry } from "../worklogSelector";
+import { RemoteDesktopPanel } from "./RemoteDesktopPanel";
 import { RemoteShellPanel } from "./RemoteShellPanel";
 
 export type PanelTab = "info" | "worklog" | "changes" | "shell" | "ide" | "desktop";
@@ -218,6 +219,8 @@ export function RightRail({
         <div style={{ display: panelOpen && isRvmTab && !selected ? "block" : "none" }}>
           {tab === "shell" ? (
             <RemoteShellPanel active={panelOpen && tab === "shell"} sessionId={sessionId} host={host} />
+          ) : tab === "desktop" ? (
+            <RemoteDesktopPanel active={panelOpen && tab === "desktop"} sessionId={sessionId} host={host} />
           ) : (
             <RvmUnavailablePanel host={host} tab={tab} />
           )}
@@ -410,8 +413,8 @@ function RvmUnavailablePanel({ host, tab }: { host: SessionHost; tab: PanelTab }
       <h3>{t(PANEL_TABS.find((entry) => entry.id === tab)?.labelKey || "session.rail.info")}</h3>
       <p>
         {host.local
-          ? "Requires an RVM host. This session is bound to Local."
-          : "Secure connection bootstrap is not implemented yet."}
+          ? t("session.rail.rvmRequiredLocal")
+          : t("session.rail.secureConnectionUnavailable")}
       </p>
     </div>
   );
