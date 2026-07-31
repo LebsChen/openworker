@@ -278,7 +278,7 @@ class SessionIdeProxy:
             redirect_query.append(("folder", self.target.workspace))
             url = parts._replace(query=urlencode(redirect_query), fragment="").geturl()
         if response.status_code < 200 or response.status_code >= 300:
-            detail = response.text.strip()
+            detail = response.text.strip()[:200]
             message = f"Remote Web IDE bootstrap failed (HTTP {response.status_code})"
             if detail:
                 message += f": {detail}"
