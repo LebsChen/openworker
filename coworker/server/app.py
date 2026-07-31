@@ -24,7 +24,7 @@ from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from websockets.asyncio.client import connect as rvm_ws_connect
-from websockets.exceptions import InvalidStatus
+from websockets.exceptions import ConnectionClosed, InvalidStatus
 
 # Origins allowed to talk to the local sidecar. It binds to 127.0.0.1, but a page in the
 # user's own browser can still reach loopback — so without an origin gate, any website they
@@ -2220,23 +2220,32 @@ def create_app(manager: SessionManager) -> FastAPI:
                 upstream_url,
                 additional_headers={"Authorization": f"Bearer {token}"},
                 max_size=None,
+                ping_interval=None,
             ) as upstream:
                 async def client_to_rvm() -> None:
                     while True:
                         message = await ws.receive()
                         if message["type"] == "websocket.disconnect":
                             return
-                        if message.get("bytes") is not None:
-                            await upstream.send(message["bytes"])
-                        elif message.get("text") is not None:
-                            await upstream.send(message["text"])
+                        try:
+                            if message.get("bytes") is not None:
+                                await upstream.send(message["bytes"])
+                            elif message.get("text") is not None:
+                                await upstream.send(message["text"])
+                        except (ConnectionClosed, RuntimeError):
+                            return
 
                 async def rvm_to_client() -> None:
                     async for message in upstream:
-                        if isinstance(message, bytes):
-                            await ws.send_bytes(message)
-                        else:
-                            await ws.send_text(message)
+                        if ws.client_state.name != "CONNECTED":
+                            return
+                        try:
+                            if isinstance(message, bytes):
+                                await ws.send_bytes(message)
+                            else:
+                                await ws.send_text(message)
+                        except (WebSocketDisconnect, RuntimeError):
+                            return
 
                 client_task = asyncio.create_task(client_to_rvm())
                 rvm_task = asyncio.create_task(rvm_to_client())

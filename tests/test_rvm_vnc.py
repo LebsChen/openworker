@@ -75,6 +75,7 @@ def test_vnc_proxy_auth_and_binary_round_trip(tmp_path, monkeypatch):
     def connect(url, **kwargs):
         observed["url"] = url
         observed["headers"] = kwargs["additional_headers"]
+        observed["ping_interval"] = kwargs["ping_interval"]
         return upstream
 
     monkeypatch.setattr("coworker.server.app.rvm_ws_connect", connect)
@@ -89,6 +90,7 @@ def test_vnc_proxy_auth_and_binary_round_trip(tmp_path, monkeypatch):
     assert urlsplit(observed["url"]).query == ""
     assert observed["url"].endswith("/vnc-ws")
     assert observed["headers"] == {"Authorization": "Bearer rvm-secret"}
+    assert observed["ping_interval"] is None
     assert "rvm-secret" not in observed["url"]
     assert upstream.history == [b"rfb-client-frame"]
 

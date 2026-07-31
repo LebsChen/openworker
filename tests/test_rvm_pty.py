@@ -74,6 +74,7 @@ def test_pty_proxy_auth_and_transparent_framing(tmp_path, monkeypatch):
     def connect(url, **kwargs):
         observed["url"] = url
         observed["headers"] = kwargs["additional_headers"]
+        observed["ping_interval"] = kwargs["ping_interval"]
         return upstream
 
     monkeypatch.setattr("coworker.server.app.rvm_ws_connect", connect)
@@ -89,6 +90,7 @@ def test_pty_proxy_auth_and_transparent_framing(tmp_path, monkeypatch):
     query = parse_qs(urlsplit(observed["url"]).query)
     assert query == {"cols": ["120"], "rows": ["40"], "cwd": ["/workspace/session-1"]}
     assert observed["headers"] == {"Authorization": "Bearer rvm-secret"}
+    assert observed["ping_interval"] is None
     assert "rvm-secret" not in observed["url"]
     assert upstream.history == [b"stdin", '{"type":"resize","cols":120,"rows":40}']
 

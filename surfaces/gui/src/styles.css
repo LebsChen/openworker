@@ -638,7 +638,7 @@ button.btn.danger { color: var(--accent); }
   font-size: 11px;
   line-height: 1.35;
 }
-.remote-desktop-panel { display: flex; flex-direction: column; min-height: 0; height: 100%; }
+.remote-desktop-panel { display: flex; flex-direction: column; height: 100%; min-height: 360px; }
 .remote-desktop-toolbar {
   display: flex; align-items: center; justify-content: space-between;
   padding: 8px 12px; color: var(--faint); font-size: 11px;
