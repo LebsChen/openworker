@@ -11,12 +11,13 @@ import asyncio
 import json
 import os
 import re
-import secrets
+import secrets as crypto_secrets
 import time
 import uuid
 from collections import deque
 from contextlib import asynccontextmanager
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Callable, Optional
 from urllib.parse import urlencode, urljoin, urlsplit
 
@@ -219,8 +220,15 @@ def _probe_rvm(base_url: str, token: str) -> dict[str, Any]:
 
 
 def create_app(manager: SessionManager) -> FastAPI:
+    ide_http_client: httpx.AsyncClient | None = None
+    ide_keys: dict[str, dict[str, Any]] = {}
+    ide_key_ttl = 3600.0
+    ide_session_cookie = "openworker_ide_key"
+
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
+        nonlocal ide_http_client
+        ide_http_client = httpx.AsyncClient(follow_redirects=False, timeout=None)
         try:
             live = (
                 await manager.start_gateway()
@@ -232,12 +240,14 @@ def create_app(manager: SessionManager) -> FastAPI:
 
             traceback.print_exc()
         yield
+        ide_keys.clear()
+        if ide_http_client is not None:
+            await ide_http_client.aclose()
+            ide_http_client = None
         await manager.aclose()  # stop gateway + close MCP connections on shutdown
 
     app = FastAPI(title="coworker", version="0.0.0", lifespan=lifespan)
     api_token = os.environ.get("COWORKER_API_TOKEN", "")
-    ide_sessions: dict[str, dict[str, Any]] = {}
-    ide_session_cookie = "openworker_ide_session"
     tokenless_paths = {
         "/v1/health",
         "/auth/callback",
@@ -249,7 +259,34 @@ def create_app(manager: SessionManager) -> FastAPI:
         provided = request.headers.get("x-openworker-token", "")
         return token_matches(provided, api_token)
 
-    def _ide_http_path(path: str) -> bool:
+    def _ide_key_state(key: str | None) -> dict[str, Any] | None:
+        if not key:
+            return None
+        state = ide_keys.get(key)
+        if state is None:
+            return None
+        if time.monotonic() - state["last_used"] > ide_key_ttl:
+            ide_keys.pop(key, None)
+            return None
+        record = manager.session_store.load(state["session_id"])
+        host = manager.rvm_hosts.get(state["host_id"])
+        if (
+            record is None
+            or record.host_id != state["host_id"]
+            or host is None
+            or host.offline
+            or host.base_url.rstrip("/") != state["base_url"]
+            or not manager.rvm_hosts.token(state["host_id"])
+        ):
+            ide_keys.pop(key, None)
+            return None
+        state["last_used"] = time.monotonic()
+        return state
+
+    def _ide_request_authenticated(request: Request) -> bool:
+        return _ide_key_state(request.cookies.get(ide_session_cookie)) is not None
+
+    def _is_ide_proxy_path(path: str) -> bool:
         if path == "/vscode-remote-resource" or path.startswith(
             ("/ide/", "/out/", "/resources/", "/extensions/", "/node_modules/")
         ):
@@ -265,7 +302,7 @@ def create_app(manager: SessionManager) -> FastAPI:
     def _websocket_authenticated(ws: WebSocket) -> bool:
         if not api_token:
             return True
-        if ws.url.path == "/" and ws.cookies.get(ide_session_cookie):
+        if ws.url.path == "/" and _ide_key_state(ws.cookies.get(ide_session_cookie)):
             return True
         protocols = {
             part.strip()
@@ -282,7 +319,10 @@ def create_app(manager: SessionManager) -> FastAPI:
             not api_token
             or request.method == "OPTIONS"
             or request.url.path in tokenless_paths
-            or _ide_http_path(request.url.path)
+            or (
+                _is_ide_proxy_path(request.url.path)
+                and _ide_request_authenticated(request)
+            )
             or _request_authenticated(request)
         ):
             return await call_next(request)
@@ -812,7 +852,15 @@ def create_app(manager: SessionManager) -> FastAPI:
                 continue
             name, value = first.split("=", 1)
             if name:
-                cookies[name] = value
+                if "max-age=0" in header.lower():
+                    cookies.pop(name, None)
+                else:
+                    cookies[name] = value
+
+    def _revoke_session_ide_keys(session_id: str) -> None:
+        for key, state in list(ide_keys.items()):
+            if state["session_id"] == session_id:
+                ide_keys.pop(key, None)
 
     async def _ide_bootstrap(session_id: str) -> Response:
         resolved = _ide_target(session_id)
@@ -821,28 +869,38 @@ def create_app(manager: SessionManager) -> FastAPI:
         target, token = resolved
         cookies: dict[str, str] = {}
         try:
+            if ide_http_client is None:
+                return _ide_error("Web IDE proxy is not running", 503)
             base_url = target.client.base_url.rstrip("/") + "/"
             url = urljoin(base_url, "ide/") + "?" + urlencode({"tkn": token})
-            async with httpx.AsyncClient(follow_redirects=False, timeout=30.0) as client:
-                for _ in range(4):
-                    response = await client.get(
-                        url,
-                        headers={"Authorization": f"Bearer {token}"},
-                    )
-                    _capture_ide_cookies(response, cookies)
-                    if response.status_code not in {301, 302, 303, 307, 308}:
-                        break
-                    location = response.headers.get("location")
-                    if not location:
-                        break
-                    location_url = urljoin(url, location)
-                    parts = urlsplit(location_url)
-                    url = parts._replace(query="", fragment="").geturl()
+            for _ in range(4):
+                response = await ide_http_client.get(
+                    url,
+                    headers={
+                        "Authorization": f"Bearer {token}",
+                        "Accept-Encoding": "identity",
+                    },
+                )
+                _capture_ide_cookies(response, cookies)
+                if response.status_code not in {301, 302, 303, 307, 308}:
+                    break
+                location = response.headers.get("location")
+                if not location:
+                    break
+                location_url = urljoin(url, location)
+                parts = urlsplit(location_url)
+                url = parts._replace(query="", fragment="").geturl()
             if response.status_code < 200 or response.status_code >= 300:
                 return _ide_error("Remote Web IDE bootstrap failed", 502)
-            ide_sessions[session_id] = {
+            _revoke_session_ide_keys(session_id)
+            key = crypto_secrets.token_urlsafe(32)
+            ide_keys[key] = {
                 "host_id": target.host.id,
+                "session_id": session_id,
+                "base_url": target.client.base_url.rstrip("/"),
+                "workspace": target.workspace,
                 "cookies": cookies,
+                "last_used": time.monotonic(),
             }
             result = Response(
                 content=response.content,
@@ -851,10 +909,11 @@ def create_app(manager: SessionManager) -> FastAPI:
             )
             result.set_cookie(
                 ide_session_cookie,
-                session_id,
+                key,
                 httponly=True,
                 samesite="lax",
                 path="/",
+                max_age=int(ide_key_ttl),
             )
             return result
         except httpx.TimeoutException:
@@ -870,44 +929,51 @@ def create_app(manager: SessionManager) -> FastAPI:
 
     async def _ide_proxy(
         request: Request,
-        session_id: str,
+        state: dict[str, Any],
         path: str,
     ) -> Response:
         if any(segment == ".." for segment in path.split("/")):
             return _ide_error("Invalid Web IDE path", 400)
-        resolved = _ide_target(session_id)
-        if isinstance(resolved, JSONResponse):
-            return resolved
-        target, token = resolved
-        session = ide_sessions.get(session_id) or {}
-        cookies = session.get("cookies") if session.get("host_id") == target.host.id else {}
-        upstream_url = target.client.base_url.rstrip("/") + "/ide/" + path
+        token = manager.rvm_hosts.token(state["host_id"])
+        if not token:
+            return _ide_error("RVM host has no configured token", 503)
+        cookies = state["cookies"]
+        upstream_url = state["base_url"] + "/ide/" + path
         if request.url.query:
             upstream_url += "?" + request.url.query
         headers = {
             key: value
             for key, value in request.headers.items()
-            if key.lower() not in {"host", "content-length", "cookie", "authorization"}
+            if key.lower()
+            not in {
+                "host",
+                "content-length",
+                "cookie",
+                "authorization",
+                "accept-encoding",
+            }
         }
         headers["Authorization"] = f"Bearer {token}"
+        headers["Accept-Encoding"] = "identity"
         if cookies:
             headers["Cookie"] = _ide_cookie_headers(cookies)
         body = await request.body()
         try:
-            client = httpx.AsyncClient(timeout=None)
-            response = await client.send(
-                client.build_request(request.method, upstream_url, headers=headers, content=body),
+            if ide_http_client is None:
+                return _ide_error("Web IDE proxy is not running", 503)
+            response = await ide_http_client.send(
+                ide_http_client.build_request(
+                    request.method, upstream_url, headers=headers, content=body
+                ),
                 stream=True,
             )
         except httpx.TimeoutException:
-            await client.aclose()
-            target.client.close()
+            _revoke_session_ide_keys(state["session_id"])
             return _ide_error("Remote Web IDE request timed out", 503)
         except httpx.HTTPError:
-            await client.aclose()
-            target.client.close()
+            _revoke_session_ide_keys(state["session_id"])
             return _ide_error("Remote Web IDE is offline or unreachable", 503)
-        target.client.close()
+        _capture_ide_cookies(response, cookies)
         excluded = {
             "content-encoding",
             "content-length",
@@ -925,7 +991,6 @@ def create_app(manager: SessionManager) -> FastAPI:
                     yield chunk
             finally:
                 await response.aclose()
-                await client.aclose()
 
         return StreamingResponse(
             stream(),
@@ -939,26 +1004,29 @@ def create_app(manager: SessionManager) -> FastAPI:
         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
     )
     async def session_ide_proxy(request: Request, session_id: str, path: str) -> Response:
-        return await _ide_proxy(request, session_id, path)
+        state = _ide_key_state(request.cookies.get(ide_session_cookie))
+        if state is None or state["session_id"] != session_id:
+            return _ide_error("Invalid or expired Web IDE key", 401)
+        return await _ide_proxy(request, state, path)
 
-    def _ide_session_from_cookie(request: Request) -> str | None:
-        return request.cookies.get(ide_session_cookie)
+    def _ide_key_from_request(request: Request) -> dict[str, Any] | None:
+        return _ide_key_state(request.cookies.get(ide_session_cookie))
 
     @app.api_route(
         "/ide/{path:path}",
         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
     )
     async def ide_path_proxy(request: Request, path: str) -> Response:
-        session_id = _ide_session_from_cookie(request)
-        if not session_id:
-            return _ide_error("No active Web IDE session", 404)
-        return await _ide_proxy(request, session_id, path)
+        state = _ide_key_from_request(request)
+        if state is None:
+            return _ide_error("Invalid or expired Web IDE key", 401)
+        return await _ide_proxy(request, state, path)
 
     async def ide_root_asset_proxy(request: Request, asset_root: str, path: str) -> Response:
-        session_id = _ide_session_from_cookie(request)
-        if not session_id:
-            return _ide_error("No active Web IDE session", 404)
-        return await _ide_proxy(request, session_id, f"static/{asset_root}/{path}")
+        state = _ide_key_from_request(request)
+        if state is None:
+            return _ide_error("Invalid or expired Web IDE key", 401)
+        return await _ide_proxy(request, state, f"static/{asset_root}/{path}")
 
     def _ide_root_asset_endpoint(asset_root: str) -> Callable[..., Any]:
         async def endpoint(request: Request, path: str) -> Response:
@@ -977,10 +1045,10 @@ def create_app(manager: SessionManager) -> FastAPI:
         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
     )
     async def ide_remote_resource_proxy(request: Request) -> Response:
-        session_id = _ide_session_from_cookie(request)
-        if not session_id:
-            return _ide_error("No active Web IDE session", 404)
-        return await _ide_proxy(request, session_id, "vscode-remote-resource")
+        state = _ide_key_from_request(request)
+        if state is None:
+            return _ide_error("Invalid or expired Web IDE key", 401)
+        return await _ide_proxy(request, state, "vscode-remote-resource")
 
     @app.get("/v1/sessions/{session_id}/artifacts/read")
     def session_artifact_read(session_id: str, path: str) -> dict[str, Any]:
@@ -2392,6 +2460,8 @@ def create_app(manager: SessionManager) -> FastAPI:
         surface_name: str,
         unavailable_reason: str,
         query_builder: Callable[[Any], str] | None = None,
+        target_override: Any | None = None,
+        token_override: str | None = None,
     ) -> None:
         """Proxy a bound remote RVM WebSocket without exposing the RVM token."""
         if not _websocket_authenticated(ws):
@@ -2403,18 +2473,22 @@ def create_app(manager: SessionManager) -> FastAPI:
         await ws.accept(subprotocol="openworker" if api_token else None)
 
         try:
-            session_id = session_id or ws.cookies.get(ide_session_cookie)
-            if not session_id:
-                await ws.close(code=1008, reason="No active Web IDE session")
-                return
-            target = manager.resolve_remote_target(session_id)
-            if target is None:
-                await ws.close(code=1008, reason=unavailable_reason)
-                return
-            token = manager.rvm_hosts.token(target.host.id)
-            if not token:
-                await ws.close(code=1008, reason="RVM host has no configured token")
-                return
+            if target_override is not None and token_override is not None:
+                target = target_override
+                token = token_override
+            else:
+                session_id = session_id or ws.cookies.get(ide_session_cookie)
+                if not session_id:
+                    await ws.close(code=1008, reason="No active Web IDE session")
+                    return
+                target = manager.resolve_remote_target(session_id)
+                if target is None:
+                    await ws.close(code=1008, reason=unavailable_reason)
+                    return
+                token = manager.rvm_hosts.token(target.host.id)
+                if not token:
+                    await ws.close(code=1008, reason="RVM host has no configured token")
+                    return
         except UnknownSessionError:
             reason = "Unknown session"
             await ws.close(code=1008, reason=reason)
@@ -2547,13 +2621,31 @@ def create_app(manager: SessionManager) -> FastAPI:
     @app.websocket("/")
     async def ws_rvm_ide(ws: WebSocket) -> None:
         """Proxy VS Code Serve Web's root management socket for the active IDE session."""
+        if "reconnectionToken" not in ws.query_params:
+            await ws.close(code=1008, reason="Not a Serve Web management socket")
+            return
+        state = _ide_key_state(ws.cookies.get(ide_session_cookie))
+        if state is None:
+            await ws.close(code=1008, reason="Invalid or expired Web IDE key")
+            return
+        target = SimpleNamespace(
+            client=SimpleNamespace(base_url=state["base_url"]),
+            host=SimpleNamespace(id=state["host_id"]),
+            workspace=state["workspace"],
+        )
+        token = manager.rvm_hosts.token(state["host_id"])
+        if not token:
+            await ws.close(code=1008, reason="RVM host has no configured token")
+            return
         await proxy_rvm_websocket(
             ws,
-            None,
+            state["session_id"],
             endpoint="ide/",
             surface_name="Web IDE",
             unavailable_reason="Web IDE requires a remote RVM session",
             query_builder=lambda _target: urlencode(dict(ws.query_params)),
+            target_override=target,
+            token_override=token,
         )
 
     @app.websocket("/ws/events")
