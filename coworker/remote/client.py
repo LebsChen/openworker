@@ -136,7 +136,7 @@ class RvmClient:
         if response.get("error"):
             error = response["error"]
             detail = error.get("message") if isinstance(error, dict) else str(error)
-            raise RvmRemoteError(f"{self.host_label}: browser request failed: {detail}")
+            raise RvmRemoteError(f"{self.host_label}: MCP request failed: {detail}")
         result = response.get("result")
         if not isinstance(result, dict):
             raise RvmMalformedResponseError(f"{self.host_label} returned malformed MCP response")
@@ -146,9 +146,9 @@ class RvmClient:
         if result.get("isError"):
             text = next(
                 (item.get("text") for item in content if isinstance(item, dict) and isinstance(item.get("text"), str)),
-                "remote browser request failed",
+                "remote MCP request failed",
             )
-            raise RvmRemoteError(f"{self.host_label}: {text}")
+            raise RvmRemoteError(f"{self.host_label}: MCP request failed: {text}")
         return content
 
     def mcp_tools(self) -> list[str]:
@@ -217,6 +217,16 @@ class RvmClient:
         content = self._mcp_call("browser_close")
         text = next((item.get("text") for item in content if item.get("type") == "text"), "Browser closed")
         return {"ok": True, "message": text}
+
+    def lsp(self, **arguments: Any) -> Any:
+        content = self._mcp_call("lsp", arguments)
+        text = next((item.get("text") for item in content if item.get("type") == "text"), None)
+        if not isinstance(text, str):
+            raise RvmMalformedResponseError(f"{self.host_label} returned malformed LSP response")
+        try:
+            return json.loads(text)
+        except (TypeError, ValueError) as exc:
+            raise RvmMalformedResponseError(f"{self.host_label} returned malformed LSP response") from exc
 
     def exec_sync(
         self, cmd: str, *, cwd: str | None = None, timeout: float | None = None,

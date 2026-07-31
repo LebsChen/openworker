@@ -7,7 +7,7 @@ import re
 import uuid
 from dataclasses import dataclass
 from typing import Any, Optional
-from urllib.parse import urlparse
+from urllib.parse import quote, unquote, urlparse
 
 import aisuite as ai
 
@@ -599,6 +599,229 @@ def remote_browser_tools(target: RemoteTarget) -> list:
         capabilities=["browser_cdp"],
     )
     return [browser_navigate, browser_eval, browser_screenshot, browser_close]
+
+
+_LSP_CAPABILITIES = {"lsp", "lsp_server", "language_server", "language_servers"}
+_LSP_LIMITS = {
+    "definition": 100,
+    "references": 200,
+    "hover": 1,
+    "document_symbols": 200,
+    "diagnostics": 200,
+}
+
+
+def _lsp_path(target: RemoteTarget, value: str) -> str:
+    raw = str(value or "").strip()
+    if raw.startswith("file://"):
+        parsed = urlparse(raw)
+        raw = unquote(parsed.path or "")
+        if target.style.name == "windows" and re.match(r"^/[A-Za-z]:", raw):
+            raw = raw[1:].replace("/", "\\")
+    if not raw:
+        raise ValueError("path required")
+    return target.resolve(raw)
+
+
+def _lsp_uri(target: RemoteTarget, path: str) -> str:
+    normalized = str(path).replace("\\", "/") if target.style.name == "windows" else str(path)
+    if target.style.name == "windows" and re.match(r"^[A-Za-z]:/", normalized):
+        return f"file:///{quote(normalized, safe='/:')}"
+    return f"file://{quote(normalized, safe='/:')}"
+
+
+def _lsp_location(target: RemoteTarget, item: Any) -> dict[str, Any] | None:
+    if not isinstance(item, dict):
+        return None
+    location = item.get("location") if isinstance(item.get("location"), dict) else item
+    uri = location.get("uri") or location.get("targetUri") or location.get("path")
+    range_value = location.get("range") or location.get("targetRange") or location.get("selectionRange")
+    if not isinstance(uri, str):
+        return None
+    if isinstance(range_value, dict):
+        start = range_value.get("start") or {}
+    elif "line" in location or "character" in location:
+        start = {
+            "line": max(0, int(location.get("line", 0)) - 1),
+            "character": max(0, int(location.get("character", 0)) - 1),
+        }
+    else:
+        return None
+    raw_path = unquote(urlparse(uri).path) if uri.startswith("file://") else uri
+    if target.style.name == "windows" and re.match(r"^/[A-Za-z]:", raw_path):
+        raw_path = raw_path[1:].replace("/", "\\")
+    try:
+        path = target.relative(target.resolve(raw_path))
+    except (RemotePathError, ValueError):
+        return None
+    return {
+        "file": path,
+        "line": int(start.get("line", 0)) + 1,
+        "column": int(start.get("character", 0)) + 1,
+        **({"text": str(item.get("name") or item.get("detail") or item.get("containerName"))}
+           if item.get("name") or item.get("detail") or item.get("containerName") else {}),
+    }
+
+
+def _lsp_truncate(items: list[dict[str, Any]], limit: int) -> dict[str, Any]:
+    clipped = items[:limit]
+    result: dict[str, Any] = {"items": clipped, "count": len(items)}
+    if len(items) > limit:
+        result["truncated"] = True
+        result["notice"] = f"Showing first {limit} of {len(items)} results."
+    return result
+
+
+def _lsp_hover(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict) and "contents" in value:
+        contents = value["contents"]
+    elif isinstance(value, dict) and ("value" in value or "language" in value):
+        contents = value
+    else:
+        contents = value
+    parts: list[str] = []
+    values = contents if isinstance(contents, list) else [contents]
+    for item in values:
+        if isinstance(item, str):
+            parts.append(item)
+        elif isinstance(item, dict):
+            text = item.get("value") or item.get("language") or item.get("contents")
+            if text:
+                parts.append(str(text))
+    text = "\n\n".join(parts).strip()
+    if len(text) > 4000:
+        text = text[:3997] + "..."
+    return {"text": text} if text else {}
+
+
+def _lsp_symbols(target: RemoteTarget, values: Any) -> list[dict[str, Any]]:
+    output: list[dict[str, Any]] = []
+    def visit(item: Any) -> None:
+        if not isinstance(item, dict):
+            return
+        location = _lsp_location(target, {
+            "location": item.get("location"),
+            "uri": item.get("uri"),
+            "range": item.get("range") or item.get("selectionRange"),
+            "name": item.get("name"),
+            "detail": item.get("detail"),
+        })
+        if location:
+            location["name"] = str(item.get("name") or "")
+            if item.get("kind") is not None:
+                location["kind"] = item["kind"]
+            output.append(location)
+        for child in item.get("children") or []:
+            visit(child)
+    for value in values if isinstance(values, list) else []:
+        visit(value)
+    return output
+
+
+def _lsp_diagnostics(target: RemoteTarget, value: Any) -> list[dict[str, Any]]:
+    uri = value.get("uri") if isinstance(value, dict) else None
+    diagnostics = value.get("diagnostics") if isinstance(value, dict) else value
+    if not isinstance(diagnostics, list):
+        return []
+    result = []
+    for diagnostic in diagnostics:
+        if not isinstance(diagnostic, dict):
+            continue
+        start = (diagnostic.get("range") or {}).get("start") or {}
+        entry = {
+            "line": int(start.get("line", 0)) + 1,
+            "column": int(start.get("character", 0)) + 1,
+            "message": str(diagnostic.get("message") or ""),
+        }
+        if uri:
+            raw_path = unquote(urlparse(uri).path) if str(uri).startswith("file://") else uri
+            if target.style.name == "windows" and re.match(r"^/[A-Za-z]:", raw_path):
+                raw_path = raw_path[1:].replace("/", "\\")
+            try:
+                entry["file"] = target.relative(target.resolve(raw_path))
+            except (RemotePathError, ValueError):
+                continue
+        if diagnostic.get("severity") is not None:
+            entry["severity"] = diagnostic["severity"]
+        result.append(entry)
+    return result
+
+
+def remote_lsp_tools(target: RemoteTarget) -> list:
+    capabilities = target.capabilities
+    if capabilities is None:
+        try:
+            capabilities = set(target.client.health().get("capabilities") or [])
+        except RvmError:
+            return []
+    if not capabilities.intersection(_LSP_CAPABILITIES):
+        return []
+
+    def query(op: str, path: str, line: int = 1, character: int = 1, language: str = "", **kwargs: Any) -> dict[str, Any]:
+        try:
+            resolved = _lsp_path(target, path)
+            arguments = {
+                "op": op,
+                "path": resolved,
+                "root": target.workspace,
+                "line": line,
+                "character": character,
+                **kwargs,
+            }
+            if language:
+                arguments["language"] = language
+            response = target.client.lsp(**arguments)
+            if isinstance(response, dict) and (response.get("isError") or response.get("error")):
+                return _error(RvmError(str(response.get("error") or "remote LSP request failed")))
+            return response
+        except (RvmError, RemotePathError, ValueError) as exc:
+            return _error(exc)
+
+    def hover(path: str, line: int, character: int, language: str = "") -> dict[str, Any]:
+        result = query("hover", path, line, character, language)
+        if "error" in result:
+            return result
+        return _lsp_hover(result)
+
+    def definition(path: str, line: int, character: int, language: str = "") -> dict[str, Any]:
+        result = query("definition", path, line, character, language)
+        if "error" in result:
+            return result
+        locations = [_lsp_location(target, item) for item in result if isinstance(result, list) for item in [item]]
+        return _lsp_truncate([item for item in locations if item], _LSP_LIMITS["definition"])
+
+    def references(path: str, line: int, character: int, language: str = "", include_declaration: bool = True) -> dict[str, Any]:
+        result = query("references", path, line, character, language, includeDeclaration=include_declaration)
+        if "error" in result:
+            return result
+        locations = [_lsp_location(target, item) for item in result if isinstance(result, list) for item in [item]]
+        return _lsp_truncate([item for item in locations if item], _LSP_LIMITS["references"])
+
+    def document_symbols(path: str, language: str = "") -> dict[str, Any]:
+        result = query("documentSymbol", path, language=language)
+        if "error" in result:
+            return result
+        return _lsp_truncate(_lsp_symbols(target, result), _LSP_LIMITS["document_symbols"])
+
+    def diagnostics(path: str, language: str = "") -> dict[str, Any]:
+        result = query("diagnostics", path, language=language)
+        if "error" in result:
+            return result
+        return _lsp_truncate(_lsp_diagnostics(target, result), _LSP_LIMITS["diagnostics"])
+
+    common = "Read-only LSP query. Paths are confined to the remote session roots; positions are 1-based."
+    for fn, description in (
+        (hover, f"{common} Return hover information. No edits are performed."),
+        (definition, f"{common} Find symbol definitions. No edits are performed."),
+        (references, f"{common} Find symbol references. No edits are performed."),
+        (document_symbols, f"{common} List document symbols. No edits are performed."),
+        (diagnostics, f"{common} Read published or pull-based diagnostics. No edits are performed."),
+    ):
+        fn.__doc__ = description
+        fn.__aisuite_tool_metadata__ = ai.ToolMetadata(
+            category="lsp", risk_level="low", requires_approval=False, capabilities=["lsp"]
+        )
+    return [hover, definition, references, document_symbols, diagnostics]
 
 
 def remote_git_tools(target: RemoteTarget) -> list:
