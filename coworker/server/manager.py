@@ -577,6 +577,8 @@ class SessionManager:
             engine.compaction_state = CompactionState.from_dict(record.compaction)
         engine.compaction_settings = self.compaction_settings
         self._engines[session_id] = engine
+        if record is not None and remote_target is not None and record.workspace != remote_target.workspace:
+            self.save(session_id, engine)
         if is_new_session:
             # Bind remote sessions durably before the first turn. Host selection is a
             # session invariant, not transient WebSocket state; a reload must reconstruct
@@ -646,13 +648,35 @@ class SessionManager:
                 f"RVM host {host.name} ({host_id}) health check failed: {exc}"
             ) from exc
         style = self.rvm_hosts.path_style_for(host, health=health)
-        remote_workspace = record.workspace if record and record.workspace else workspace
+        requested_workspace = record.workspace if record and record.workspace else workspace
+        remote_workspace = None
+        if requested_workspace:
+            try:
+                normalized = style.normalize(str(requested_workspace))
+                resolvable = True
+                exists = getattr(client, "exists", None)
+                if callable(exists):
+                    resolvable = bool(exists(normalized).get("exists"))
+                if style.is_absolute(normalized) and resolvable:
+                    remote_workspace = normalized
+            except Exception:
+                remote_workspace = None
         if not remote_workspace:
             if not host.workspace:
                 client.close()
                 raise ValueError(
-                    f"RVM host {host_id} has no workspace for session {session_id}"
+                    f"RVM host {host_id} has no usable workspace for session {session_id}; "
+                    "enter the remote workspace in Settings and test the connection"
                 )
+            try:
+                if not style.is_absolute(style.normalize(host.workspace)):
+                    raise ValueError("configured workspace is not absolute for this host")
+            except (ValueError, TypeError) as exc:
+                client.close()
+                raise ValueError(
+                    f"RVM host {host_id} has no usable workspace for session {session_id}; "
+                    "enter the remote workspace in Settings and test the connection"
+                ) from exc
             remote_workspace = style.join(host.workspace, f".coworker/sessions/{session_id}")
             if create_workspace:
                 client.mkdir(remote_workspace)
@@ -1386,6 +1410,44 @@ class SessionManager:
 
     def list_artifacts(self, session_id: str) -> list[dict[str, Any]]:
         record = self.session_store.load(session_id)
+        if record is not None and record.host_id and record.host_id != "local":
+            target = self.resolve_remote_target(session_id)
+            try:
+                suffixes = {
+                    ".md", ".markdown", ".html", ".htm", ".txt", ".json", ".csv", ".tsv",
+                    ".py", ".js", ".ts", ".tsx", ".css", ".png", ".jpg", ".jpeg", ".webp",
+                    ".gif", ".pdf", ".xlsx", ".xls", ".pptx", ".ppt", ".pptm", ".docx",
+                    ".doc", ".docm",
+                }
+                pending = [target.workspace]
+                out: list[dict[str, Any]] = []
+                while pending and len(out) < 80:
+                    current = pending.pop(0)
+                    listing = target.client.ls(current)
+                    for item in listing.get("items", []):
+                        name = str(item.get("name", ""))
+                        if not name or name.startswith(".") or name in {"node_modules", "target", "dist", "__pycache__"}:
+                            continue
+                        child = target.style.join(current, name)
+                        if item.get("dir"):
+                            pending.append(child)
+                            continue
+                        suffix = Path(name).suffix.lower()
+                        if suffix not in suffixes:
+                            continue
+                        metadata = target.client.stat(child)
+                        out.append({
+                            "path": target.style.relative(target.workspace, child),
+                            "abs_path": child,
+                            "name": name,
+                            "kind": _artifact_kind(Path(name)),
+                            "size": metadata.get("size", item.get("size", 0)),
+                            "modified_at": metadata.get("modified_at", metadata.get("mtime", item.get("mtime", 0))),
+                        })
+                out.sort(key=lambda artifact: artifact["modified_at"], reverse=True)
+                return out[:80]
+            finally:
+                target.client.close()
         workspace = record.workspace if record else self.default_workspace
         if not workspace:
             return []
@@ -3712,11 +3774,13 @@ class SessionManager:
 
     def save(self, session_id: str, engine: TurnEngine) -> None:
         executor = getattr(engine, "executor", None)
-        if isinstance(executor, RvmExecutor):
+        remote_target = getattr(engine, "remote_target", None)
+        if remote_target is not None:
+            workspace = str(remote_target.workspace)
+        elif isinstance(executor, RvmExecutor):
             workspace = str(executor.cwd)
         else:
             workspace = os.path.realpath(str(executor.cwd)) if executor else ""
-        remote_target = getattr(engine, "remote_target", None)
         self.session_store.save(
             SessionRecord(
                 session_id=session_id,

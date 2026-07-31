@@ -70,7 +70,7 @@ import { Onboarding } from "./components/Onboarding";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { ScheduledView } from "./components/ScheduledView";
 import { RightRail } from "./components/RightRail";
-import { setHostProbeResult } from "./hostStatus";
+import { hostProbeResult, setHostProbeResult } from "./hostStatus";
 import { IntegrationsView } from "./components/IntegrationsView";
 import { SettingsView } from "./components/SettingsView";
 import { PersonaView } from "./components/PersonaView";
@@ -915,7 +915,7 @@ export function App() {
       }
     };
 
-    const session = new Session(sessionId, workspace || "", agent, {
+    const session = new Session(sessionId, sessionHost.local ? workspace || "" : "", agent, {
       onEvent: handleEvent,
       onOpen: () => {
         if (!isCurrent()) return;
@@ -1807,11 +1807,15 @@ export function App() {
                 })}
               </select>
             )}
-            {!sessionHost.local && (sessionHost.offline || sessionHost.status !== "online") && (
+            {!sessionHost.local && (() => {
+              const probe = hostProbeResult(sessionHost.id);
+              const status = sessionHost.offline ? "offline" : (probe?.status || sessionHost.status || "unknown");
+              return status !== "online" && (
               <div className="topbar-remote-status text-[11px] text-warnInk" role="status">
-                Remote host "{sessionHost.name}" is {sessionHost.status === "auth_failed" ? "authentication failed" : "offline or untested"}; this session will not fall back to Local.
+                Remote host "{sessionHost.name}" is {status === "auth_failed" ? "authentication failed" : "offline or untested"}; this session will not fall back to Local.
               </div>
-            )}
+              );
+            })()}
             <label className="flex items-center gap-1 text-[11px] text-muted" title={t("app.createSessionIsolatedWorkspace")}>
               <input
                 type="checkbox"

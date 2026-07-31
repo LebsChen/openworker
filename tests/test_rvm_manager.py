@@ -99,6 +99,93 @@ def test_new_session_host_can_be_selected_per_connection(monkeypatch, tmp_path):
     assert manager.session_store.load("selected-session").host_id == "rvm"
 
 
+def test_remote_session_rejects_local_workspace_for_windows_host(monkeypatch, tmp_path):
+    class Client:
+        def health(self):
+            return {"platform": "windows"}
+
+        def mkdir(self, path):
+            return {"ok": True}
+
+        def close(self):
+            pass
+
+    manager = SessionManager(data_dir=tmp_path)
+    manager.rvm_hosts.put(
+        RvmHost("winrvm", "Windows", "http://rvm", platform="windows", workspace=r"C:\Users\Team"),
+        "token",
+    )
+    monkeypatch.setattr(manager.rvm_hosts, "client", lambda _host_id: Client())
+    monkeypatch.setattr(
+        manager_module,
+        "build_engine",
+        lambda **kwargs: SimpleNamespace(
+            model="m",
+            permissions=SimpleNamespace(mode=SimpleNamespace(value="interactive")),
+            messages=[],
+            executor=SimpleNamespace(cwd=kwargs["remote_target"].workspace),
+            remote_target=kwargs["remote_target"],
+            agent_name="code",
+        ),
+    )
+
+    engine = manager.get_engine(
+        "windows-session",
+        agent="code",
+        host_id="winrvm",
+        workspace="/home/ubuntu/OpenWorker/windows-session",
+    )
+
+    assert engine.remote_target.workspace.startswith(r"C:\Users\Team\.coworker\sessions")
+    assert not engine.remote_target.workspace.startswith("/home/")
+    assert manager.session_store.load("windows-session").workspace == engine.remote_target.workspace
+
+
+def test_windows_host_never_accepts_posix_persisted_workspace(monkeypatch, tmp_path):
+    class Client:
+        def health(self):
+            return {"platform": "windows"}
+
+        def mkdir(self, path):
+            return {"ok": True}
+
+        def close(self):
+            pass
+
+    manager = SessionManager(data_dir=tmp_path)
+    manager.rvm_hosts.put(
+        RvmHost("winrvm", "Windows", "http://rvm", platform="windows", workspace=r"C:\Users\Team"),
+        "token",
+    )
+    monkeypatch.setattr(manager.rvm_hosts, "client", lambda _host_id: Client())
+    manager.session_store.save(
+        SessionRecord(
+            session_id="bad-workspace",
+            workspace="/home/ubuntu/OpenWorker/bad-workspace",
+            model="m",
+            mode="interactive",
+            host_id="winrvm",
+        )
+    )
+    monkeypatch.setattr(
+        manager_module,
+        "build_engine",
+        lambda **kwargs: SimpleNamespace(
+            model="m",
+            permissions=SimpleNamespace(mode=SimpleNamespace(value="interactive")),
+            messages=[],
+            executor=SimpleNamespace(cwd=kwargs["remote_target"].workspace),
+            remote_target=kwargs["remote_target"],
+            agent_name="code",
+        ),
+    )
+
+    engine = manager.get_engine("bad-workspace", agent="code")
+
+    assert engine.remote_target.workspace.startswith(r"C:\Users\Team\.coworker\sessions")
+    assert manager.session_store.load("bad-workspace").workspace == engine.remote_target.workspace
+
+
 def test_stale_local_engine_is_rebuilt_for_requested_remote_host(monkeypatch, tmp_path):
     class Client:
         def health(self):
@@ -167,6 +254,44 @@ def test_remote_roots_use_remote_existence_check(monkeypatch, tmp_path):
     roots = manager.get_roots("remote-roots")
     assert roots[0]["path"].startswith(r"C:\Users\Team")
     assert roots[0]["exists"] is True
+
+
+def test_remote_artifacts_use_rvm_listing(monkeypatch, tmp_path):
+    class Client:
+        def health(self):
+            return {"platform": "windows"}
+
+        def ls(self, path):
+            if path.endswith("remote-artifacts"):
+                return {"items": [{"name": "report.txt", "dir": False}]}
+            return {"items": []}
+
+        def stat(self, path):
+            return {"size": 7, "modified_at": 12.5}
+
+        def close(self):
+            pass
+
+    manager = SessionManager(data_dir=tmp_path)
+    manager.rvm_hosts.put(
+        RvmHost("winrvm", "Windows", "http://rvm", platform="windows", workspace=r"C:\Users\Team"),
+        "token",
+    )
+    monkeypatch.setattr(manager.rvm_hosts, "client", lambda _host_id: Client())
+    manager.session_store.save(
+        SessionRecord(
+            session_id="remote-artifacts",
+            workspace=r"C:\Users\Team\.coworker\sessions\remote-artifacts",
+            model="m",
+            mode="interactive",
+            host_id="winrvm",
+        )
+    )
+
+    artifacts = manager.list_artifacts("remote-artifacts")
+
+    assert artifacts[0]["path"] == "report.txt"
+    assert artifacts[0]["abs_path"].endswith(r"\report.txt")
 
 
 def test_cached_remote_session_rejects_host_marked_offline(tmp_path):
