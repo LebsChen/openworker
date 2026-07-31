@@ -567,6 +567,11 @@ class SessionManager:
         engine.compaction_settings = self.compaction_settings
         self._engines[session_id] = engine
         if is_new_session:
+            # Bind remote sessions durably before the first turn. Host selection is a
+            # session invariant, not transient WebSocket state; a reload must reconstruct
+            # the same remote executor from the server record.
+            if remote_target is not None:
+                self.save(session_id, engine)
             self._emit_session_created(session_id, agent_name)
         return engine
 
