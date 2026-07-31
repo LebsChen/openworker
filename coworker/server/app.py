@@ -606,7 +606,12 @@ def create_app(manager: SessionManager) -> FastAPI:
     @app.put("/v1/skills/{name}")
     def skill_save(name: str, body: dict) -> dict[str, Any]:
         try:
-            return manager.save_skill(name, str((body or {}).get("body", "")), bool((body or {}).get("enabled", True)))
+            return manager.save_skill(
+                name,
+                str((body or {}).get("body", "")),
+                bool((body or {}).get("enabled", True)),
+                str((body or {}).get("description", "")),
+            )
         except ValueError as exc:
             return {"ok": False, "error": str(exc)}
 

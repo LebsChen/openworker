@@ -91,6 +91,7 @@ from ..assets import AssetStore, PLAYBOOK_TEMPLATE
 from ..sessions import SessionRecord
 from ..session_workspaces import SessionWorkspaceManager
 from ..skills import SkillLoader
+from ..skills.base import _parse_skill
 
 _SCOPES = {s.value for s in Scope}
 
@@ -4225,8 +4226,23 @@ class SessionManager:
         return _list_agents()
 
     def list_skills(self) -> list[dict[str, Any]]:
-        loader = SkillLoader([state_dir() / "skills"])
-        return loader.catalog()
+        skills_dir = state_dir() / "skills"
+        result: list[dict[str, Any]] = []
+        for path in sorted(skills_dir.glob("*/SKILL.md")):
+            try:
+                skill = _parse_skill(path)
+            except (OSError, ValueError):
+                continue
+            result.append(
+                {
+                    "name": skill.name,
+                    "description": skill.description,
+                    "enabled": skill.enabled,
+                    "body": skill.instructions,
+                    "path": str(path),
+                }
+            )
+        return result
 
     def get_agents_md(self) -> dict[str, Any]:
         path = state_dir() / "AGENTS.md"
@@ -4237,14 +4253,21 @@ class SessionManager:
         write_private_text(state_dir() / "AGENTS.md", body)
         return self.get_agents_md()
 
-    def save_skill(self, name: str, body: str, enabled: bool = True) -> dict[str, Any]:
+    def save_skill(
+        self, name: str, body: str, enabled: bool = True, description: str = ""
+    ) -> dict[str, Any]:
         if not name or Path(name).name != name:
             raise ValueError("invalid skill name")
         path = state_dir() / "skills" / name / "SKILL.md"
         from ..secrets import write_private_text
-        content = f"---\nname: {name}\nenabled: {'true' if enabled else 'false'}\n---\n\n{body.rstrip()}\n"
+        if "\n" in name or "\r" in name or "\n" in description or "\r" in description:
+            raise ValueError("skill name and description must not contain newlines")
+        content = (
+            f"---\nname: {name}\ndescription: {description}\n"
+            f"enabled: {'true' if enabled else 'false'}\n---\n\n{body.rstrip()}\n"
+        )
         write_private_text(path, content)
-        return {"name": name, "enabled": enabled, "body": body}
+        return {"name": name, "description": description, "enabled": enabled, "body": body, "path": str(path)}
 
     def delete_skill(self, name: str) -> dict[str, Any]:
         path = state_dir() / "skills" / Path(name).name

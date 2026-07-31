@@ -315,9 +315,10 @@ def build_engine(
     knowledge = AssetStore("knowledge")
     playbooks = AssetStore("playbooks")
     workspace_key = str(ws) if ws is not None else None
+    workspace_style = remote_target.style.name if remote_target is not None else None
     always_notes = [
         note.body
-        for note in knowledge.iter_matching(workspace=workspace_key)
+            for note in knowledge.iter_matching(workspace=workspace_key, path_style=workspace_style)
         if note.trigger == "always"
     ]
     if always_notes:
@@ -343,8 +344,8 @@ def build_engine(
             )
         )
     for asset_catalog in (
-        knowledge.catalog_text(workspace=workspace_key),
-        playbooks.catalog_text(workspace=workspace_key),
+        knowledge.catalog_text(workspace=workspace_key, path_style=workspace_style),
+        playbooks.catalog_text(workspace=workspace_key, path_style=workspace_style),
     ):
         if asset_catalog:
             instructions = f"{instructions}\n\n{asset_catalog}"

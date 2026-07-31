@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any, Iterable
 
 from ..secrets import state_dir, write_private_text
@@ -76,7 +77,11 @@ class AssetStore:
         return [a.metadata() for a in self.iter_matching(workspace=workspace, enabled_only=False)]
 
     def iter_matching(
-        self, *, workspace: str | None = None, enabled_only: bool = True
+        self,
+        *,
+        workspace: str | None = None,
+        enabled_only: bool = True,
+        path_style: str | None = None,
     ) -> Iterable[Asset]:
         for path in sorted(self.directory.glob("*.md")):
             try:
@@ -85,20 +90,28 @@ class AssetStore:
                 continue
             if enabled_only and not asset.enabled:
                 continue
-            if _scope_matches(asset, workspace):
+            if _scope_matches(asset, workspace, path_style=path_style):
                 yield asset
 
-    def get(self, name: str, *, workspace: str | None = None) -> Asset | None:
+    def get(
+        self,
+        name: str,
+        *,
+        workspace: str | None = None,
+        path_style: str | None = None,
+    ) -> Asset | None:
         path = self._path(name)
         if not path.is_file():
             return None
         asset = self._read(path)
-        return asset if _scope_matches(asset, workspace) else None
+        return asset if _scope_matches(asset, workspace, path_style=path_style) else None
 
     def save(self, data: dict[str, Any], *, existing: str | None = None) -> dict[str, Any]:
         name = str(data.get("name") or existing or "").strip()
         if not name or "/" in name or "\\" in name:
             raise ValueError("asset name must be a non-empty filename")
+        if "\n" in name or "\r" in name:
+            raise ValueError("asset name must not contain newlines")
         scope = str(data.get("scope", "global")).strip().lower()
         if scope not in {"global", "project"}:
             raise ValueError("scope must be global or project")
@@ -107,6 +120,8 @@ class AssetStore:
             raise ValueError("project is required for project-scoped assets")
         old = self.get(existing or name)
         description = str(data.get("description", old.description if old else "")).strip()
+        if "\n" in description or "\r" in description:
+            raise ValueError("asset description must not contain newlines")
         body = str(data.get("body", old.body if old else "")).strip()
         if self.kind == "playbooks" and not body and old is None:
             body = PLAYBOOK_TEMPLATE.format(name=name, description=description or "A reusable procedure.")
@@ -117,10 +132,16 @@ class AssetStore:
             enabled=bool(data.get("enabled", old.enabled if old else True)),
             scope=scope,
             project=project,
-            trigger=(str(data["trigger"]).strip() if data.get("trigger") is not None else (old.trigger if old else None)),
+            trigger=(
+                str(data["trigger"]).strip()
+                if data.get("trigger") is not None
+                else (old.trigger if old else "manual")
+            ),
         )
-        if self.kind == "knowledge" and asset.trigger not in {None, "always"}:
-            asset.trigger = str(asset.trigger)
+        if self.kind == "knowledge" and asset.trigger not in {"always", "manual"}:
+            raise ValueError("knowledge trigger must be always or manual")
+        if self.kind != "knowledge":
+            asset.trigger = None
         if existing and existing != name:
             self._path(existing).unlink(missing_ok=True)
         write_private_text(self._path(name), _render(asset))
@@ -133,8 +154,10 @@ class AssetStore:
         path.unlink()
         return True
 
-    def catalog_text(self, *, workspace: str | None = None) -> str:
-        items = list(self.iter_matching(workspace=workspace))
+    def catalog_text(
+        self, *, workspace: str | None = None, path_style: str | None = None
+    ) -> str:
+        items = list(self.iter_matching(workspace=workspace, path_style=path_style))
         if not items:
             return ""
         noun = "knowledge notes" if self.kind == "knowledge" else "playbooks"
@@ -159,7 +182,14 @@ class AssetStore:
                 if ":" not in line:
                     continue
                 key, value = line.split(":", 1)
-                value = value.strip().strip('"').strip("'")
+                value = value.strip()
+                if value.startswith('"'):
+                    try:
+                        value = json.loads(value)
+                    except json.JSONDecodeError as exc:
+                        raise ValueError(f"invalid frontmatter value for {key}") from exc
+                elif value.startswith("'") and value.endswith("'"):
+                    value = value[1:-1]
                 raw[key.strip().lower()] = _BOOLS.get(value.lower(), value)
         return Asset(
             name=str(raw.get("name") or path.stem),
@@ -173,19 +203,35 @@ class AssetStore:
         )
 
 
-def _scope_matches(asset: Asset, workspace: str | None) -> bool:
+def _scope_matches(
+    asset: Asset, workspace: str | None, *, path_style: str | None = None
+) -> bool:
     if asset.scope == "global":
         return True
     if not workspace or not asset.project:
         return False
-    return str(Path(workspace)) == asset.project
+    style = path_style or (
+        "windows"
+        if ("\\" in workspace or re.match(r"^[A-Za-z]:", workspace))
+        else "posix"
+    )
+    if style == "windows":
+        candidate = PureWindowsPath(workspace)
+        project = PureWindowsPath(asset.project)
+        candidate_text = str(candidate).rstrip("\\").casefold()
+        project_text = str(project).rstrip("\\").casefold()
+        return candidate_text == project_text or candidate_text.startswith(project_text + "\\")
+    else:
+        candidate = PurePosixPath(workspace)
+        project = PurePosixPath(asset.project)
+        return candidate == project or project in candidate.parents
 
 
 def _render(asset: Asset) -> str:
     lines = [
         "---",
-        f"name: {asset.name}",
-        f"description: {asset.description}",
+        f"name: {json.dumps(asset.name, ensure_ascii=False)}",
+        f"description: {json.dumps(asset.description, ensure_ascii=False)}",
         f"enabled: {'true' if asset.enabled else 'false'}",
         f"scope: {asset.scope}",
     ]
