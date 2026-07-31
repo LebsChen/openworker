@@ -168,10 +168,19 @@ const sessionHostBindings = new Map<string, string>();
 
 export const rememberSessionHost = (sessionId: string, host: SessionHost): void => {
   sessionHostBindings.set(sessionId, host.id);
+  try {
+    localStorage.setItem(`openworker:session-host:${sessionId}`, host.id);
+  } catch {}
 };
 
 export const hostForSession = (sessionId: string): SessionHost => {
-  const hostId = sessionHostBindings.get(sessionId);
+  let hostId = sessionHostBindings.get(sessionId);
+  if (!hostId) {
+    try {
+      hostId = localStorage.getItem(`openworker:session-host:${sessionId}`) || undefined;
+    } catch {}
+    if (hostId) sessionHostBindings.set(sessionId, hostId);
+  }
   const host = sessionHosts().find((candidate) => candidate.id === hostId);
   if (!host) throw new Error(`No host binding found for session ${sessionId}.`);
   return host;
@@ -208,7 +217,11 @@ const fetch = (
 };
 
 const request = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
-  const res = await fetch(`${httpBase()}${path}`, init);
+  const headers = new Headers(init.headers);
+  if (typeof init.body === "string" && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  const res = await fetch(`${httpBase()}${path}`, { ...init, headers });
   const data = await res.json();
   if (!res.ok || data?.ok === false) {
     throw new Error(data?.error || `request failed: ${res.status}`);

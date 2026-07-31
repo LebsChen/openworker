@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import {
   getArtifacts,
+  createAsset,
   getHealth,
   getInbox,
   getSessionMessages,
@@ -46,6 +47,25 @@ it("authenticates REST and session WebSocket calls with the launch token", async
   const session = new Session("s1", "/workspace", "code", { onEvent: vi.fn() });
   const socket = (session as unknown as { ws: FakeWebSocket }).ws;
   expect(socket.protocols).toEqual(["openworker", "launch-token"]);
+});
+
+it("adds JSON content type for generic JSON writes without replacing explicit headers", async () => {
+  const request = vi.fn(async (_url: string, init?: RequestInit) => ({
+    ok: true,
+    json: async () => ({ name: "note", description: "", body: "", enabled: true, scope: "global" }),
+    init,
+  }) as unknown as Response);
+  vi.stubGlobal("fetch", request);
+
+  await createAsset("knowledge", {
+    name: "note",
+    description: "",
+    body: "",
+    enabled: true,
+    scope: "global",
+  });
+  const headers = new Headers(request.mock.calls[0][1]?.headers);
+  expect(headers.get("Content-Type")).toBe("application/json");
 });
 
 it("routes every session REST request through the bound remote host", async () => {

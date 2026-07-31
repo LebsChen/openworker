@@ -441,6 +441,7 @@
   "assets.localSub": "Local OpenWorker assets, independent of Devin Cloud.",
   "assets.new": "New asset",
   "assets.name": "Name",
+  "assets.nameRequired": "Name is required.",
   "assets.description": "Description",
   "assets.enabled": "Enabled",
   "assets.scope": "Scope",

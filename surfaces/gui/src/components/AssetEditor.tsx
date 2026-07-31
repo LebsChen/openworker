@@ -24,7 +24,13 @@ export function AssetEditor({ kind }: { kind: AssetKind }) {
   const [draft, setDraft] = useState<Asset>(emptyAsset());
   const [notice, setNotice] = useState<Notice>({});
   const reload = async () => { try { setItems(await getAssets(kind)); } catch (error) { setNotice({ error: String(error) }); } };
-  useEffect(() => { void reload(); }, [kind]);
+  useEffect(() => {
+    setItems([]);
+    setSelected(null);
+    setDraft(emptyAsset());
+    setNotice({});
+    void reload();
+  }, [kind]);
   const edit = async (item?: Asset) => {
     setNotice({});
     if (!item) { setSelected(null); setDraft(emptyAsset()); return; }
@@ -34,7 +40,10 @@ export function AssetEditor({ kind }: { kind: AssetKind }) {
     } catch (error) { setNotice({ error: String(error) }); }
   };
   const save = async () => {
-    if (!draft.name.trim()) return;
+    if (!draft.name.trim()) {
+      setNotice({ error: t("assets.nameRequired") });
+      return;
+    }
     try {
       const saved = selected ? await updateAsset(kind, selected.name, draft) : await createAsset(kind, draft);
       await reload(); setSelected(saved); setDraft(saved); setNotice({ success: t("assets.saved") });
@@ -75,7 +84,16 @@ export function TextAssetEditor({ skill = false }: { skill?: boolean }) {
   const [items, setItems] = useState<Skill[]>([]); const [selected, setSelected] = useState<Skill | null>(null);
   const [name, setName] = useState(skill ? "" : "AGENTS.md"); const [description, setDescription] = useState(""); const [body, setBody] = useState(""); const [enabled, setEnabled] = useState(true); const [notice, setNotice] = useState<Notice>({});
   const reload = async () => { try { if (skill) setItems(await getSkills()); else { const x = await getAgentsMd(); setBody(x.body); } } catch (error) { setNotice({ error: String(error) }); } };
-  useEffect(() => { void reload(); }, [skill]);
+  useEffect(() => {
+    setItems([]);
+    setSelected(null);
+    setName(skill ? "" : "AGENTS.md");
+    setDescription("");
+    setBody("");
+    setEnabled(true);
+    setNotice({});
+    void reload();
+  }, [skill]);
   const edit = (item?: Skill) => { setSelected(item || null); setName(item?.name || (skill ? "" : "AGENTS.md")); setDescription(item?.description || ""); setBody(item?.body || ""); setEnabled(item?.enabled ?? true); setNotice({}); };
   const save = async () => { try { if (skill) { const saved = await saveSkill(name, body, enabled, description); setSelected(saved); setName(saved.name); setDescription(saved.description); setBody(saved.body || ""); setItems(await getSkills()); } else { const saved = await saveAgentsMd(body); setBody(saved.body); await reload(); } setNotice({ success: t("assets.saved") }); } catch (error) { setNotice({ error: String(error) }); } };
   const remove = async () => { if (!selected || !window.confirm(t("assets.confirmDelete"))) return; try { await deleteSkill(selected.name); setSelected(null); edit(); setItems(await getSkills()); setNotice({ success: t("assets.deleted") }); } catch (error) { setNotice({ error: String(error) }); } };

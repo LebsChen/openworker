@@ -441,6 +441,7 @@
   "assets.localSub": "OpenWorker 本地资产，不与 Devin Cloud 同步。",
   "assets.new": "新建资产",
   "assets.name": "名称",
+  "assets.nameRequired": "名称不能为空。",
   "assets.description": "描述",
   "assets.enabled": "启用",
   "assets.scope": "范围",
