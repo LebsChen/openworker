@@ -20,13 +20,13 @@ import { selectWorklog, type WorklogEntry } from "../worklogSelector";
 import { RemoteShellPanel } from "./RemoteShellPanel";
 
 export type PanelTab = "info" | "worklog" | "changes" | "shell" | "ide" | "desktop";
-const PANEL_TABS: { id: PanelTab; label: string; icon: "audit" | "clock" | "fileCode" | "terminal" | "code" | "monitor" }[] = [
-  { id: "info", label: "Info", icon: "audit" },
-  { id: "worklog", label: "Worklog", icon: "clock" },
-  { id: "changes", label: "File changes", icon: "fileCode" },
-  { id: "shell", label: "Shell", icon: "terminal" },
-  { id: "ide", label: "Web IDE", icon: "code" },
-  { id: "desktop", label: "Browser/Desktop", icon: "monitor" },
+const PANEL_TABS: { id: PanelTab; labelKey: string; icon: "audit" | "clock" | "fileCode" | "terminal" | "code" | "monitor" }[] = [
+  { id: "info", labelKey: "session.rail.info", icon: "audit" },
+  { id: "worklog", labelKey: "session.rail.worklog", icon: "clock" },
+  { id: "changes", labelKey: "session.rail.fileChanges", icon: "fileCode" },
+  { id: "shell", labelKey: "session.rail.shell", icon: "terminal" },
+  { id: "ide", labelKey: "session.rail.webIde", icon: "code" },
+  { id: "desktop", labelKey: "session.rail.browserDesktop", icon: "monitor" },
 ];
 export const isRvmPanelTab = (tab: PanelTab): boolean =>
   tab === "shell" || tab === "ide" || tab === "desktop";
@@ -245,8 +245,8 @@ export function RightRail({
               type="button"
               className={"right-panel-rail-btn" + (panelOpen && tab === entry.id ? " active" : "")}
               disabled={disabled}
-              title={disabled ? "Requires an RVM host" : entry.label}
-              aria-label={entry.label}
+              title={disabled ? t("session.rail.rvmRequired") : t(entry.labelKey)}
+              aria-label={t(entry.labelKey)}
               aria-pressed={panelOpen && tab === entry.id}
               onClick={() => {
                 if (disabled) return;
@@ -295,7 +295,7 @@ function InfoPanel({
   useT();
   return (
     <div className="right-panel-section">
-      <h3 className="right-panel-heading">Info</h3>
+      <h3 className="right-panel-heading">{t("session.rail.info")}</h3>
       <div className="right-panel-host">
         <strong>{host.name}</strong>
         <span className={"right-panel-status " + (host.local ? "online" : (probe?.status || host.status || "unknown"))}>
@@ -406,9 +406,10 @@ function FileChangesPanel({
 }
 
 function RvmUnavailablePanel({ host, tab }: { host: SessionHost; tab: PanelTab }) {
+  useT();
   return (
     <div className="right-panel-empty">
-      <h3>{PANEL_TABS.find((entry) => entry.id === tab)?.label}</h3>
+      <h3>{t(PANEL_TABS.find((entry) => entry.id === tab)?.labelKey || "session.rail.info")}</h3>
       <p>
         {host.local
           ? "Requires an RVM host. This session is bound to Local."
