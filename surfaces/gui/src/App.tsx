@@ -12,6 +12,8 @@ import {
   connectEvents,
   getSettings,
   getPersonas,
+  refreshSessionHostsFromServer,
+  testRvmHost,
   getInbox,
   getUnattended,
   hostForSession,
@@ -52,12 +54,9 @@ import { addTurnUsage, emptyUsage, usageFromMessages } from "./usage";
 import { streamMode } from "./streamGate";
 import { InboxItemCard } from "./components/InboxItemCard";
 import {
-  bindSessionHost,
   isTauri,
   platformOS,
-  refreshSessionHosts,
   startWindowDrag,
-  testRemoteHost,
 } from "./tauri";
 import { Icon } from "./components/Icon";
 import { Sidebar } from "./components/Sidebar";
@@ -249,33 +248,32 @@ export function App() {
   // scheduledOpenId comment above): nav re-entry lands on the list, never a
   // possibly-deleted automation's dead detail.
   useEffect(() => {
-    if (isTauri()) {
-      refreshSessionHosts()
+    refreshSessionHostsFromServer()
         .then((hosts) => {
           const selected = hosts.find((host) => host.id === sessionHost.id) || hosts[0];
           if (selected) setSessionHost(selected);
           for (const host of hosts) {
             if (!host.local) {
               setHostProbeResult(host.id, { status: "checking", error: "Checking connection…" });
-              void testRemoteHost(host.base_url, host.token).then((result) => {
-                setHostProbeResult(host.id, result);
+              void testRvmHost(host.id).then((result) => {
+                setHostProbeResult(host.id, result as any);
                 setHostStatusVersion((version) => version + 1);
               });
             }
           }
         })
         .catch(() => {});
-    }
   }, []);
   useEffect(() => {
     const onHostsChanged = () => {
-      const hosts = sessionHosts();
-      const selected = hosts.find((host) => host.id === sessionHost.id);
-      if (selected) {
-        setSessionHost(selected);
-        if (!selected.local) setSessionOffline(Boolean(selected.offline) || selected.status === "offline");
-      }
-      setHostStatusVersion((version) => version + 1);
+      void refreshSessionHostsFromServer().then((hosts) => {
+        const selected = hosts.find((host) => host.id === sessionHost.id);
+        if (selected) {
+          setSessionHost(selected);
+          if (!selected.local) setSessionOffline(Boolean(selected.offline) || selected.status === "offline");
+        }
+        setHostStatusVersion((version) => version + 1);
+      });
     };
     window.addEventListener("coworker-hosts-changed", onHostsChanged);
     return () => window.removeEventListener("coworker-hosts-changed", onHostsChanged);
@@ -1156,7 +1154,6 @@ export function App() {
     setSelectedSessionTitle("");
     setSessionId(id);
     rememberSessionHost(id, sessionHost);
-    if (isTauri()) bindSessionHost(id, sessionHost.id).catch(() => {});
   };
   // Inbox → session: the item carries its session's workspace/agent, so open it directly.
   // UX-026: 5s top-right toast when a SCHEDULED automation run starts (never for
@@ -1216,7 +1213,6 @@ export function App() {
     setSessionOffline(Boolean(remoteUnavailable));
     setSessionHistoryUnavailable(Boolean(remoteUnavailable));
     setIsolateWorkspace(Boolean(selectedInfo?.workspace_isolated));
-    if (isTauri()) bindSessionHost(id, selectedHost?.id || "local").catch(() => {});
     if (!gatesWorkspace(ag)) setShowGate(false);
     if (ws && ws !== workspace) {
       setWorkspace(ws); // switch project to the session's folder
@@ -1770,13 +1766,13 @@ export function App() {
               <select
                 aria-label={t("app.sessionHost")}
                 value={sessionHost.id}
+                disabled={sessions.some((session) => session.session_id === sessionId)}
                 onChange={(e) => {
                   const host = sessionHosts().find((candidate) => candidate.id === e.target.value);
                   if (host) {
                     activeHostRef.current = host.id;
                     setSessionHost(host);
                     rememberSessionHost(sessionId, host);
-                    if (isTauri()) bindSessionHost(sessionId, host.id).catch(() => {});
                   }
                 }}
                 className="text-[12px] bg-transparent border border-line rounded px-1.5 py-1 text-muted"

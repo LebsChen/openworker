@@ -34,6 +34,26 @@ class RvmHostStore:
             raw = json.loads(self.path.read_text(encoding="utf-8")) if self.path.is_file() else {}
         except (OSError, ValueError):
             raw = {}
+        if not raw and self.path.name == "rvm-hosts.json":
+            legacy_path = self.path.with_name("remote-hosts.json")
+            try:
+                legacy = json.loads(legacy_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                legacy = {}
+            if isinstance(legacy, dict):
+                for item in legacy.get("hosts", []):
+                    if not isinstance(item, dict) or not item.get("name") or not item.get("url"):
+                        continue
+                    host_id = str(item["name"])
+                    host = RvmHost(
+                        id=host_id,
+                        name=host_id,
+                        base_url=str(item["url"]).rstrip("/"),
+                    )
+                    self._hosts[host_id] = host
+                    token = item.get("token")
+                    self.put(host, str(token) if token else None)
+                return
         for item in raw.get("hosts", []) if isinstance(raw, dict) else []:
             if isinstance(item, dict) and item.get("id") and item.get("base_url"):
                 self._hosts[str(item["id"])] = RvmHost(

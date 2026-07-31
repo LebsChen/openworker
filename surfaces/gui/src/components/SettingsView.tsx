@@ -2,6 +2,11 @@ import { t, useT } from "../i18n";
 import { useEffect, useState } from "react";
 import {
   getSettings,
+  deleteRvmHost,
+  listRvmHosts,
+  saveRvmHost,
+  testRvmHost,
+  type RvmHostInfo,
   getTrustedWorkspaces,
   setCompactionSettings,
   setOnboarded,
@@ -29,13 +34,6 @@ import {
   pickFolder,
   setAutostart,
   setKeepAwake,
-  deleteRemoteHost,
-  listRemoteHosts,
-  saveRemoteHost,
-  setRemoteHostOffline,
-  testRemoteHost,
-  remoteHostConfigError,
-  type RemoteHostInfo,
   type RemoteHostProbeResult,
   startDictation,
   stopDictation,
@@ -44,7 +42,6 @@ import {
   type DictationStatus,
 } from "../tauri";
 import { useThemePref } from "../theme";
-import { sessionHosts } from "../api";
 import { Icon } from "./Icon";
 import { PanelHead } from "./IntegrationsView";
 import { ModelsTab } from "./ManageTabs";
@@ -151,27 +148,22 @@ export function SettingsView({
 }
 
 function RemoteHostsSection() {
-  const [hosts, setHosts] = useState<RemoteHostInfo[]>([]);
+  const [hosts, setHosts] = useState<RvmHostInfo[]>([]);
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [vncPassword, setVncPassword] = useState("");
   const [token, setToken] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const [configError, setConfigError] = useState<string | null>(null);
   const [probeState, setProbeState] = useState<Record<string, RemoteHostProbeResult>>({});
-  const [savedTokens, setSavedTokens] = useState<Record<string, string>>({});
   const [testing, setTesting] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [lastSeen, setLastSeen] = useState<Record<string, number>>({});
   const refresh = async () => {
-    const listed = await listRemoteHosts().catch(() => []);
+    const listed = await listRvmHosts().catch(() => []);
     setHosts(listed || []);
-    remoteHostConfigError().then(setConfigError).catch(() => setConfigError(null));
-    const runtimeHosts = sessionHosts();
     for (const host of listed || []) {
-      const runtime = runtimeHosts.find((candidate) => candidate.id === host.name);
-      if (runtime?.token) void test(host.name, host.url, runtime.token);
+      void test(host.id);
     }
   };
   useEffect(() => {
@@ -182,8 +174,7 @@ function RemoteHostsSection() {
   const save = async () => {
     setError(null);
     try {
-      await saveRemoteHost(name, url, token, vncPassword);
-      setSavedTokens((current) => ({ ...current, [name]: token }));
+      await saveRvmHost(name, name, url, token);
       setToken("");
       setEditing(null);
       setSaved(true);
@@ -198,7 +189,7 @@ function RemoteHostsSection() {
       );
     }
   };
-  const test = async (hostName: string, url: string, hostToken: string) => {
+  const test = async (hostName: string) => {
     setHostProbeResult(hostName, { status: "checking", error: "Checking connection…" });
     setProbeState((current) => ({
       ...current,
@@ -206,7 +197,7 @@ function RemoteHostsSection() {
     }));
     setTesting(hostName);
     try {
-      const result = await testRemoteHost(url, hostToken);
+      const result = await testRvmHost(hostName) as RemoteHostProbeResult;
       if (result.status === "online") setLastSeen((current) => ({ ...current, [hostName]: Date.now() }));
       setProbeState((current) => ({ ...current, [hostName]: result }));
       setHostProbeResult(hostName, result);
@@ -233,65 +224,56 @@ function RemoteHostsSection() {
         sub="Connect a remote host for shared development. Run node agent.js on the remote machine to start the agent."
       />
       <div className={`${CARD} p-4 space-y-3`}>
-        {configError && (
-          <div role="alert" className="text-[12px] text-danger">
-            Remote host configuration could not be parsed. Local mode remains active. {configError}
-          </div>
-        )}
         {hosts.map((host) => (
-          <div key={host.name} className="flex items-center gap-3 border-b border-line pb-3">
+          <div key={host.id} className="flex items-center gap-3 border-b border-line pb-3">
             <div className="min-w-0 flex-1">
               <div className="text-[13px] font-medium">
                 {host.name}
                 <span className="ml-2 text-[11px] text-muted">
-                  {probeState[host.name]?.error === "Checking connection…"
+                  {probeState[host.id]?.error === "Checking connection…"
                     ? "checking"
-                    : host.offline ? "offline" : statusLabel(probeState[host.name]?.status || "unknown")}
+                    : statusLabel(probeState[host.id]?.status || "unknown")}
                 </span>
               </div>
-              <div className="text-[12px] text-muted truncate">{host.url}</div>
-              {probeState[host.name] && (
+              <div className="text-[12px] text-muted truncate">{host.base_url || "Configured remote host"}</div>
+              {probeState[host.id] && (
                 <div className="text-[11px] text-muted">
-                  {probeState[host.name].error === "Checking connection…"
+                  {probeState[host.id].error === "Checking connection…"
                     ? "checking"
-                    : probeState[host.name].latency_ms != null
-                      ? `${probeState[host.name].latency_ms} ms`
+                    : probeState[host.id].latency_ms != null
+                      ? `${probeState[host.id].latency_ms} ms`
                       : ""}
-                  {probeState[host.name]?.health?.platform && ` · ${probeState[host.name]?.health?.platform}`}
-                  {probeState[host.name]?.health?.host && ` · ${probeState[host.name]?.health?.host}`}
-                  {probeState[host.name]?.health?.version && ` · v${probeState[host.name]?.health?.version}`}
-                  {probeState[host.name]?.info?.hostname && ` · ${probeState[host.name]?.info?.hostname}`}
-                  {probeState[host.name]?.health?.vnc_port != null && " · VNC"}
-                  {probeState[host.name]?.health?.ide_port != null && " · IDE"}
-                  {probeState[host.name]?.info?.cpus != null && ` · ${probeState[host.name]?.info?.cpus} CPU`}
-                  {probeState[host.name]?.info?.memory_gb != null && ` · ${probeState[host.name]?.info?.memory_gb} GB`}
-                  {lastSeen[host.name] && ` · Last seen: ${new Date(lastSeen[host.name]).toLocaleString()}`}
-                  {probeState[host.name]?.health?.capabilities?.length && ` · ${probeState[host.name]?.health?.capabilities?.join(", ")}`}
-                  {probeState[host.name].error && probeState[host.name].error !== "Checking connection…" && ` · ${probeState[host.name].error}`}
+                  {probeState[host.id]?.health?.platform && ` · ${probeState[host.id]?.health?.platform}`}
+                  {probeState[host.id]?.health?.host && ` · ${probeState[host.id]?.health?.host}`}
+                  {probeState[host.id]?.health?.version && ` · v${probeState[host.id]?.health?.version}`}
+                  {probeState[host.id]?.info?.hostname && ` · ${probeState[host.id]?.info?.hostname}`}
+                  {probeState[host.id]?.health?.vnc_port != null && " · VNC"}
+                  {probeState[host.id]?.health?.ide_port != null && " · IDE"}
+                  {probeState[host.id]?.info?.cpus != null && ` · ${probeState[host.id]?.info?.cpus} CPU`}
+                  {probeState[host.id]?.info?.memory_gb != null && ` · ${probeState[host.id]?.info?.memory_gb} GB`}
+                  {lastSeen[host.id] && ` · Last seen: ${new Date(lastSeen[host.id]).toLocaleString()}`}
+                  {probeState[host.id]?.health?.capabilities?.length && ` · ${probeState[host.id]?.health?.capabilities?.join(", ")}`}
+                  {probeState[host.id]?.error && probeState[host.id].error !== "Checking connection…" && ` · ${probeState[host.id].error}`}
                 </div>
               )}
             </div>
             <button
               className={BTN_BORDERED}
-              disabled={testing === host.name || !savedTokens[host.name]}
-              title={!savedTokens[host.name] ? "Enter the token below to test this host." : undefined}
-              onClick={() => test(host.name, host.url, savedTokens[host.name] || "")}
+              disabled={testing === host.id}
+              onClick={() => test(host.id)}
             >
-              {testing === host.name ? "Testing…" : "Test connection"}
+              {testing === host.id ? "Testing…" : "Test connection"}
             </button>
             <button className="text-[12px]" onClick={() => {
-              setEditing(host.name);
+              setEditing(host.id);
               setName(host.name);
-              setUrl(host.url);
-              setToken(savedTokens[host.name] || "");
+              setUrl(host.base_url || "");
+              setToken("");
               setVncPassword("");
             }}>
               Edit
             </button>
-            <button className="text-[12px]" onClick={() => setRemoteHostOffline(host.name, !host.offline).then(refresh)}>
-              {host.offline ? "Online" : "Offline"}
-            </button>
-            <button className="text-[12px] text-danger" onClick={() => deleteRemoteHost(host.name).then(refresh)}>
+            <button className="text-[12px] text-danger" onClick={() => deleteRvmHost(host.id).then(refresh)}>
               Delete
             </button>
           </div>
@@ -304,7 +286,10 @@ function RemoteHostsSection() {
         <button
           className={BTN_BORDERED}
           disabled={!name || !url || !token || testing === name}
-          onClick={() => test(name, url, token)}
+          onClick={async () => {
+            await save();
+            await test(name);
+          }}
         >
           {testing === name ? "Testing…" : "Test connection"}
         </button>

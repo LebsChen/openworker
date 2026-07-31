@@ -843,13 +843,10 @@ pub fn run() {
         serde_json::json!({
             "id": host.name,
             "name": host.name,
-            "base_url": host.url,
-            "url": host.url,
-            "ws_url": host.url
-                .replacen("https://", "wss://", 1)
-                .replacen("http://", "ws://", 1),
-            "token": host.token,
-            "vnc_password": host.vnc_password,
+            "base_url": http,
+            "url": http,
+            "ws_url": ws,
+            "token": api_token,
             "offline": host.offline,
             "local": false
         })

@@ -104,62 +104,6 @@ export type RemoteHostProbeResult = {
   error?: string;
 };
 
-export async function testRemoteHost(
-  url: string,
-  token: string,
-): Promise<RemoteHostProbeResult> {
-  const base = url.replace(/\/+$/, "");
-  const started = performance.now();
-  try {
-    const health = await fetch(`${base}/api/health`, { signal: AbortSignal.timeout(8_000) });
-    if (!health.ok) {
-      return {
-        status: health.status === 401 || health.status === 403 ? "auth_failed" : "offline",
-        error:
-          health.status === 401 || health.status === 403
-            ? "Authentication failed. Check the token."
-            : `Server returned HTTP ${health.status}. Check the address.`,
-      };
-    }
-    const healthPayload = (await health.json()) as RemoteHostProbeResult["health"];
-    const startedInfo = performance.now();
-    const infoResponse = await fetch(`${base}/api/info`, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(8_000),
-    });
-    if (!infoResponse.ok) {
-      return {
-        status:
-          infoResponse.status === 401 || infoResponse.status === 403
-            ? "auth_failed"
-            : "offline",
-        latency_ms: Math.round(performance.now() - started),
-        error:
-          infoResponse.status === 401 || infoResponse.status === 403
-            ? "Authentication failed. Check the token."
-            : `Server returned HTTP ${infoResponse.status}. Check the address.`,
-      };
-    }
-    const infoPayload = (await infoResponse.json()) as RemoteHostProbeResult["info"];
-    return {
-      status: "online",
-      latency_ms: Math.round(performance.now() - startedInfo),
-      health: healthPayload,
-      info: infoPayload,
-    };
-  } catch (error) {
-    const errorText = error instanceof Error ? `${error.name} ${error.message}` : String(error);
-    return {
-      status: "offline",
-      latency_ms: Math.round(performance.now() - started),
-      error:
-        /abort|timed out|timeout/i.test(errorText)
-          ? "Connection timed out. Check the address and network connection."
-          : "Host is unreachable. Check the address and network connection.",
-    };
-  }
-}
-
 export type SessionHostInfo = RemoteHostInfo & {
   id: string;
   base_url: string;

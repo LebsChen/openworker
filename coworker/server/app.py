@@ -601,6 +601,19 @@ def create_app(manager: SessionManager) -> FastAPI:
     def sessions(workspace: str | None = None) -> dict[str, Any]:
         return {"sessions": manager.list_sessions(workspace)}
 
+    @app.get("/v1/sessions/{session_id}/host")
+    def session_host(session_id: str) -> dict[str, Any]:
+        record = manager.session_store.load(session_id)
+        if record is None:
+            return JSONResponse({"error": "session not found"}, status_code=404)
+        host = manager.rvm_hosts.get(record.host_id) if record.host_id != "local" else None
+        return {
+            "session_id": session_id,
+            "host_id": record.host_id or "local",
+            "host_name": host.name if host else "Local",
+            "status": "configured" if record.host_id == "local" else "unknown",
+        }
+
     @app.get("/v1/sessions/{session_id}/messages")
     def session_messages(session_id: str) -> dict[str, Any]:
         return {"messages": manager.session_messages(session_id)}
@@ -1524,6 +1537,22 @@ def create_app(manager: SessionManager) -> FastAPI:
             return
         await ws.accept(subprotocol="openworker" if api_token else None)
         agent = ws.query_params.get("agent") or "code"
+        requested_host_id = (ws.query_params.get("host_id") or "").strip() or None
+        existing_record = manager.session_store.load(session_id)
+        if existing_record is not None and requested_host_id and requested_host_id != (existing_record.host_id or "local"):
+            await ws.send_json(
+                {
+                    "type": "error",
+                    "data": {
+                        "error": (
+                            f"Session is permanently bound to {existing_record.host_id or 'local'}; "
+                            "start a new session to use another host."
+                        )
+                    },
+                }
+            )
+            await ws.close(code=1008)
+            return
 
         # All four interactive prompts (approval / question / directory / plan) are parked as Inbox
         # items and awaited via inbox.wait — so they survive a dropped socket (redelivered on
@@ -1743,17 +1772,28 @@ def create_app(manager: SessionManager) -> FastAPI:
         mcp_tools = await manager.prepare_mcp_tools(
             session_id, workspace=workspace, agent=agent
         )
-        engine = manager.get_engine(
-            session_id,
-            workspace=workspace,
-            agent=agent,
-            isolate=isolate,
-            approver=approver,
-            extra_tools=mcp_tools,
-            directory_requester=directory_requester,
-            plan_approver=plan_approver,
-            question_asker=question_asker,
-        )
+        try:
+            engine = manager.get_engine(
+                session_id,
+                workspace=workspace,
+                agent=agent,
+                host_id=requested_host_id,
+                isolate=isolate,
+                approver=approver,
+                extra_tools=mcp_tools,
+                directory_requester=directory_requester,
+                plan_approver=plan_approver,
+                question_asker=question_asker,
+            )
+        except (
+            UnknownRvmHostError,
+            RvmHostOfflineError,
+            RvmHostUnauthorizedError,
+            ValueError,
+        ) as exc:
+            await ws.send_json({"type": "error", "data": {"error": str(exc)}})
+            await ws.close(code=1011)
+            return
         if engine is None:
             await ws.send_json(
                 {
@@ -2144,6 +2184,7 @@ def create_app(manager: SessionManager) -> FastAPI:
                     "platform": h.platform,
                     "workspace": h.workspace,
                     "has_token": manager.rvm_hosts.token(h.id) is not None,
+                    "status": "configured",
                 }
                 for h in manager.rvm_hosts.list()
             ]
@@ -2200,14 +2241,14 @@ def create_app(manager: SessionManager) -> FastAPI:
             try:
                 info = client.info()
             except RvmUnauthorizedError as exc:
-                return {"status": "auth-failed", "latency_ms": round((time.monotonic() - started) * 1000), "error": str(exc), "capabilities": health.get("capabilities", [])}
+                return {"status": "auth_failed", "latency_ms": round((time.monotonic() - started) * 1000), "error": str(exc), "capabilities": health.get("capabilities", [])}
             except (RvmUnreachableError, RvmTimeoutError) as exc:
                 return {"status": "offline", "latency_ms": round((time.monotonic() - started) * 1000), "error": str(exc), "capabilities": health.get("capabilities", [])}
             except Exception as exc:
                 return {"status": "offline", "latency_ms": round((time.monotonic() - started) * 1000), "error": str(exc), "capabilities": health.get("capabilities", [])}
             return {"status": "online", "latency_ms": round((time.monotonic() - started) * 1000), "capabilities": health.get("capabilities", []), "platform": health.get("platform"), "workspace": health.get("workspace"), "info": info}
         except RvmUnauthorizedError as exc:
-            return {"status": "auth-failed", "latency_ms": round((time.monotonic() - started) * 1000), "error": str(exc)}
+            return {"status": "auth_failed", "latency_ms": round((time.monotonic() - started) * 1000), "error": str(exc)}
         except (RvmUnreachableError, RvmTimeoutError) as exc:
             return {"status": "offline", "latency_ms": round((time.monotonic() - started) * 1000), "error": str(exc)}
         except Exception as exc:

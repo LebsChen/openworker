@@ -104,6 +104,30 @@ def test_host_store_keeps_token_private(tmp_path):
     assert "super-secret" not in repr(store.client("h"))
 
 
+def test_host_store_migrates_desktop_profiles_into_secret_store(tmp_path):
+    legacy = tmp_path / "remote-hosts.json"
+    legacy.write_text(
+        json.dumps(
+            {
+                "hosts": [
+                    {
+                        "name": "win-antec",
+                        "url": "http://rvm.example",
+                        "token": "desktop-token",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    secrets = SecretStore(tmp_path / "secrets.json")
+    store = RvmHostStore(tmp_path / "rvm-hosts.json", secrets=secrets)
+
+    assert store.get("win-antec").base_url == "http://rvm.example"
+    assert store.token("win-antec") == "desktop-token"
+    assert "desktop-token" not in (tmp_path / "rvm-hosts.json").read_text()
+
+
 def test_unknown_host_is_hard_failure_without_local_fallback(tmp_path, monkeypatch):
     monkeypatch.setenv("COWORKER_STATE_DIR", str(tmp_path / "state"))
     from coworker.server.manager import SessionManager

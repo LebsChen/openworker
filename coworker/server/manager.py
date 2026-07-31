@@ -392,6 +392,7 @@ class SessionManager:
         *,
         workspace: Optional[str] = None,
         agent: str = "code",
+        host_id: Optional[str] = None,
         isolate: bool = False,
         approver: Optional[Approver] = None,
         extra_tools: Optional[list[Any]] = None,
@@ -415,7 +416,7 @@ class SessionManager:
         is_new_session = record is None
         agent_name = (record.agent if record else agent) or "code"
         ag = get_agent(agent_name)
-        bound_host_id = record.host_id if record else self.host_id
+        bound_host_id = record.host_id if record else (host_id or self.host_id)
         remote_target = None
         if bound_host_id and bound_host_id != "local":
             remote_target = self._resolve_remote_target(

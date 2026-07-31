@@ -31,6 +31,16 @@ export type SessionHost = {
   offline?: boolean;
 };
 
+export type RvmHostInfo = {
+  id: string;
+  name: string;
+  platform?: string | null;
+  workspace?: string | null;
+  base_url?: string;
+  has_token?: boolean;
+  status?: "online" | "offline" | "auth_failed" | "unknown" | "configured";
+};
+
 export const sessionHosts = (): SessionHost[] => {
   const hosts = (globalThis as any).__COWORKER_HOSTS__;
   const statuses = (globalThis as any).__COWORKER_HOST_STATUS__ || {};
@@ -46,6 +56,72 @@ export const sessionHosts = (): SessionHost[] => {
     local: true,
   }];
 };
+
+export async function listRvmHosts(): Promise<RvmHostInfo[]> {
+  const res = await fetch(`${httpBase()}/v1/rvm/hosts`, { headers: { "X-OpenWorker-Token": apiToken() } });
+  if (!res.ok) throw new Error(`Unable to list remote hosts (HTTP ${res.status}).`);
+  return ((await res.json()).hosts ?? []) as RvmHostInfo[];
+}
+
+export async function testRvmHost(hostId: string): Promise<Record<string, unknown>> {
+  const res = await fetch(`${httpBase()}/v1/rvm/hosts/${encodeURIComponent(hostId)}/test`, {
+    method: "POST",
+    headers: { "X-OpenWorker-Token": apiToken() },
+  });
+  return (await res.json()) as Record<string, unknown>;
+}
+
+export async function saveRvmHost(
+  id: string,
+  name: string,
+  baseUrl: string,
+  token: string,
+  platform?: string,
+  workspace?: string,
+): Promise<void> {
+  const res = await fetch(`${httpBase()}/v1/rvm/hosts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-OpenWorker-Token": apiToken() },
+    body: JSON.stringify({ id, name, base_url: baseUrl, token, platform, workspace }),
+  });
+  if (!res.ok) throw new Error((await res.json()).error || `Unable to save remote host (HTTP ${res.status}).`);
+  window.dispatchEvent(new Event("coworker-hosts-changed"));
+}
+
+export async function deleteRvmHost(id: string): Promise<void> {
+  const res = await fetch(`${httpBase()}/v1/rvm/hosts/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: { "X-OpenWorker-Token": apiToken() },
+  });
+  if (!res.ok) throw new Error(`Unable to delete remote host (HTTP ${res.status}).`);
+  window.dispatchEvent(new Event("coworker-hosts-changed"));
+}
+
+export async function refreshSessionHostsFromServer(): Promise<SessionHost[]> {
+  const remote = await listRvmHosts();
+  const local = sessionHosts().find((host) => host.local) || {
+    id: "local",
+    name: "Local",
+    base_url: httpBase(),
+    ws_url: wsBase(),
+    token: apiToken(),
+    local: true,
+  };
+  const hosts = [
+    local,
+    ...remote.map((host) => ({
+      id: host.id,
+      name: host.name,
+      base_url: httpBase(),
+      ws_url: wsBase(),
+      token: apiToken(),
+      local: false,
+      status: host.status === "configured" ? "unknown" : host.status,
+    })),
+  ];
+  (globalThis as any).__COWORKER_HOSTS__ = hosts;
+  return hosts;
+}
 
 const sessionHostBindings = new Map<string, string>();
 
@@ -224,38 +300,36 @@ const hostFetch = (host: SessionHost, input: RequestInfo | URL, init: RequestIni
 
 export async function getSessions(workspace?: string): Promise<SessionInfo[]> {
   const q = workspace ? `?workspace=${encodeURIComponent(workspace)}` : "";
-  const hosts = sessionHosts();
-  const all = await Promise.all(
-    hosts.map(async (host) => {
-      try {
-        const res = host.local
-          ? await fetch(`${host.base_url}/v1/sessions${q}`)
-          : await hostFetch(host, `${host.base_url}/v1/sessions${q}`);
-        const sessions = (await res.json()).sessions ?? [];
-        const tagged = sessions.map((s: SessionInfo) => ({
-          ...s,
-          host_id: host.id,
-          host_status: "online" as const,
-        }));
-        tagged.forEach((session: SessionInfo) => sessionHostBindings.set(session.session_id, host.id));
-        try {
-          localStorage.setItem(`openworker:sessions:${host.id}`, JSON.stringify(tagged));
-        } catch {}
-        return tagged;
-      } catch {
-        try {
-          const cached = JSON.parse(localStorage.getItem(`openworker:sessions:${host.id}`) || "[]");
-          return Array.isArray(cached)
-            ? cached.map((s: SessionInfo) => ({ ...s, host_id: host.id, host_status: "offline" as const }))
-            : [];
-        } catch {
-          return [];
-        }
-      }
-    }),
-  );
+  const local = sessionHosts().find((host) => host.local) || {
+    id: "local",
+    name: "Local",
+    base_url: httpBase(),
+    ws_url: wsBase(),
+    token: apiToken(),
+    local: true,
+  };
+  let all: SessionInfo[] = [];
+  try {
+    const res = await hostFetch(local, `${local.base_url}/v1/sessions${q}`);
+    const sessions = (await res.json()).sessions ?? [];
+    all = sessions.map((s: SessionInfo) => ({
+      ...s,
+      host_id: s.host_id || "local",
+      host_status: "online" as const,
+    }));
+    try { localStorage.setItem("openworker:sessions:local", JSON.stringify(all)); } catch {}
+  } catch {
+    try {
+      const cached = JSON.parse(localStorage.getItem("openworker:sessions:local") || "[]");
+      all = Array.isArray(cached)
+        ? cached.map((s: SessionInfo) => ({ ...s, host_id: s.host_id || "local", host_status: "offline" as const }))
+        : [];
+    } catch {
+      all = [];
+    }
+  }
   const unique = new Map<string, SessionInfo>();
-  for (const session of all.flat()) {
+  for (const session of all) {
     const previous = unique.get(session.session_id);
     // A session id must have exactly one execution host in the GUI.  Prefer a
     // remote record over a local duplicate: a local copy can be an accidental
@@ -2047,7 +2121,7 @@ export class Session {
   ) {
     this.sessionId = sessionId;
     this.hostId = host?.id || "local";
-    const q = `?workspace=${encodeURIComponent(workspace)}&agent=${encodeURIComponent(agent)}&isolate=${isolate ? "true" : "false"}`;
+    const q = `?workspace=${encodeURIComponent(workspace)}&agent=${encodeURIComponent(agent)}&host_id=${encodeURIComponent(this.hostId)}&isolate=${isolate ? "true" : "false"}`;
     const endpoint = host?.ws_url || wsBase();
     const token = host?.token;
     this.ws = token
@@ -2082,6 +2156,7 @@ export class Session {
     this.send({
       type: "user_message",
       text,
+      host_id: this.hostId,
       ...(model ? { model } : {}),
       ...(attachments?.length ? { attachments } : {}),
     });

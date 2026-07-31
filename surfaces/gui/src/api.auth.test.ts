@@ -80,7 +80,7 @@ it("routes every session REST request through the bound remote host", async () =
   }
 });
 
-it("deduplicates session ids and keeps the remote binding over a local duplicate", async () => {
+it("uses the server's persisted host binding for sessions", async () => {
   const local: SessionHost = {
     id: "local",
     name: "Local",
@@ -98,9 +98,9 @@ it("deduplicates session ids and keeps the remote binding over a local duplicate
     local: false,
   };
   vi.stubGlobal("__COWORKER_HOSTS__", [local, remote]);
-  vi.stubGlobal("fetch", vi.fn(async (url: string) => ({
+  vi.stubGlobal("fetch", vi.fn(async (_url: string) => ({
     json: async () => ({
-      sessions: [{ session_id: "shared", title: url.includes("remote") ? "remote" : "local" }],
+      sessions: [{ session_id: "shared", title: "remote", host_id: "rvm-a" }],
     }),
   }) as Response));
 
