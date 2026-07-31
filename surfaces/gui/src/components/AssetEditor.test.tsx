@@ -4,6 +4,7 @@ import { AssetEditor, SecretsEditor, TextAssetEditor } from "./AssetEditor";
 
 const mocks = vi.hoisted(() => ({
   getAssets: vi.fn().mockResolvedValue([]),
+  getAsset: vi.fn().mockResolvedValue({ name: "handoff", description: "", body: "Use this", enabled: true, scope: "global" }),
   createAsset: vi.fn().mockResolvedValue({}),
   updateAsset: vi.fn().mockResolvedValue({}),
   deleteAsset: vi.fn().mockResolvedValue({ ok: true }),

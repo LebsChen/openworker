@@ -873,6 +873,9 @@ export async function getAssets(kind: "knowledge" | "playbooks"): Promise<Asset[
   const data = await request<{ assets: Asset[] }>(`/v1/assets/${kind}`);
   return data.assets || [];
 }
+export async function getAsset(kind: "knowledge" | "playbooks", name: string): Promise<Asset> {
+  return request<Asset>(`/v1/assets/${kind}/${encodeURIComponent(name)}`);
+}
 
 export async function createAsset(kind: "knowledge" | "playbooks", asset: Partial<Asset>) {
   return request<Asset>(`/v1/assets/${kind}`, { method: "POST", body: JSON.stringify(asset) });

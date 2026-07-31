@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  createAsset, deleteAsset, deleteSecret, deleteSkill, getAgentsMd, getAssets,
+  createAsset, deleteAsset, deleteSecret, deleteSkill, getAgentsMd, getAsset, getAssets,
   getSecrets, getSkills, saveAgentsMd, saveSecret, saveSkill, updateAsset,
   type Asset, type SecretStatus, type Skill,
 } from "../api";
@@ -25,7 +25,14 @@ export function AssetEditor({ kind }: { kind: AssetKind }) {
   const [notice, setNotice] = useState<Notice>({});
   const reload = async () => { try { setItems(await getAssets(kind)); } catch (error) { setNotice({ error: String(error) }); } };
   useEffect(() => { void reload(); }, [kind]);
-  const edit = (item?: Asset) => { setSelected(item || null); setDraft(item ? { ...item } : emptyAsset()); setNotice({}); };
+  const edit = async (item?: Asset) => {
+    setNotice({});
+    if (!item) { setSelected(null); setDraft(emptyAsset()); return; }
+    try {
+      const detail = await getAsset(kind, item.name);
+      setSelected(detail); setDraft(detail);
+    } catch (error) { setNotice({ error: String(error) }); }
+  };
   const save = async () => {
     if (!draft.name.trim()) return;
     try {
@@ -39,7 +46,7 @@ export function AssetEditor({ kind }: { kind: AssetKind }) {
     catch (error) { setNotice({ error: String(error) }); }
   };
   return <div className="grid grid-cols-[220px_1fr] gap-5">
-    <div className="space-y-1"><button className="btn w-full" onClick={() => edit()}>{t("assets.new")}</button>{items.map((item) => <button key={item.name} className={"w-full text-left px-3 py-2 rounded-lg " + (selected?.name === item.name ? "bg-paper text-accent" : "hover:bg-paper")} onClick={() => edit(item)}><div className="text-[13px] font-medium">{item.name}</div><div className="text-[11px] text-muted truncate">{item.description}</div></button>)}</div>
+    <div className="space-y-1"><button className="btn w-full" onClick={() => void edit()}>{t("assets.new")}</button>{items.map((item) => <button key={item.name} className={"w-full text-left px-3 py-2 rounded-lg " + (selected?.name === item.name ? "bg-paper text-accent" : "hover:bg-paper")} onClick={() => void edit(item)}><div className="text-[13px] font-medium">{item.name}</div><div className="text-[11px] text-muted truncate">{item.description}</div></button>)}</div>
     <div className="rounded-xl2 border border-line bg-panel p-5 space-y-4"><Notice notice={notice} />
       <input className="input w-full" placeholder={t("assets.name")} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
       <input className="input w-full" placeholder={t("assets.description")} value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} />
