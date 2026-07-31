@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+import time
 
 import httpx
 import websockets
@@ -186,6 +187,11 @@ async def test_registry_replaces_host_binding_and_closes_all():
         IdeTarget("session", "host-b", "https://b.example", "C:\\b", "token-b")
     )
     assert first.port != second.port
+    second.last_used = time.monotonic() - second.ttl - 1
+    third = await registry.get_or_create(
+        IdeTarget("other-session", "host-c", "https://c.example", "C:\\c", "token-c")
+    )
+    assert third.port != second.port
     await registry.close_all()
     assert not registry.proxies
 
