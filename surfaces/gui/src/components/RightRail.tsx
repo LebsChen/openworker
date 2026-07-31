@@ -18,6 +18,7 @@ import { Markdown, OPEN_ARTIFACT_EVENT } from "./Markdown";
 import { hostProbeResult, HOST_STATUS_CHANGED } from "../hostStatus";
 import { selectWorklog, type WorklogEntry } from "../worklogSelector";
 import { RemoteDesktopPanel } from "./RemoteDesktopPanel";
+import { RemoteIdePanel } from "./RemoteIdePanel";
 import { RemoteShellPanel } from "./RemoteShellPanel";
 
 export type PanelTab = "info" | "worklog" | "changes" | "shell" | "ide" | "desktop";
@@ -220,9 +221,17 @@ export function RightRail({
           {tab === "shell" ? (
             <RemoteShellPanel active={panelOpen && tab === "shell"} sessionId={sessionId} host={host} />
           ) : tab === "desktop" ? (
-            <RemoteDesktopPanel active={panelOpen && tab === "desktop"} sessionId={sessionId} host={host} />
+            <RemoteDesktopPanel
+              active={panelOpen && tab === "desktop"}
+              sessionId={sessionId}
+              host={host}
+            />
           ) : (
-            <RvmUnavailablePanel host={host} tab={tab} />
+            <RemoteIdePanel
+              active={panelOpen && tab === "ide"}
+              sessionId={sessionId}
+              host={host}
+            />
           )}
         </div>
       </div>
@@ -402,20 +411,6 @@ function FileChangesPanel({
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-function RvmUnavailablePanel({ host, tab }: { host: SessionHost; tab: PanelTab }) {
-  useT();
-  return (
-    <div className="right-panel-empty">
-      <h3>{t(PANEL_TABS.find((entry) => entry.id === tab)?.labelKey || "session.rail.info")}</h3>
-      <p>
-        {host.local
-          ? t("session.rail.rvmRequiredLocal")
-          : t("session.rail.secureConnectionUnavailable")}
-      </p>
     </div>
   );
 }

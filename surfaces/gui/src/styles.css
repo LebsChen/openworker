@@ -651,6 +651,13 @@ button.btn.danger { color: var(--accent); }
   position: absolute;
   inset: 0;
 }
+.remote-ide-panel { display: flex; flex-direction: column; height: 100%; min-height: 360px; background: var(--panel); }
+.remote-ide-toolbar {
+  display: flex; align-items: center; padding: 8px 12px;
+  color: var(--faint); font-size: 11px;
+}
+.remote-ide-frame-holder { position: relative; flex: 1; min-height: 320px; overflow: hidden; }
+.remote-ide-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--panel); }
 .right-panel-shell.collapsed {
   width: 42px;
 }

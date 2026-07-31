@@ -259,6 +259,20 @@ export const openRvmPty = (
 export const openRvmVnc = (sessionId: string): WebSocket =>
   openWebSocket(`${wsBase()}/ws/rvm/vnc/${encodeURIComponent(sessionId)}`);
 
+export const rvmIdeUrl = (sessionId: string): string =>
+  `${httpBase()}/v1/sessions/${encodeURIComponent(sessionId)}/ide/`;
+
+export async function prepareRvmIde(sessionId: string): Promise<void> {
+  const res = await fetch(rvmIdeUrl(sessionId));
+  if (!res.ok) {
+    let detail = "";
+    try {
+      detail = (await res.json()).error || "";
+    } catch {}
+    throw new Error(detail || `Web IDE unavailable (HTTP ${res.status}).`);
+  }
+}
+
 export const isRemoteMode = (): boolean => Boolean((globalThis as any).__COWORKER_REMOTE_MODE__);
 export const remoteProfileName = (): string | null =>
   typeof (globalThis as any).__COWORKER_REMOTE_NAME__ === "string"
