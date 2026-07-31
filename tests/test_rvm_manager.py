@@ -82,3 +82,12 @@ def test_new_session_host_can_be_selected_per_connection(monkeypatch, tmp_path):
 
     assert engine.remote_target.host.id == "rvm"
     assert manager.session_store.load("selected-session") is None
+    manager.save("selected-session", engine)
+    assert manager.session_store.load("selected-session").host_id == "rvm"
+
+
+def test_existing_engine_cannot_cross_local_and_remote_host_bindings(tmp_path):
+    manager = SessionManager(data_dir=tmp_path)
+    manager._engines["bound"] = SimpleNamespace(remote_target=None)
+    with __import__("pytest").raises(ValueError, match="bound to rvm"):
+        manager.get_engine("bound", host_id="rvm")

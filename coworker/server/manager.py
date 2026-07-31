@@ -406,8 +406,21 @@ class SessionManager:
         plan_approver: Optional[Any] = None,
         question_asker: Optional[Any] = None,
     ) -> Optional[TurnEngine]:
+        record = self.session_store.load(session_id)
         engine = self._engines.get(session_id)
         if engine is not None:
+            expected_host = record.host_id if record is not None else host_id
+            if expected_host:
+                actual_host = (
+                    getattr(getattr(engine, "remote_target", None), "host", None).id
+                    if getattr(engine, "remote_target", None) is not None
+                    else "local"
+                )
+                if actual_host != expected_host:
+                    raise ValueError(
+                        f"session {session_id} is bound to {expected_host}, "
+                        f"but its engine is bound to {actual_host}"
+                    )
             if approver is not None:
                 engine.approver = approver
             if directory_requester is not None:
@@ -418,7 +431,6 @@ class SessionManager:
                 engine.question_asker = question_asker
             return engine
 
-        record = self.session_store.load(session_id)
         is_new_session = record is None
         agent_name = (record.agent if record else agent) or "code"
         ag = get_agent(agent_name)

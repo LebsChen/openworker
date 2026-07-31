@@ -98,3 +98,29 @@ def test_knowledge_trigger_is_validated_and_defaults_to_manual(tmp_path):
         pass
     else:
         raise AssertionError("invalid trigger was accepted")
+
+
+def test_always_knowledge_is_injected_into_system_prompt(tmp_path, monkeypatch):
+    monkeypatch.setenv("COWORKER_STATE_DIR", str(tmp_path / "state"))
+    store = AssetStore("knowledge", tmp_path / "state" / "knowledge")
+    store.save(
+        {
+            "name": "always-note",
+            "description": "Injected note",
+            "body": "This body must be in the system prompt.",
+            "trigger": "always",
+        }
+    )
+
+    from coworker.agent import build_engine
+    from coworker.agents import chat_agent
+
+    class Provider:
+        def complete(self, **kwargs):
+            raise AssertionError("completion should not run")
+
+        def capabilities(self, model):
+            return None
+
+    engine = build_engine(agent=chat_agent(), provider=Provider())
+    assert "This body must be in the system prompt." in engine.messages[0]["content"]
