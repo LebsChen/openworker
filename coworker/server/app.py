@@ -1672,6 +1672,37 @@ def create_app(manager: SessionManager) -> FastAPI:
                 {"type": "model_changed", "data": {"model": model, "text": notice}},
             )
 
+        async def _apply_persona(persona: Optional[str]) -> None:
+            nonlocal engine
+            if not persona or manager.is_running(session_id):
+                if manager.is_running(session_id):
+                    await reject_input("Cannot switch persona while the session is running.")
+                return
+            new_engine, notice, error = manager.switch_persona(
+                session_id,
+                persona,
+                approver=approver,
+                directory_requester=directory_requester,
+                plan_approver=plan_approver,
+                question_asker=question_asker,
+            )
+            if error:
+                await reject_input(error)
+                return
+            if notice is None or new_engine is None:
+                return
+            engine = new_engine
+            await manager.broadcast_session(
+                session_id,
+                {
+                    "type": "persona_changed",
+                    "data": {
+                        "persona": getattr(engine, "agent_name", persona),
+                        "text": notice,
+                    },
+                },
+            )
+
         def _resolve_pending(resolution: str) -> None:
             # Live WS responses resolve THE session's single pending prompt (one at a time, since the
             # agent blocks). Reconnect / Inbox resolve by id via REST instead.
@@ -1848,6 +1879,12 @@ def create_app(manager: SessionManager) -> FastAPI:
                         await reject_input("Invalid model: expected a string.")
                     else:
                         await _apply_model(model)
+                elif kind == "set_persona":
+                    persona = message.get("persona")
+                    if persona is not None and not isinstance(persona, str):
+                        await reject_input("Invalid persona: expected a string.")
+                    else:
+                        await _apply_persona(persona)
                 elif kind == "user_message":
                     raw_text = message.get("text")
                     if raw_text is None:

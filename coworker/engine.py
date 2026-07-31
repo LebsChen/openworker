@@ -75,13 +75,19 @@ def _screenshot_content(result: Any) -> Optional[list[dict[str, Any]]]:
     ]
 
 
-def _retain_screenshot_images(messages: list[dict[str, Any]]) -> None:
+def _retain_screenshot_images(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return an outbound copy with only the newest screenshot payloads retained."""
     screenshot_messages = [
         message for message in messages if message.get("_screenshot_image") is True
     ]
-    for message in screenshot_messages[:-SCREENSHOT_HISTORY_LIMIT]:
-        message["content"] = _SCREENSHOT_PLACEHOLDER
-        message.pop("_screenshot_image", None)
+    retained = set(id(message) for message in screenshot_messages[-SCREENSHOT_HISTORY_LIMIT:])
+    out: list[dict[str, Any]] = []
+    for message in messages:
+        if message.get("_screenshot_image") is True and id(message) not in retained:
+            out.append({**message, "content": _SCREENSHOT_PLACEHOLDER})
+        else:
+            out.append(message)
+    return out
 
 
 @dataclass
@@ -279,7 +285,7 @@ class TurnEngine:
         for message in reversed(self.messages):
             if message.get("role") != "notice":
                 return False
-            if message.get("kind") == "model_switch":
+            if message.get("kind") in {"model_switch", "persona_switch"}:
                 continue
             return message.get("kind") == "error"
         return False
@@ -845,7 +851,6 @@ class TurnEngine:
                     "ts": time.time(),
                 }
             )
-            _retain_screenshot_images(self.messages)
         hidden = int((display or {}).get("hidden_by_filters") or 0)
         stripped = int((display or {}).get("hidden_fields") or 0)
         if hidden or stripped:
@@ -1090,6 +1095,7 @@ class TurnEngine:
         source_messages = _compaction.apply_to_outbound(
             self.messages, self.compaction_state
         )
+        source_messages = _retain_screenshot_images(source_messages)
         out = [
             (
                 {k: v for k, v in msg.items() if k not in _SIDECARS}

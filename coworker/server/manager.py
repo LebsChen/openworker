@@ -3471,6 +3471,117 @@ class SessionManager:
             )
         )
 
+    def switch_persona(
+        self,
+        session_id: str,
+        persona_id: str,
+        *,
+        approver: Optional[Approver] = None,
+        directory_requester: Optional[Any] = None,
+        plan_approver: Optional[Any] = None,
+        question_asker: Optional[Any] = None,
+    ) -> tuple[Optional[TurnEngine], Optional[str], Optional[str]]:
+        """Atomically rebuild an idle session under another persona.
+
+        Returns ``(engine, notice, error)``. A no-op returns ``(old_engine, None, None)``;
+        rejected transitions return ``(old_engine, None, error)``.
+        """
+        old = self._engines.get(session_id)
+        if old is None:
+            if self.session_store.load(session_id) is None:
+                return None, None, "unknown session"
+            old = self.get_engine(session_id)
+        if old is None:
+            return None, None, "unknown session"
+        if self.is_running(session_id):
+            return old, None, "Cannot switch persona while the session is running."
+        if self.inbox.pending(session_id):
+            return old, None, "Cannot switch persona while an approval or Inbox prompt is pending."
+
+        current_id = getattr(old, "agent_name", "code")
+        if persona_id == current_id:
+            return old, None, None
+        entry = self.personas.get(persona_id)
+        if entry is None:
+            return old, None, f"Unknown persona: {persona_id}"
+        target = entry.agent()
+        current = get_agent(current_id)
+        if target.needs_workspace != current.needs_workspace:
+            return (
+                old,
+                None,
+                "This persona requires a different workspace setup; start a new session "
+                "or attach a workspace first.",
+            )
+
+        executor = getattr(old, "executor", None)
+        remote_target = getattr(old, "remote_target", None)
+        workspace = str(executor.cwd) if executor is not None else None
+        roots = list(getattr(old, "roots", None) or [])
+        history = list(old.messages)
+        if history and history[0].get("role") == "system":
+            history = history[1:]
+
+        new = build_engine(
+            agent=target,
+            workspace=workspace,
+            model=old.model,
+            mode=old.permissions.mode,
+            provider=old.provider,
+            messages=history,
+            secrets=self.secrets,
+            task_store=self.task_store,
+            wake_store=self.wakes,
+            session_id=session_id,
+            audit_sink=self.audit_store.append,
+            roots=roots,
+            approver=approver or old.approver,
+            directory_requester=directory_requester or old.directory_requester,
+            plan_approver=plan_approver or old.plan_approver,
+            question_asker=question_asker or old.question_asker,
+            subscription_store=self.subscriptions,
+            channel_buffer=self.channel_buffer,
+            routing_targets=self._routing_targets(session_id, persona_id),
+            connector_filter=self.effective_connectors(session_id, persona_id),
+            remote_target=remote_target,
+            todo=getattr(old, "todo", None),
+            executor=executor,
+        )
+        new.compaction_state = old.compaction_state
+        new.compaction_settings = old.compaction_settings
+        new.is_attended = old.is_attended
+
+        old_tools = set(getattr(old.permissions, "session_allow_tools", None) or ())
+        valid_tools = set(new.registry.names())
+        grants = {
+            "tools": sorted(old_tools & valid_tools),
+            "commands": (
+                sorted(getattr(old.permissions, "session_allow_commands", None) or ())
+                if "run_shell" in valid_tools
+                else []
+            ),
+        }
+        self._apply_grants(new, grants)
+        text = f"Persona switched to {entry.name}"
+        new._append_notice("persona_switch", text)
+        # Agent.name is currently the stable persona id for both hand-written and
+        # manifest-backed agents. Persist that id, never the display title.
+        new.agent_name = persona_id
+        new.audit_context = {
+            **getattr(old, "audit_context", {}),
+            "agent": entry.name,
+            "agent_id": persona_id,
+        }
+        try:
+            self.session_store.rewrite_messages(session_id, new.messages)
+            self._engines[session_id] = new
+            self.save(session_id, new)
+        except Exception:
+            self._engines[session_id] = old
+            self.session_store.rewrite_messages(session_id, old.messages)
+            raise
+        return new, text, None
+
     @staticmethod
     def _apply_grants(engine: TurnEngine, grants: dict[str, Any]) -> None:
         """Re-apply a reloaded session's persisted "Always allow" approvals — they're
