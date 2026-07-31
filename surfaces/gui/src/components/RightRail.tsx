@@ -4,10 +4,14 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import {
   getArtifacts,
+  getGitDiff,
+  getGitStatus,
   readArtifact,
   revealArtifact,
   type ArtifactContent,
   type ArtifactInfo,
+  type GitFileChange,
+  type GitStatus,
   type SessionHost,
 } from "../api";
 import type { TodoItem } from "../types";
@@ -209,6 +213,9 @@ export function RightRail({
         {panelOpen && tab === "worklog" && !selected && <WorklogPanel entries={worklog} />}
         {panelOpen && tab === "changes" && !selected && (
           <FileChangesPanel
+            sessionId={sessionId}
+            host={host}
+            refreshKey={refreshKey}
             artifacts={artifacts}
             showArtifacts={showArtifacts}
             onRefresh={refreshArtifacts}
@@ -365,18 +372,65 @@ function WorklogPanel({ entries }: { entries: WorklogEntry[] }) {
 }
 
 function FileChangesPanel({
+  sessionId,
+  host,
+  refreshKey,
   artifacts,
   showArtifacts,
   onRefresh,
   onReveal,
   onSelect,
 }: {
+  sessionId: string;
+  host: SessionHost;
+  refreshKey: number;
   artifacts: ArtifactInfo[];
   showArtifacts: boolean;
   onRefresh: () => void;
   onReveal: () => void;
   onSelect: (artifact: ArtifactInfo) => void;
 }) {
+  const [git, setGit] = useState<GitStatus | null>(null);
+  const [gitLoading, setGitLoading] = useState(true);
+  const [gitFile, setGitFile] = useState<GitFileChange | null>(null);
+  const [gitDiff, setGitDiff] = useState<string | null>(null);
+  const [gitError, setGitError] = useState("");
+  const refreshGit = () => {
+    setGitLoading(true);
+    setGitError("");
+    getGitStatus(sessionId, host)
+      .then(setGit)
+      .catch((error) => setGitError(error instanceof Error ? error.message : String(error)))
+      .finally(() => setGitLoading(false));
+  };
+  useEffect(() => {
+    setGitFile(null);
+    setGitDiff(null);
+    refreshGit();
+  }, [sessionId, host.id, refreshKey]);
+  const selectGitFile = (file: GitFileChange) => {
+    setGitFile(file);
+    setGitDiff(null);
+    getGitDiff(sessionId, file.path, host)
+      .then((result) => {
+        if (result.status === "offline") setGitError(result.error || t("session.rail.workspaceOffline"));
+        setGitDiff(result.diff || "");
+      })
+      .catch((error) => setGitError(error instanceof Error ? error.message : String(error)));
+  };
+  if (gitFile) {
+    return (
+      <div className="right-panel-section">
+        <div className="right-panel-heading-row">
+          <button className="rail-mini-btn" onClick={() => { setGitFile(null); setGitDiff(null); setGitError(""); }} title={t("session.rail.back")}><Icon name="arrowLeft" size={13} /></button>
+          <h3 className="right-panel-heading">{gitFile.path}</h3>
+          <button className="rail-mini-btn" onClick={() => selectGitFile(gitFile)} title={t("session.rail.refreshDiff")}><Icon name="refresh" size={13} /></button>
+        </div>
+        {gitError && <div className="rail-error">{gitError}</div>}
+        {gitDiff === null ? <div className="rail-muted">{t("session.rail.loadingDiff")}</div> : <UnifiedDiff text={gitDiff} />}
+      </div>
+    );
+  }
   return (
     <div className="right-panel-section">
       <div className="right-panel-heading-row">
@@ -387,7 +441,31 @@ function FileChangesPanel({
         </div>
       </div>
       <h4 className="right-panel-subheading">{t("session.rail.workspaceChanges")}</h4>
-      <div className="rail-muted">{t("session.rail.noWorkspaceDiffDataAvailableYet")}</div>
+      {gitError && <div className="rail-error">{gitError}</div>}
+      {gitLoading ? <div className="rail-muted">{t("session.rail.loadingGitState")}</div> : git?.status === "offline" ? (
+        <div className="rail-error">{t("session.rail.workspaceOffline")}</div>
+      ) : !git?.repository ? (
+        <div className="rail-muted">{t("session.rail.notGitRepository")}</div>
+      ) : (
+        <>
+          <div className="git-review-summary">
+            <strong>{git.branch || t("session.rail.unknownBranch")}</strong>
+            <span>{git.dirty ? t("session.rail.workspaceDirty") : t("session.rail.workspaceClean")}</span>
+          </div>
+          {git.upstream && <div className="rail-muted">{git.upstream}{git.sync ? ` · ${git.sync}` : ""}</div>}
+          {!git.files.length ? <div className="rail-muted">{t("session.rail.noWorkspaceChanges")}</div> : (
+            <div className="git-change-list">
+              {git.files.map((file) => (
+                <button className="git-change-row" key={file.path} onClick={() => selectGitFile(file)}>
+                  <span className={"git-change-status git-change-status--" + file.status.replace(/[^A-Za-z?]/g, "")}>{file.status}</span>
+                  <span className="git-change-path">{file.path}</span>
+                  <span className="git-change-counts">+{file.additions} −{file.deletions}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
       <h4 className="right-panel-subheading">Artifacts</h4>
       {!showArtifacts || !artifacts.length ? (
         <div className="rail-muted">{t("session.rail.noPreviewableFilesYet")}</div>
@@ -403,6 +481,18 @@ function FileChangesPanel({
         </div>
       )}
     </div>
+  );
+}
+
+function UnifiedDiff({ text }: { text: string }) {
+  if (!text) return <div className="rail-muted">{t("session.rail.emptyDiff")}</div>;
+  return (
+    <pre className="git-diff">
+      {text.split("\n").map((line, index) => {
+        const kind = line.startsWith("@@") ? "hunk" : line.startsWith("+") && !line.startsWith("+++") ? "added" : line.startsWith("-") && !line.startsWith("---") ? "removed" : "context";
+        return <span className={"git-diff-line git-diff-line--" + kind} key={index}>{line}{"\n"}</span>;
+      })}
+    </pre>
   );
 }
 

@@ -258,6 +258,18 @@ class RvmClient:
     def stat(self, path: str) -> dict[str, Any]:
         return self._storage("stat", {"path": path})
 
+    def git_status(self) -> dict[str, Any]:
+        return self._request("GET", "/api/git/status")
+
+    def git_changes(self) -> dict[str, Any]:
+        return self._request("GET", "/api/git/changes")
+
+    def git_file_diff(self, path: str) -> dict[str, Any]:
+        return self._request("GET", "/api/git/file-diff", params={"path": path})
+
+    def git_branch(self) -> dict[str, Any]:
+        return self._request("GET", "/api/git/branch")
+
     def mkdir(self, path: str) -> dict[str, Any]:
         return self._storage("mkdir", {"path": path})
 

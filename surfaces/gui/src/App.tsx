@@ -1906,8 +1906,7 @@ export function App() {
                 role="alert"
                 className="mx-4 mb-2 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-[12px] text-danger"
               >
-                Remote host "{sessionHost.name}" is offline. This session remains bound to that
-                host and will not fall back to Local.
+                {t("app.remoteHostOffline", { host: sessionHost.name })}
               </div>
             )}
             {localServerError && (
@@ -1930,7 +1929,7 @@ export function App() {
               {idle && sessionHistoryUnavailable && !sessionHost.local ? (
                 <div className="session-history-unavailable">
                   <h1>{t("app.historyLoadFailed")}</h1>
-                  <p>Remote host &quot;{sessionHost.name}&quot; is offline.</p>
+                  <p>{t("app.remoteHostOffline", { host: sessionHost.name })}</p>
                   <p>{t("app.historyReloadsWithHost")}</p>
                 </div>
               ) : idle ? (

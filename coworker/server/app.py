@@ -755,9 +755,29 @@ def create_app(manager: SessionManager) -> FastAPI:
     def session_artifacts(session_id: str) -> dict[str, Any]:
         try:
             return {"artifacts": manager.list_artifacts(session_id)}
-        except RvmHostOfflineError as exc:
+        except (RvmHostOfflineError, RvmHostUnauthorizedError) as exc:
             return JSONResponse(
                 {"artifacts": [], "status": "offline", "error": str(exc)},
+                status_code=503,
+            )
+
+    @app.get("/v1/sessions/{session_id}/git/status")
+    def session_git_status(session_id: str) -> dict[str, Any]:
+        try:
+            return manager.git_status(session_id)
+        except (RvmHostOfflineError, RvmHostUnauthorizedError) as exc:
+            return JSONResponse(
+                {"repository": False, "files": [], "status": "offline", "error": str(exc)},
+                status_code=503,
+            )
+
+    @app.get("/v1/sessions/{session_id}/git/diff")
+    def session_git_diff(session_id: str, path: str) -> dict[str, Any]:
+        try:
+            return manager.git_diff(session_id, path)
+        except (RvmHostOfflineError, RvmHostUnauthorizedError) as exc:
+            return JSONResponse(
+                {"ok": False, "status": "offline", "error": str(exc)},
                 status_code=503,
             )
 

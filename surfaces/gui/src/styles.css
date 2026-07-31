@@ -552,6 +552,22 @@ button.btn.danger { color: var(--accent); }
 .right-panel-heading { margin: 0 0 10px; font-size: 14px; font-weight: 650; color: var(--ink); }
 .right-panel-heading-row { display: flex; align-items: center; justify-content: space-between; }
 .right-panel-subheading { margin: 14px 0 7px; font-size: 12px; color: var(--muted); }
+.git-review-summary { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--muted); }
+.git-review-summary span { color: var(--faint); }
+.git-change-list { display: flex; flex-direction: column; gap: 3px; margin-top: 7px; }
+.git-change-row { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 6px; align-items: center; width: 100%; padding: 5px 4px; border: 0; border-radius: 4px; background: transparent; color: var(--muted); text-align: left; font: inherit; cursor: pointer; }
+.git-change-row:hover { background: var(--paper); color: var(--ink); }
+.git-change-status { font: 10px var(--mono); color: var(--warn-ink); }
+.git-change-status--M, .git-change-status--modified { color: var(--accent); }
+.git-change-status--D, .git-change-status--deleted { color: var(--danger); }
+.git-change-status--A, .git-change-status--added, .git-change-status--\?\? { color: var(--ok); }
+.git-change-path { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.git-change-counts { color: var(--faint); font: 10px var(--mono); white-space: nowrap; }
+.git-diff { margin: 6px 0 0; overflow: auto; padding: 10px; background: var(--panel); color: var(--muted); font: 10px/1.5 var(--mono); white-space: pre; }
+.git-diff-line { display: block; min-height: 1.5em; }
+.git-diff-line--added { color: var(--ok); background: color-mix(in srgb, var(--ok) 10%, transparent); }
+.git-diff-line--removed { color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); }
+.git-diff-line--hunk { color: var(--accent); }
 .right-panel-host { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
 .right-panel-status { border-radius: 999px; padding: 2px 7px; font-size: 10px; text-transform: capitalize; }
 .right-panel-status.online { color: var(--ok); background: var(--ok-soft); }

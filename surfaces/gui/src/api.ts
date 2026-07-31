@@ -513,6 +513,44 @@ export async function readArtifact(sessionId: string, path: string, host: Sessio
   return res.json();
 }
 
+export interface GitFileChange {
+  path: string;
+  status: string;
+  additions: number;
+  deletions: number;
+}
+
+export interface GitStatus {
+  repository: boolean;
+  branch?: string | null;
+  upstream?: string | null;
+  sync?: string | null;
+  dirty?: boolean;
+  untracked?: boolean;
+  files: GitFileChange[];
+  status?: string;
+  error?: string;
+}
+
+export interface GitDiff {
+  ok: boolean;
+  path?: string;
+  diff?: string;
+  status?: string;
+  error?: string;
+}
+
+export async function getGitStatus(sessionId: string, host: SessionHost): Promise<GitStatus> {
+  const res = await hostFetch(host, `${host.base_url}/v1/sessions/${encodeURIComponent(sessionId)}/git/status`);
+  return res.json();
+}
+
+export async function getGitDiff(sessionId: string, path: string, host: SessionHost): Promise<GitDiff> {
+  const q = new URLSearchParams({ path });
+  const res = await hostFetch(host, `${host.base_url}/v1/sessions/${encodeURIComponent(sessionId)}/git/diff?${q}`);
+  return res.json();
+}
+
 /** Show the artifact in the OS file manager ("reveal") or open it with its default app ("open"). */
 export async function revealArtifact(
   sessionId: string,
