@@ -5,11 +5,13 @@ from coworker.remote.paths import RemotePathStyle
 from coworker.remote.tools import (
     RemoteTarget,
     remote_environment_context,
+    remote_browser_tools,
     remote_computer_tools,
     remote_file_tools,
     remote_git_tools,
     remote_search_tools,
 )
+from coworker.permissions import Mode, PermissionEngine
 
 
 class FakeClient:
@@ -86,6 +88,22 @@ class FakeClient:
             "capabilities": ["screenshot", "computer_use"],
         }
 
+    def browser_navigate(self, url):
+        self.calls.append(("browser_navigate", url))
+        return {"url": url, "result": {}}
+
+    def browser_eval(self, expression):
+        self.calls.append(("browser_eval", expression))
+        return {"result": {"value": "Example"}}
+
+    def browser_screenshot(self):
+        self.calls.append(("browser_screenshot",))
+        return {"image": "abc", "format": "png"}
+
+    def browser_close(self):
+        self.calls.append(("browser_close",))
+        return {"ok": True}
+
     def screenshot(self):
         self.calls.append(("screenshot",))
         return {"image": "abc", "format": "png"}
@@ -157,6 +175,39 @@ def test_computer_tools_are_capability_gated():
     assert [tool.__name__ for tool in remote_computer_tools(remote)] == ["screenshot"]
     remote.capabilities = {"computer_use"}
     assert [tool.__name__ for tool in remote_computer_tools(remote)] == ["computer"]
+
+
+def test_browser_tools_are_capability_gated_and_validate_schemes():
+    client = FakeClient()
+    remote = target(client)
+    remote.capabilities = {"screenshot", "computer_use"}
+    assert remote_browser_tools(remote) == []
+    remote.capabilities = {"browser_cdp"}
+    tools = remote_browser_tools(remote)
+    navigate = by_name(tools, "browser_navigate")
+    evaluate = by_name(tools, "browser_eval")
+    screenshot = by_name(tools, "browser_screenshot")
+    assert "error" in navigate("file:///etc/passwd")
+    assert "error" in navigate("data:text/html,hello")
+    assert navigate("https://example.com")["url"] == "https://example.com"
+    assert evaluate("document.title", "https://example.com")["result"]["value"] == "Example"
+    assert "error" in evaluate("document.title", "https://other.example")
+    assert screenshot()["format"] == "png"
+
+
+def test_browser_eval_requires_approval_or_is_read_only_denied():
+    remote = target(FakeClient())
+    remote.capabilities = {"browser_cdp"}
+    metadata = by_name(remote_browser_tools(remote), "browser_eval").__aisuite_tool_metadata__
+    args = {"expression": "document.cookie", "target_url": "https://example.com"}
+    interactive = PermissionEngine("/workspace", mode=Mode.INTERACTIVE)
+    assert interactive.evaluate("browser_eval", args, metadata).needs_user
+    custom = PermissionEngine("/workspace", mode=Mode.CUSTOM)
+    assert custom.evaluate("browser_eval", args, metadata).needs_user
+    for mode in (Mode.DISCUSS, Mode.PLAN):
+        decision = PermissionEngine("/workspace", mode=mode).evaluate("browser_eval", args, metadata)
+        assert not decision.allowed
+        assert not decision.needs_user
 
 
 def test_list_files_recursion_glob_and_cap():

@@ -21,6 +21,7 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, AsyncIterator, Awaitable, Callable, Optional
+from urllib.parse import urlsplit, urlunsplit
 
 from . import compaction as _compaction
 from .events import Event, EventType
@@ -41,6 +42,22 @@ SCREENSHOT_HISTORY_LIMIT = 2
 _SCREENSHOT_PLACEHOLDER = (
     "[screenshot from an earlier turn — take a new one if you need to look again]"
 )
+
+
+def _approval_arguments(tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    """Keep browser credentials out of approval cards while retaining the target."""
+    if tool_name != "browser_eval":
+        return arguments
+    safe = dict(arguments or {})
+    for key in ("url", "target_url"):
+        value = safe.get(key)
+        if not isinstance(value, str):
+            continue
+        parsed = urlsplit(value)
+        if parsed.query or parsed.fragment:
+            safe[key] = urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
+            safe[key] += "?[redacted]" if parsed.query else ""
+    return safe
 
 
 def _screenshot_content(result: Any) -> Optional[list[dict[str, Any]]]:
@@ -731,7 +748,7 @@ class TurnEngine:
                 EventType.PERMISSION_REQUIRED,
                 {
                     "name": tool_call.name,
-                    "arguments": tool_call.arguments,
+                    "arguments": _approval_arguments(tool_call.name, tool_call.arguments),
                     "reason": decision.reason,
                     "category": getattr(metadata, "category", ""),
                     **(
@@ -756,7 +773,7 @@ class TurnEngine:
                 self.approver(
                     PermissionRequest(
                         tool_name=tool_call.name,
-                        arguments=tool_call.arguments,
+                        arguments=_approval_arguments(tool_call.name, tool_call.arguments),
                         metadata=metadata,
                         reason=decision.reason,
                         tool_call_id=tool_call.id,

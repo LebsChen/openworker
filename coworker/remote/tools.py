@@ -7,6 +7,7 @@ import re
 import uuid
 from dataclasses import dataclass
 from typing import Any, Optional
+from urllib.parse import urlparse
 
 import aisuite as ai
 
@@ -515,6 +516,89 @@ def remote_computer_tools(target: RemoteTarget) -> list:
     if "computer_use" in capabilities:
         tools.append(computer)
     return tools
+
+
+def _browser_url(url: str) -> str:
+    value = str(url or "").strip()
+    parsed = urlparse(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError("browser URLs must use http or https")
+    return value
+
+
+def remote_browser_tools(target: RemoteTarget) -> list:
+    capabilities = target.capabilities
+    if capabilities is None:
+        try:
+            capabilities = set(target.client.health().get("capabilities") or [])
+        except RvmError:
+            return []
+    if not capabilities.intersection({"browser", "browser_cdp", "cdp_browser"}):
+        return []
+
+    current_url = {"value": None}
+
+    def browser_navigate(url: str) -> dict[str, Any]:
+        try:
+            value = _browser_url(url)
+            result = target.client.browser_navigate(value)
+            current_url["value"] = value
+            return result
+        except (RvmError, ValueError) as exc:
+            return _error(exc)
+
+    def browser_eval(expression: str, target_url: str) -> dict[str, Any]:
+        try:
+            if not str(expression or "").strip():
+                return {"error": "expression required"}
+            value = _browser_url(target_url)
+            if current_url["value"] and value != current_url["value"]:
+                return {"error": "target_url does not match the current browser page"}
+            return target.client.browser_eval(expression)
+        except (RvmError, ValueError) as exc:
+            return _error(exc)
+
+    def browser_screenshot() -> dict[str, Any]:
+        try:
+            return target.client.browser_screenshot()
+        except RvmError as exc:
+            return _error(exc)
+
+    def browser_close() -> dict[str, Any]:
+        try:
+            result = target.client.browser_close()
+            current_url["value"] = None
+            return result
+        except RvmError as exc:
+            return _error(exc)
+
+    browser_navigate.__doc__ = (
+        "Navigate the remote headless browser to an http or https URL. The browser is "
+        "launched implicitly on the first navigation."
+    )
+    browser_navigate.__aisuite_tool_metadata__ = ai.ToolMetadata(
+        category="browser", risk_level="low", requires_approval=False,
+        capabilities=["browser_cdp"],
+    )
+    browser_eval.__doc__ = (
+        "Evaluate JavaScript in the current remote browser page. This can access page "
+        "contents and browser session state; provide the exact current target_url."
+    )
+    browser_eval.__aisuite_tool_metadata__ = ai.ToolMetadata(
+        category="browser", risk_level="high", requires_approval=True,
+        capabilities=["browser_cdp"],
+    )
+    browser_screenshot.__doc__ = "Capture the current remote browser page as a PNG screenshot."
+    browser_screenshot.__aisuite_tool_metadata__ = ai.ToolMetadata(
+        category="browser", risk_level="low", requires_approval=False,
+        capabilities=["browser_cdp"],
+    )
+    browser_close.__doc__ = "Close the remote browser session and its temporary profile."
+    browser_close.__aisuite_tool_metadata__ = ai.ToolMetadata(
+        category="browser", risk_level="low", requires_approval=False,
+        capabilities=["browser_cdp"],
+    )
+    return [browser_navigate, browser_eval, browser_screenshot, browser_close]
 
 
 def remote_git_tools(target: RemoteTarget) -> list:
