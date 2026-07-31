@@ -60,6 +60,18 @@ class FakeAsyncClient:
         return None
 
 
+class FailingAsyncClient(FakeAsyncClient):
+    async def get(self, url, **kwargs):
+        request = httpx.Request("GET", url, headers=kwargs.get("headers"))
+        self.requests.append(request)
+        return httpx.Response(
+            401,
+            request=request,
+            headers={"content-type": "text/plain"},
+            content=b"RVM authorization required",
+        )
+
+
 def _manager(tmp_path, sessions: dict[str, tuple[str, str]]):
     manager = SessionManager(data_dir=tmp_path)
     targets = {}
@@ -163,6 +175,23 @@ def test_ide_document_requires_key_and_traversal_is_rejected(monkeypatch, tmp_pa
             ).status_code
             == 400
         )
+
+
+def test_ide_bootstrap_failure_surfaces_upstream_reason(monkeypatch, tmp_path):
+    manager = _manager(tmp_path, {"session-1": ("rvm-a", "https://rvm.example")})
+    monkeypatch.setattr(app_module.httpx, "AsyncClient", FailingAsyncClient)
+
+    with TestClient(create_app(manager)) as client:
+        result = client.post("/v1/sessions/session-1/ide/session")
+        assert result.status_code == 503
+        assert result.json() == {
+            "status": "offline",
+            "error": (
+                "Remote Web IDE bootstrap failed (HTTP 401): "
+                "RVM authorization required"
+            ),
+        }
+        assert "Unable to start the Web IDE proxy" not in result.text
 
 
 async def test_registry_replaces_host_binding_and_closes_all():

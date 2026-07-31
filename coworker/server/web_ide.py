@@ -8,8 +8,10 @@ the proxied ``/vscode-remote-resource`` endpoint.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import re
 import secrets
+import socket
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -77,6 +79,20 @@ def _replace_connection_token(query: str, token: str) -> str:
     )
 
 
+class _EmbeddedUvicornServer(uvicorn.Server):
+    def __init__(self, config: uvicorn.Config) -> None:
+        super().__init__(config)
+        self.ready = asyncio.Event()
+
+    @contextlib.contextmanager
+    def capture_signals(self):
+        yield
+
+    async def startup(self, sockets: list[socket.socket] | None = None) -> None:
+        await super().startup(sockets)
+        self.ready.set()
+
+
 class SessionIdeProxy:
     ttl = 3600.0
 
@@ -86,17 +102,20 @@ class SessionIdeProxy:
         self.document_key = secrets.token_urlsafe(32)
         self.cookies: dict[str, str] = {}
         self.last_used = time.monotonic()
-        self.server = uvicorn.Server(
+        self.listen_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.listen_socket.bind(("127.0.0.1", 0))
+        self.listen_socket.listen(socket.SOMAXCONN)
+        self.listen_socket.setblocking(False)
+        self.port = int(self.listen_socket.getsockname()[1])
+        self.server = _EmbeddedUvicornServer(
             uvicorn.Config(
                 self._build_app(),
-                host="127.0.0.1",
-                port=0,
                 log_level="error",
                 access_log=False,
             )
         )
         self.task: asyncio.Task[None] | None = None
-        self.port: int | None = None
 
     def matches(self, target: IdeTarget) -> bool:
         return (
@@ -109,22 +128,28 @@ class SessionIdeProxy:
         return time.monotonic() - self.last_used > self.ttl
 
     async def start(self) -> None:
-        self.task = asyncio.create_task(self.server.serve())
-        for _ in range(100):
-            if self.server.started and self.server.servers:
-                sockets = self.server.servers[0].sockets
-                if sockets:
-                    self.port = int(sockets[0].getsockname()[1])
-                    return
-            await asyncio.sleep(0.01)
-        await self.stop()
-        raise RuntimeError("Web IDE proxy failed to start")
+        self.task = asyncio.create_task(self.server.serve(sockets=[self.listen_socket]))
+        ready = asyncio.create_task(self.server.ready.wait())
+        done, _ = await asyncio.wait(
+            {self.task, ready},
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        if self.task in done:
+            ready.cancel()
+            await asyncio.gather(ready, return_exceptions=True)
+            await self.task
+        await ready
 
     async def stop(self) -> None:
         self.server.should_exit = True
-        if self.task is not None:
-            await self.task
+        try:
+            if self.task is not None:
+                await self.task
+        finally:
             self.task = None
+            if self.listen_socket is not None:
+                self.listen_socket.close()
+                self.listen_socket = None
 
     def url(self) -> str:
         assert self.port is not None
@@ -253,7 +278,11 @@ class SessionIdeProxy:
             redirect_query.append(("folder", self.target.workspace))
             url = parts._replace(query=urlencode(redirect_query), fragment="").geturl()
         if response.status_code < 200 or response.status_code >= 300:
-            return _error("Remote Web IDE bootstrap failed", 502)
+            detail = response.text.strip()
+            message = f"Remote Web IDE bootstrap failed (HTTP {response.status_code})"
+            if detail:
+                message += f": {detail}"
+            return _error(message, 502)
         return response
 
     async def prepare(self) -> None:

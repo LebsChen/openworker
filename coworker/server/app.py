@@ -796,7 +796,7 @@ def create_app(manager: SessionManager) -> FastAPI:
                 status_code=503,
             )
 
-    def _ide_target(session_id: str) -> tuple[IdeTarget, Any] | JSONResponse:
+    def _ide_target(session_id: str) -> IdeTarget | JSONResponse:
         try:
             target = manager.resolve_remote_target(session_id)
         except UnknownSessionError:
@@ -827,7 +827,7 @@ def create_app(manager: SessionManager) -> FastAPI:
             token=token,
         )
         target.client.close()
-        return resolved, target
+        return resolved
 
     @app.post("/v1/sessions/{session_id}/ide/session")
     async def session_ide_session(request: Request, session_id: str) -> Response:
@@ -837,18 +837,26 @@ def create_app(manager: SessionManager) -> FastAPI:
             if ide_proxies is not None:
                 await ide_proxies.close(session_id)
             return resolved
-        target, _ = resolved
         if ide_proxies is None:
             return JSONResponse(
                 {"status": "offline", "error": "Web IDE proxy is not running"},
                 status_code=503,
             )
         try:
-            proxy = await ide_proxies.get_or_create(target)
+            proxy = await ide_proxies.get_or_create(resolved)
             return {"url": proxy.url()}
-        except Exception:
+        except Exception as exc:
+            detail = str(exc).replace(resolved.token, "[redacted]").strip()
+            try:
+                parsed = json.loads(detail)
+            except json.JSONDecodeError:
+                parsed = None
+            if isinstance(parsed, dict) and isinstance(parsed.get("error"), str):
+                detail = parsed["error"]
+            if not detail:
+                detail = "Unable to start the Web IDE proxy"
             return JSONResponse(
-                {"status": "offline", "error": "Unable to start the Web IDE proxy"},
+                {"status": "offline", "error": detail},
                 status_code=503,
             )
 
