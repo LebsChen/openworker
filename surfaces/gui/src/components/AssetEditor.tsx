@@ -6,6 +6,9 @@ import {
   saveSecret,
   getSecrets,
   updateAsset,
+  getAgentsMd,
+  saveAgentsMd,
+  saveSkill,
   type Asset,
   type SecretStatus,
 } from "../api";
@@ -85,5 +88,21 @@ export function SecretsEditor() {
       <button className="btn btn-primary" onClick={save}>{t("assets.saveSecret")}</button>
     </div>
     <div className="rounded-xl2 border border-line bg-panel divide-y divide-line">{items.map((item) => <div key={item.profile} className="flex items-center justify-between p-3 text-[13px]"><span>{item.profile}</span><span className="text-muted">{item.type || t("assets.secretStored")}</span></div>)}</div>
+  </div>;
+}
+
+export function TextAssetEditor({ skill = false }: { skill?: boolean }) {
+  useT();
+  const [name, setName] = useState(skill ? "" : "AGENTS.md");
+  const [body, setBody] = useState("");
+  const [enabled, setEnabled] = useState(true);
+  useEffect(() => {
+    if (!skill) getAgentsMd().then((x) => setBody(x.body)).catch(() => {});
+  }, [skill]);
+  return <div className="rounded-xl2 border border-line bg-panel p-5 space-y-4">
+    {skill && <input className="input w-full" placeholder={t("assets.name")} value={name} onChange={(e) => setName(e.target.value)} />}
+    {skill && <label className="text-[12.5px]"><input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> {t("assets.enabled")}</label>}
+    <textarea className="input w-full min-h-96 font-mono" placeholder={t("assets.body")} value={body} onChange={(e) => setBody(e.target.value)} />
+    <button className="btn btn-primary" onClick={() => (skill ? saveSkill(name, body, enabled) : saveAgentsMd(body))}>{t("assets.save")}</button>
   </div>;
 }

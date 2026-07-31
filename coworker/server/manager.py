@@ -4228,6 +4228,32 @@ class SessionManager:
         loader = SkillLoader([state_dir() / "skills"])
         return loader.catalog()
 
+    def get_agents_md(self) -> dict[str, Any]:
+        path = state_dir() / "AGENTS.md"
+        return {"name": "AGENTS.md", "body": path.read_text(encoding="utf-8") if path.is_file() else ""}
+
+    def save_agents_md(self, body: str) -> dict[str, Any]:
+        from ..secrets import write_private_text
+        write_private_text(state_dir() / "AGENTS.md", body)
+        return self.get_agents_md()
+
+    def save_skill(self, name: str, body: str, enabled: bool = True) -> dict[str, Any]:
+        if not name or Path(name).name != name:
+            raise ValueError("invalid skill name")
+        path = state_dir() / "skills" / name / "SKILL.md"
+        from ..secrets import write_private_text
+        content = f"---\nname: {name}\nenabled: {'true' if enabled else 'false'}\n---\n\n{body.rstrip()}\n"
+        write_private_text(path, content)
+        return {"name": name, "enabled": enabled, "body": body}
+
+    def delete_skill(self, name: str) -> dict[str, Any]:
+        path = state_dir() / "skills" / Path(name).name
+        if path.name != name:
+            return {"ok": False}
+        import shutil
+        shutil.rmtree(path, ignore_errors=True)
+        return {"ok": True}
+
     def list_assets(self, kind: str, *, workspace: str | None = None) -> list[dict[str, Any]]:
         return self.asset_stores[kind].list(workspace=workspace)
 

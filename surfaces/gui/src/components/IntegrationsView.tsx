@@ -4,7 +4,7 @@ import { getConnectors } from "../api";
 import { McpTab } from "./ManageTabs";
 import { ConnectorsSection } from "./connectors/ConnectorsSection";
 import { Icon } from "./Icon";
-import { AssetEditor, SecretsEditor } from "./AssetEditor";
+import { AssetEditor, SecretsEditor, TextAssetEditor } from "./AssetEditor";
 
 // The Connectors surface (renamed from "Integrations", §26) keeps the left sub-nav, now just
 // Connectors · MCP. The old "Messaging routing" tab (and its ⚠ unrouted badge) moved whole to
@@ -96,7 +96,7 @@ export function IntegrationsView() {
           ) : tab === "secrets" ? (
             <section><PanelHead title={t("assets.secrets")} sub={t("assets.secretsSub")} /><SecretsEditor /></section>
           ) : (
-            <section><PanelHead title={tab === "agents" ? t("assets.agents") : t("assets.skill")} sub={t("assets.localSub")} /><div className="rounded-xl2 border border-line bg-panel p-5 text-[13px] text-muted">{t("assets.editorComingSoon")}</div></section>
+            <section><PanelHead title={tab === "agents" ? t("assets.agents") : t("assets.skill")} sub={t("assets.localSub")} /><TextAssetEditor skill={tab === "skill"} /></section>
           )}
         </div>
       </div>

@@ -440,7 +440,6 @@
   "assets.playbookSub": "Reusable procedures invoked explicitly by the agent.",
   "assets.secretsSub": "Private credentials stored locally; values are write-only.",
   "assets.localSub": "Local OpenWorker assets, independent of Devin Cloud.",
-  "assets.editorComingSoon": "This local asset editor is coming soon.",
   "assets.new": "New asset",
   "assets.name": "Name",
   "assets.description": "Description",

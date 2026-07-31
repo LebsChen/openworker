@@ -595,6 +595,25 @@ def create_app(manager: SessionManager) -> FastAPI:
     def skills() -> dict[str, Any]:
         return {"skills": manager.list_skills()}
 
+    @app.get("/v1/agents-md")
+    def agents_md() -> dict[str, Any]:
+        return manager.get_agents_md()
+
+    @app.put("/v1/agents-md")
+    def agents_md_save(body: dict) -> dict[str, Any]:
+        return manager.save_agents_md(str((body or {}).get("body", "")))
+
+    @app.put("/v1/skills/{name}")
+    def skill_save(name: str, body: dict) -> dict[str, Any]:
+        try:
+            return manager.save_skill(name, str((body or {}).get("body", "")), bool((body or {}).get("enabled", True)))
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
+
+    @app.delete("/v1/skills/{name}")
+    def skill_delete(name: str) -> dict[str, Any]:
+        return manager.delete_skill(name)
+
     @app.get("/v1/assets/{kind}")
     def assets(kind: str, workspace: str | None = None) -> dict[str, Any]:
         if kind not in {"knowledge", "playbooks"}:

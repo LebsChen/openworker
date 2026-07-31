@@ -912,6 +912,19 @@ export async function deleteSecret(profile: string) {
   return request<{ ok: boolean }>(`/v1/secrets/${encodeURIComponent(profile)}`, { method: "DELETE" });
 }
 
+export async function getAgentsMd(): Promise<{ name: string; body: string }> {
+  return request("/v1/agents-md");
+}
+export async function saveAgentsMd(body: string) {
+  return request("/v1/agents-md", { method: "PUT", body: JSON.stringify({ body }) });
+}
+export async function saveSkill(name: string, body: string, enabled = true) {
+  return request(`/v1/skills/${encodeURIComponent(name)}`, { method: "PUT", body: JSON.stringify({ body, enabled }) });
+}
+export async function deleteSkill(name: string) {
+  return request(`/v1/skills/${encodeURIComponent(name)}`, { method: "DELETE" });
+}
+
 export async function connectConnector(
   name: string,
   fields: Record<string, string>,

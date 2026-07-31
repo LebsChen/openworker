@@ -440,7 +440,6 @@
   "assets.playbookSub": "由代理显式调用的可复用流程。",
   "assets.secretsSub": "本地私密凭据；值仅可写入。",
   "assets.localSub": "OpenWorker 本地资产，不与 Devin Cloud 同步。",
-  "assets.editorComingSoon": "本地资产编辑器即将推出。",
   "assets.new": "新建资产",
   "assets.name": "名称",
   "assets.description": "描述",
