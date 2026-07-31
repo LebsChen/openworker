@@ -74,6 +74,20 @@ export const setAutostart = (enabled: boolean) => invoke<boolean>("set_autostart
 export const getKeepAwake = () => invoke<boolean>("get_keep_awake");
 export const setKeepAwake = (enabled: boolean) => invoke<boolean>("set_keep_awake", { enabled });
 
+export type RemoteHostInfo = {
+  name: string;
+  base_url: string;
+  active: boolean;
+};
+
+export const listRemoteHosts = () => invoke<RemoteHostInfo[]>("list_remote_hosts");
+export const saveRemoteHost = (name: string, baseUrl: string, token: string) =>
+  invokeStrict<void>("save_remote_host", { name, base_url: baseUrl, token });
+export const deleteRemoteHost = (name: string) => invokeStrict<void>("delete_remote_host", { name });
+export const activateRemoteHost = (name: string | null) =>
+  invokeStrict<void>("activate_remote_host", { name });
+export const restartApp = () => invokeStrict<void>("restart_app");
+
 /** Begin native window dragging from a custom title/header region. */
 export const startWindowDrag = () => invoke<boolean>("start_window_drag");
 

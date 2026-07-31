@@ -28,6 +28,12 @@ import {
   pickFolder,
   setAutostart,
   setKeepAwake,
+  activateRemoteHost,
+  deleteRemoteHost,
+  listRemoteHosts,
+  restartApp,
+  saveRemoteHost,
+  type RemoteHostInfo,
   startDictation,
   stopDictation,
   verifyDictationModel,
@@ -49,7 +55,7 @@ import { showPersonas } from "../flags";
 // Models + Personas host the existing tab components inside the page shell (field re-skin to follow).
 // "appearance" is the General tab's stable key — callers deep-link with it, so the
 // rename (UX-021) changed only the label. "files" folded into General as a card.
-type SetTab = "appearance" | "models" | "voice" | "personas";
+type SetTab = "appearance" | "models" | "voice" | "personas" | "remote";
 
 const CARD = "rounded-xl2 border border-line bg-panel";
 const FIELD_LABEL = "text-[12.5px] font-medium text-ink";
@@ -64,6 +70,7 @@ const SET_TABS: { key: SetTab; label: string; icon: "sliders" | "code" | "mic" |
   { key: "appearance", label: "General", icon: "sliders" },
   { key: "models", label: "Models", icon: "code" },
   { key: "voice", label: "Voice input", icon: "mic" },
+  { key: "remote", label: "Remote host", icon: "sliders" },
   { key: "personas", label: "Personas", icon: "sparkle" },
 ];
 
@@ -107,7 +114,9 @@ export function SettingsView({
 
       <div className="flex-1 min-w-0 overflow-y-auto hairline-scroll">
         <div className="max-w-3xl mx-auto px-7 py-6">
-          {tab === "appearance" ? (
+          {tab === "remote" ? (
+            <RemoteHostsSection />
+          ) : tab === "appearance" ? (
             <AppearanceSection />
           ) : tab === "models" ? (
             <section>
@@ -131,6 +140,75 @@ export function SettingsView({
         </div>
       </div>
     </main>
+  );
+}
+
+function RemoteHostsSection() {
+  const [hosts, setHosts] = useState<RemoteHostInfo[]>([]);
+  const [name, setName] = useState("");
+  const [baseUrl, setBaseUrl] = useState("");
+  const [token, setToken] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const refresh = () => listRemoteHosts().then((v) => setHosts(v || [])).catch(() => setHosts([]));
+  useEffect(() => {
+    refresh();
+  }, []);
+  const save = async () => {
+    setError(null);
+    try {
+      await saveRemoteHost(name, baseUrl, token);
+      setToken("");
+      setSaved(true);
+      refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save remote host.");
+    }
+  };
+  const activate = async (host: RemoteHostInfo | null) => {
+    setError(null);
+    try {
+      await activateRemoteHost(host?.name ?? null);
+      await restartApp();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not activate remote host.");
+    }
+  };
+  return (
+    <section>
+      <PanelHead
+        title="Remote host"
+        sub="Connect the desktop client to an OpenWorker server running on an RVM host. HTTPS certificate verification remains enabled."
+      />
+      <div className={`${CARD} p-4 space-y-3`}>
+        {hosts.map((host) => (
+          <div key={host.name} className="flex items-center gap-3 border-b border-line pb-3">
+            <div className="min-w-0 flex-1">
+              <div className="text-[13px] font-medium">{host.name}</div>
+              <div className="text-[12px] text-muted truncate">{host.base_url}</div>
+            </div>
+            {host.active ? (
+              <span className="text-[12px] text-accent">Active</span>
+            ) : (
+              <button className={BTN_BORDERED} onClick={() => activate(host)}>Use</button>
+            )}
+            <button className="text-[12px] text-danger" onClick={() => deleteRemoteHost(host.name).then(refresh)}>
+              Remove
+            </button>
+          </div>
+        ))}
+        <div className="pt-2 text-[12px] font-medium">Add or update profile</div>
+        <input className={INPUT} placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
+        <input className={INPUT} placeholder="https://rvm-host:8765" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
+        <input className={INPUT} type="password" placeholder="Server token" value={token} onChange={(e) => setToken(e.target.value)} />
+        <button className={BTN_ACCENT} disabled={!name || !baseUrl || !token} onClick={save}>Save profile</button>
+        {hosts.some((h) => h.active) && (
+          <button className={BTN_BORDERED} onClick={() => activate(null)}>Use local server</button>
+        )}
+        {saved && <div className="text-[12px] text-accent">Saved securely. Select Use to restart in remote mode.</div>}
+        {error && <div role="alert" className="text-[12px] text-danger">{error}</div>}
+      </div>
+    </section>
   );
 }
 
