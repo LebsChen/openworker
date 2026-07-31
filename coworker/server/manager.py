@@ -42,6 +42,13 @@ from ..roots import RootDir
 from ..workspace_trust import WorkspaceTrustStore
 from ..remote.hosts import RvmHostStore
 from ..remote.client import RvmError, RvmUnauthorizedError, RvmUnreachableError
+from ..git_review import (
+    empty_status,
+    local_diff,
+    local_status,
+    remote_diff,
+    remote_status,
+)
 from ..remote.tools import RemoteTarget
 from ..remote.executor import RvmExecutor
 from ..automation import Schedule, ScheduledTask, Scheduler, TaskRun, TaskStore
@@ -1512,6 +1519,32 @@ class SessionManager:
                 continue
         out.sort(key=lambda a: a["modified_at"], reverse=True)
         return out[:80]
+
+    def git_status(self, session_id: str) -> dict[str, Any]:
+        record = self.session_store.load(session_id)
+        if record is not None and record.host_id and record.host_id != "local":
+            target = self.resolve_remote_target(session_id)
+            try:
+                return remote_status(target)
+            finally:
+                target.client.close()
+        workspace = record.workspace if record else self.default_workspace
+        return local_status(workspace) if workspace else empty_status()
+
+    def git_diff(self, session_id: str, path: str) -> dict[str, Any]:
+        if not path or path.startswith(("/", "\\")):
+            return {"ok": False, "error": "path escapes workspace"}
+        record = self.session_store.load(session_id)
+        if record is not None and record.host_id and record.host_id != "local":
+            target = self.resolve_remote_target(session_id)
+            try:
+                return remote_diff(target, path)
+            finally:
+                target.client.close()
+        workspace = record.workspace if record else self.default_workspace
+        if not workspace:
+            return {"ok": False, "error": "no workspace"}
+        return local_diff(workspace, path)
 
     MAX_BINARY_PREVIEW = 25 * 1024 * 1024  # base64-over-JSON gets heavy past this
 
