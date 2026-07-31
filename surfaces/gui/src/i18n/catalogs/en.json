@@ -464,5 +464,6 @@
   "assets.path": "Path",
   "assets.writeOnlyNotice": "Secret values are write-only and are never shown after saving.",
   "assets.globalAgentsTitle": "Global AGENTS.md",
-  "assets.globalAgentsSub": "This edits the global AGENTS.md only. A project AGENTS.md is read from that workspace."
+  "assets.globalAgentsSub": "This edits the global AGENTS.md only. A project AGENTS.md is read from that workspace.",
+  "approval.staysOnRemoteHost": "stays on {host}"
 }

@@ -106,6 +106,35 @@ def test_unsaved_host_probe_does_not_register_host(tmp_path, monkeypatch):
     assert manager.rvm_hosts.list() == []
 
 
+def test_saved_host_probe_adopts_reported_workspace(tmp_path, monkeypatch):
+    import coworker.server.app as server_app
+
+    manager = SessionManager(workspace=tmp_path, provider=ScriptedProvider([]))
+    monkeypatch.setattr(
+        server_app,
+        "_probe_rvm",
+        lambda base_url, token: {
+            "status": "online",
+            "platform": "windows",
+            "workspace": r"C:\Users\Team",
+        },
+    )
+    with TestClient(create_app(manager)) as client:
+        created = client.post(
+            "/v1/rvm/hosts",
+            json={
+                "id": "winrvm",
+                "name": "Antec",
+                "base_url": "http://candidate",
+                "token": "candidate-token",
+            },
+        )
+        assert created.status_code == 200
+        response = client.post("/v1/rvm/hosts/winrvm/test")
+    assert response.json()["workspace"] == r"C:\Users\Team"
+    assert manager.rvm_hosts.get("winrvm").workspace == r"C:\Users\Team"
+
+
 def test_disable_persona_archives_its_sessions(tmp_path):
     """Disable = "put this coworker and its history away": the persona's real sessions are
     archived atomically server-side (so its sidebar section disappears with it), internal

@@ -296,8 +296,8 @@ function InfoPanel({
       <h3 className="right-panel-heading">{t("session.rail.info")}</h3>
       <div className="right-panel-host">
         <strong>{host.name}</strong>
-        <span className={"right-panel-status " + (host.local ? "online" : (probe?.status || host.status || "unknown"))}>
-          {host.local ? "online" : (probe?.status || host.status || "unknown").replace("_", " ")}
+        <span className={"right-panel-status " + (host.local ? "online" : (host.offline ? "offline" : (probe?.status || host.status || "unknown")))}>
+          {host.local ? "online" : (host.offline ? "offline" : (probe?.status || host.status || "unknown")).replace("_", " ")}
         </span>
       </div>
       {host.local ? (

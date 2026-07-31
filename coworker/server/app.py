@@ -192,7 +192,21 @@ def _probe_rvm(base_url: str, token: str) -> dict[str, Any]:
             return {"status": "offline", "latency_ms": round((time.monotonic() - started) * 1000), "error": str(exc), "capabilities": health.get("capabilities", [])}
         except Exception as exc:
             return {"status": "offline", "latency_ms": round((time.monotonic() - started) * 1000), "error": str(exc), "capabilities": health.get("capabilities", [])}
-        return {"status": "online", "latency_ms": round((time.monotonic() - started) * 1000), "capabilities": health.get("capabilities", []), "platform": health.get("platform"), "workspace": health.get("workspace"), "info": info}
+        workspace = health.get("workspace")
+        return {
+            "status": "online",
+            "latency_ms": round((time.monotonic() - started) * 1000),
+            "capabilities": health.get("capabilities", []),
+            "platform": health.get("platform"),
+            "workspace": workspace,
+            "health": health,
+            "info": info,
+            "error": (
+                None
+                if workspace
+                else "Connected, but the RVM reported no workspace; enter one manually in the Workspace field."
+            ),
+        }
     except RvmUnauthorizedError as exc:
         return {"status": "auth_failed", "latency_ms": round((time.monotonic() - started) * 1000), "error": str(exc)}
     except (RvmUnreachableError, RvmTimeoutError) as exc:
@@ -1930,6 +1944,7 @@ def create_app(manager: SessionManager) -> FastAPI:
             # The receive loop atomically claims this session before scheduling the task.
             # Keeping the claim outside prevents two back-to-back frames from both starting.
             try:
+                manager.ensure_remote_available(session_id)
                 events = engine.retry() if retry else engine.run(content)
                 async for event in events:
                     # Broadcast to every socket viewing this session (this socket included — it's a
@@ -1939,6 +1954,16 @@ def create_app(manager: SessionManager) -> FastAPI:
                     )
                     if event.type.value in _CHECKPOINTS:
                         manager.save(session_id, engine)
+            except (
+                UnknownRvmHostError,
+                RvmHostOfflineError,
+                RvmHostUnauthorizedError,
+                ValueError,
+            ) as exc:
+                await manager.broadcast_session(
+                    session_id,
+                    {"type": "error", "data": {"error": str(exc)}},
+                )
             finally:
                 manager.mark_idle(session_id)
                 manager.save(session_id, engine)
@@ -2337,7 +2362,22 @@ def create_app(manager: SessionManager) -> FastAPI:
             return JSONResponse({"status": "offline", "error": "host not found"}, status_code=404)
         if host.offline:
             return {"status": "offline", "error": "host is marked offline"}
-        return _probe_rvm(host.base_url, manager.rvm_hosts.token(host_id) or "")
+        result = _probe_rvm(host.base_url, manager.rvm_hosts.token(host_id) or "")
+        workspace = result.get("workspace")
+        if result.get("status") == "online" and workspace and not host.workspace:
+            from ..remote.hosts import RvmHost
+
+            manager.rvm_hosts.put(
+                RvmHost(
+                    id=host.id,
+                    name=host.name,
+                    base_url=host.base_url,
+                    platform=host.platform or result.get("platform"),
+                    workspace=str(workspace),
+                    offline=host.offline,
+                )
+            )
+        return result
 
     @app.post("/v1/rvm/hosts/test")
     def rvm_host_probe(body: dict[str, Any]) -> dict[str, Any]:

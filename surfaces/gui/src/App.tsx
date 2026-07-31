@@ -2028,7 +2028,7 @@ export function App() {
                 ) : !unattended && pendingDirReq?.kind === "dirreq" ? (
                   <DirectoryRequestCard item={pendingDirReq} onRespond={respondDirectory} />
                 ) : !unattended && pendingApproval?.kind === "approval" ? (
-                  <ApprovalCard item={pendingApproval} onApprove={approve} runTask={runContext} compact />
+                  <ApprovalCard item={pendingApproval} onApprove={approve} runTask={runContext} compact host={sessionHost} />
                 ) : !unattended && pendingQuestion?.kind === "question" ? (
                   // Live ask_user in an attended session — answer inline (reuses the Inbox card UI).
                   <InboxItemCard

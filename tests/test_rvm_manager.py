@@ -4,6 +4,7 @@ from coworker.remote.executor import RvmExecutor
 from coworker.remote.hosts import RvmHost
 from coworker.server import manager as manager_module
 from coworker.server.manager import SessionManager
+from coworker.sessions import SessionRecord
 from coworker.tools.shell import LocalExecutor
 
 
@@ -98,11 +99,94 @@ def test_new_session_host_can_be_selected_per_connection(monkeypatch, tmp_path):
     assert manager.session_store.load("selected-session").host_id == "rvm"
 
 
-def test_existing_engine_cannot_cross_local_and_remote_host_bindings(tmp_path):
+def test_stale_local_engine_is_rebuilt_for_requested_remote_host(monkeypatch, tmp_path):
+    class Client:
+        def health(self):
+            return {"platform": "linux"}
+
+        def mkdir(self, path):
+            return {"ok": True}
+
+        def close(self):
+            pass
+
     manager = SessionManager(data_dir=tmp_path)
-    manager._engines["bound"] = SimpleNamespace(remote_target=None)
-    with __import__("pytest").raises(ValueError, match="bound to rvm"):
-        manager.get_engine("bound", host_id="rvm")
+    manager.rvm_hosts.put(
+        RvmHost("rvm", "Remote", "http://rvm", platform="linux", workspace="/remote"),
+        "token",
+    )
+    client = Client()
+    monkeypatch.setattr(manager.rvm_hosts, "client", lambda _host_id: client)
+    closed = []
+    manager._engines["bound"] = SimpleNamespace(
+        remote_target=None,
+        executor=SimpleNamespace(close=lambda: closed.append(True)),
+    )
+    monkeypatch.setattr(
+        manager_module,
+        "build_engine",
+        lambda **kwargs: SimpleNamespace(
+            model="m",
+            permissions=SimpleNamespace(mode=SimpleNamespace(value="interactive")),
+            messages=[],
+            executor=SimpleNamespace(cwd=kwargs["remote_target"].workspace),
+            remote_target=kwargs["remote_target"],
+            agent_name="code",
+        ),
+    )
+    engine = manager.get_engine("bound", agent="code", host_id="rvm")
+    assert engine.remote_target.host.id == "rvm"
+    assert closed == [True]
+
+
+def test_remote_roots_use_remote_existence_check(monkeypatch, tmp_path):
+    class Client:
+        def health(self):
+            return {"platform": "windows"}
+
+        def exists(self, path):
+            return {"exists": True}
+
+        def close(self):
+            pass
+
+    manager = SessionManager(data_dir=tmp_path)
+    host = RvmHost("winrvm", "Antec", "http://rvm", platform="windows", workspace=r"C:\Users\Team")
+    manager.rvm_hosts.put(host, "token")
+    client = Client()
+    monkeypatch.setattr(manager.rvm_hosts, "client", lambda _host_id: client)
+    manager.session_store.save(
+        SessionRecord(
+            session_id="remote-roots",
+            workspace=r"C:\Users\Team\.coworker\sessions\remote-roots",
+            model="m",
+            mode="interactive",
+            host_id="winrvm",
+        )
+    )
+    roots = manager.get_roots("remote-roots")
+    assert roots[0]["path"].startswith(r"C:\Users\Team")
+    assert roots[0]["exists"] is True
+
+
+def test_cached_remote_session_rejects_host_marked_offline(tmp_path):
+    manager = SessionManager(data_dir=tmp_path)
+    host = RvmHost("rvm", "Remote", "http://rvm", platform="linux", workspace="/remote")
+    manager.rvm_hosts.put(host, "token")
+    manager.session_store.save(
+        SessionRecord(
+            session_id="offline",
+            workspace="/remote/.coworker/sessions/offline",
+            model="m",
+            mode="interactive",
+            host_id="rvm",
+        )
+    )
+    manager.rvm_hosts.set_offline("rvm", True)
+    import pytest
+
+    with pytest.raises(manager_module.RvmHostOfflineError, match="marked offline"):
+        manager.ensure_remote_available("offline")
 
 
 def test_remote_session_persists_binding_and_executes_after_reload(monkeypatch, tmp_path):

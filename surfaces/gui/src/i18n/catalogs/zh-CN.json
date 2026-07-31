@@ -464,5 +464,6 @@
   "assets.path": "路径",
   "assets.writeOnlyNotice": "密钥值仅可写入，保存后不会显示。",
   "assets.globalAgentsTitle": "全局 AGENTS.md",
-  "assets.globalAgentsSub": "这里只编辑全局 AGENTS.md。项目 AGENTS.md 将从对应工作区读取。"
+  "assets.globalAgentsSub": "这里只编辑全局 AGENTS.md。项目 AGENTS.md 将从对应工作区读取。",
+  "approval.staysOnRemoteHost": "保留在 {host}"
 }

@@ -11,14 +11,20 @@ import { Icon } from "./Icon";
 export const OPEN_ARTIFACT_EVENT = "ocw-open-artifact";
 
 function ArtifactChip({ path, title }: { path: string; title: string }) {
-  const file = path.split("/").pop() || path;
+  let displayPath = path;
+  try {
+    displayPath = decodeURIComponent(path);
+  } catch {
+    // Keep the original path when it is not valid URI text.
+  }
+  const file = displayPath.split(/[\\/]/).pop() || displayPath;
   return (
     <button
       className="art-chip"
       data-testid="artifact-chip"
-      title={path}
+      title={displayPath}
       onClick={() =>
-        window.dispatchEvent(new CustomEvent(OPEN_ARTIFACT_EVENT, { detail: { path } }))
+        window.dispatchEvent(new CustomEvent(OPEN_ARTIFACT_EVENT, { detail: { path: displayPath } }))
       }
     >
       <span className="art-chip-ico">

@@ -409,7 +409,13 @@ class SessionManager:
         record = self.session_store.load(session_id)
         engine = self._engines.get(session_id)
         if engine is not None:
-            expected_host = record.host_id if record is not None else host_id
+            record_host = record.host_id if record is not None else None
+            if record_host and host_id and host_id != record_host:
+                raise ValueError(
+                    f"session {session_id} is permanently bound to {record_host}; "
+                    "start a new session to use another host"
+                )
+            expected_host = record_host or host_id
             if expected_host:
                 actual_host = (
                     getattr(getattr(engine, "remote_target", None), "host", None).id
@@ -417,19 +423,24 @@ class SessionManager:
                     else "local"
                 )
                 if actual_host != expected_host:
-                    raise ValueError(
-                        f"session {session_id} is bound to {expected_host}, "
-                        f"but its engine is bound to {actual_host}"
-                    )
-            if approver is not None:
-                engine.approver = approver
-            if directory_requester is not None:
-                engine.directory_requester = directory_requester
-            if plan_approver is not None:
-                engine.plan_approver = plan_approver
-            if question_asker is not None:
-                engine.question_asker = question_asker
-            return engine
+                    stale = self._engines.pop(session_id, None)
+                    executor = getattr(stale, "executor", None)
+                    close = getattr(executor, "close", None)
+                    if callable(close):
+                        close()
+                    engine = None
+            if engine is None:
+                pass
+            else:
+                if approver is not None:
+                    engine.approver = approver
+                if directory_requester is not None:
+                    engine.directory_requester = directory_requester
+                if plan_approver is not None:
+                    engine.plan_approver = plan_approver
+                if question_asker is not None:
+                    engine.question_asker = question_asker
+                return engine
 
         is_new_session = record is None
         agent_name = (record.agent if record else agent) or "code"
@@ -588,6 +599,15 @@ class SessionManager:
             host_id=record.host_id,
             create_workspace=False,
         )
+
+    def ensure_remote_available(self, session_id: str) -> None:
+        """Revalidate a bound remote host immediately before starting a turn."""
+        record = self.session_store.load(session_id)
+        if record is None or not record.host_id or record.host_id == "local":
+            return
+        target = self.resolve_remote_target(session_id)
+        if target is not None:
+            target.client.close()
 
     def _resolve_remote_target(
         self,
@@ -3960,6 +3980,24 @@ class SessionManager:
         """
         engine = self._engines.get(session_id)
         if engine is not None and getattr(engine, "roots", None):
+            remote_target = getattr(engine, "remote_target", None)
+            if remote_target is not None:
+                def remote_exists(path: str) -> bool:
+                    try:
+                        return bool(remote_target.client.exists(path).get("exists"))
+                    except Exception:
+                        return False
+
+                return [
+                    {
+                        "path": str(r.path),
+                        "writable": bool(r.writable),
+                        "label": r.label,
+                        "primary": i == 0,
+                        "exists": remote_exists(str(r.path)),
+                    }
+                    for i, r in enumerate(engine.roots)
+                ]
             return [
                 {
                     "path": str(r.path),
@@ -3971,6 +4009,35 @@ class SessionManager:
                 for i, r in enumerate(engine.roots)
             ]
         record = self.session_store.load(session_id)
+        remote_target = None
+        if record is not None and record.host_id and record.host_id != "local":
+            remote_target = self.resolve_remote_target(session_id)
+        if remote_target is not None:
+            primary = record.workspace or remote_target.workspace
+            extra = (record.extra_roots if record else []) or []
+            def remote_exists(path: str) -> bool:
+                try:
+                    return bool(remote_target.client.exists(path).get("exists"))
+                except Exception:
+                    return False
+            out = [{
+                "path": primary,
+                "writable": True,
+                "label": "scratch",
+                "primary": True,
+                "exists": remote_exists(primary),
+            }]
+            for r in extra:
+                p = str(r.get("path", ""))
+                out.append({
+                    "path": p,
+                    "writable": bool(r.get("writable", False)),
+                    "label": r.get("label") or remote_target.style.basename(p),
+                    "primary": False,
+                    "exists": remote_exists(p),
+                })
+            remote_target.client.close()
+            return out
         primary = (
             record.workspace
             if record and record.workspace

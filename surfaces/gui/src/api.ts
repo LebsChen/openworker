@@ -45,10 +45,12 @@ export type RvmHostInfo = {
 export type RemoteHostProbeResult = {
   status: "online" | "offline" | "auth_failed" | "checking" | "unknown";
   latency_ms?: number;
+  workspace?: string;
   health?: {
     platform?: string;
     host?: string;
     version?: string;
+    workspace?: string;
     capabilities?: string[];
     vnc_port?: number | null;
     ide_port?: number | null;
@@ -109,10 +111,19 @@ export async function saveRvmHost(
   platform?: string,
   workspace?: string,
 ): Promise<void> {
+  const body: Record<string, unknown> = {
+    id,
+    name,
+    base_url: baseUrl,
+    platform,
+    workspace,
+  };
+  if (token) body.token = token;
+  if (vncPassword) body.vnc_password = vncPassword;
   const res = await fetch(`${httpBase()}/v1/rvm/hosts`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-OpenWorker-Token": apiToken() },
-    body: JSON.stringify({ id, name, base_url: baseUrl, token, vnc_password: vncPassword, platform, workspace }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error((await res.json()).error || `Unable to save remote host (HTTP ${res.status}).`);
   window.dispatchEvent(new Event("coworker-hosts-changed"));
