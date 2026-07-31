@@ -216,35 +216,36 @@ body {
   -webkit-backdrop-filter: blur(8px);
   z-index: 6;
 }
-.main.rail-open .main-topbar { right: 332px; }
-/* Centered title column (§22, amended: the ⋯ menu removed — the nav row's hover cluster owns
-   pin/rename/archive/delete). Title + facts subtitle beneath.
-   ABSOLUTE centering (owner catch 2026-07-13: a long mention-spawned title painted over the
-   topbar icons): the flex sides can't guarantee clearance — the settings row's rest-state
-   glance occupies space by design, so every content-based flex floor over-reserves. Centering
-   on the BAR and capping against its width (100% here = the topbar, not the viewport — the
-   right rail sits outside it) makes the title ellipsize before it can reach either cluster:
-   332px ≈ 2 × (collapsed cluster + settings icon + gaps). */
+.main.rail-open .main-topbar { right: 380px; }
+/* The title and subtitle occupy a centered, shrinkable column between the two topbar sides. */
 .main-title {
-  position: absolute; left: 50%; top: 0; height: 100%; transform: translateX(-50%);
-  max-width: max(96px, calc(100% - 332px));
+  position: static; flex: 0 1 280px; min-width: 96px; max-width: 280px; height: 100%;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
+  overflow: hidden;
   font-size: 13px; font-weight: 600; color: var(--ink);
 }
 /* The overlay build pads the collapsed cluster past the traffic lights — reserve that too. */
-.app.nav-collapsed.tauri-overlay .main-title { max-width: max(96px, calc(100% - 416px)); }
-.main-title-text { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: min(460px, 100%); }
+.app.nav-collapsed.tauri-overlay .main-title { max-width: 280px; }
+.main-title-text { display: block; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; text-align: center; }
 .title-ghost { color: var(--faint); font-weight: 400; }
 /* The facts subtitle — fixed facts, not controls (persona · model · folder); click → coworker page. */
 .title-sub {
   border: 0; background: none; padding: 0; font: inherit;
   font-size: 11px; font-weight: 400; line-height: 1.25; color: var(--faint);
-  max-width: min(460px, 100%); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;
+  width: 100%; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;
 }
 .title-sub:hover { color: var(--muted); }
 /* Equal-flex side regions keep the subtitle centered; they double as window-drag surfaces. */
 .main-topbar-side { align-self: stretch; flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 6px; }
-.main-topbar-actions { justify-content: flex-end; }
+.main-topbar-actions { justify-content: flex-end; min-width: 0; overflow: hidden; }
+.main-topbar-actions > * { min-width: 0; }
+.main-topbar-actions select { flex: 0 0 180px; }
+.main-topbar-actions label {
+  flex: 0 1 auto;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
 .topbar-icon-btn {
   width: 30px; height: 30px; display: grid; place-items: center;
   border: 0; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer;
@@ -263,7 +264,7 @@ body {
 }
 .main-workspace { position: relative; display: flex; min-height: 0; flex: 1; overflow: hidden; }
 .main-chat { position: relative; display: flex; flex-direction: column; min-width: 0; flex: 1; padding-top: 48px; }
-.main.rail-open .main-chat { margin-right: 332px; }
+.main.rail-open .main-chat { margin-right: 380px; }
 .main-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 24px 8% 24px; }
 
 /* idle hero */
@@ -534,6 +535,47 @@ button.btn.danger { color: var(--accent); }
   backdrop-filter: blur(12px);
   z-index: 5;
 }
+.right-panel-tabs { padding: 0; }
+.right-panel-tabbar {
+  display: flex; gap: 2px; overflow-x: auto; padding: 8px 10px;
+  border-bottom: 1px solid var(--line); background: var(--glass-soft);
+}
+.right-panel-tab {
+  flex: 0 0 auto; border: 0; border-radius: 7px; padding: 6px 8px;
+  background: transparent; color: var(--muted); cursor: pointer; font-size: 11px;
+}
+.right-panel-tab:hover { color: var(--ink); background: var(--paper); }
+.right-panel-tab.active { color: var(--ink); background: var(--paper); font-weight: 600; }
+.right-panel-tab:disabled { color: var(--faint); cursor: not-allowed; opacity: .55; }
+.right-panel-tabbody { padding: 0 16px 18px; }
+.right-panel-section { padding-top: 12px; }
+.right-panel-heading { margin: 0 0 10px; font-size: 14px; font-weight: 650; color: var(--ink); }
+.right-panel-heading-row { display: flex; align-items: center; justify-content: space-between; }
+.right-panel-subheading { margin: 14px 0 7px; font-size: 12px; color: var(--muted); }
+.right-panel-host { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.right-panel-status { border-radius: 999px; padding: 2px 7px; font-size: 10px; text-transform: capitalize; }
+.right-panel-status.online { color: var(--ok); background: var(--ok-soft); }
+.right-panel-status.offline, .right-panel-status.auth { color: var(--danger); background: var(--danger-soft); }
+.right-panel-status.unknown, .right-panel-status.checking { color: var(--warn-ink); background: var(--warn-soft); }
+.right-panel-field { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; font-size: 11px; color: var(--faint); }
+.right-panel-field strong { max-width: 70%; color: var(--muted); text-align: right; overflow-wrap: anywhere; font-weight: 500; }
+.right-panel-worklog { display: flex; flex-direction: column; gap: 8px; }
+.right-panel-worklog-row { display: grid; grid-template-columns: 8px minmax(0, 1fr); gap: 8px; font-size: 11px; }
+.right-panel-worklog-row strong { display: block; color: var(--muted); text-transform: capitalize; }
+.right-panel-worklog-dot {
+  display: block; align-self: start; width: 7px; min-width: 7px; height: 7px;
+  margin-top: 4px; border-radius: 50%; background: var(--faint);
+}
+.right-panel-worklog-dot--tool { background: var(--accent); }
+.right-panel-worklog-dot--file { background: var(--ok); }
+.right-panel-worklog-dot--assistant { background: var(--teal); }
+.right-panel-worklog-dot--user { background: var(--muted); }
+.right-panel-worklog-dot--notice { background: var(--warn-ink); }
+.right-panel-worklog-status { margin-left: 6px; color: var(--faint); }
+.right-panel-worklog-row pre { max-height: 84px; margin: 4px 0 0; overflow: auto; white-space: pre-wrap; color: var(--faint); font: 10px/1.35 ui-monospace, monospace; }
+.right-panel-empty { padding: 32px 8px; text-align: center; color: var(--faint); font-size: 12px; }
+.right-panel-empty h3 { margin: 0 0 8px; color: var(--muted); font-size: 14px; }
+.right-panel-empty p { margin: 5px 0; }
 /* An open artifact widens the rail into a reading panel (Codex-style) — the chat stays visible
    and usable beside it; Back returns to the normal-width Progress/Artifacts list. */
 .right-rail.artifact-mode {
@@ -543,8 +585,77 @@ button.btn.danger { color: var(--accent); }
   background: var(--paper);
   backdrop-filter: none;
 }
-.main.rail-open:has(.right-rail.artifact-mode) .main-chat { margin-right: var(--artifact-rail-w); }
-.main.rail-open:has(.right-rail.artifact-mode) .main-topbar { right: var(--artifact-rail-w); }
+.right-panel-shell {
+  position: absolute;
+  top: 48px;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  width: 380px;
+  z-index: 5;
+  overflow: hidden;
+  background: var(--glass-soft);
+  border-left: 1px solid var(--line);
+  backdrop-filter: blur(12px);
+}
+.right-panel-shell.collapsed {
+  width: 42px;
+}
+.right-panel-shell.artifact-mode {
+  width: var(--artifact-rail-w);
+  z-index: 8;
+  background: var(--paper);
+  backdrop-filter: none;
+}
+.right-panel-drawer { flex: 1; min-width: 0; overflow-y: auto; }
+.right-panel-drawer.collapsed { display: none; }
+.right-panel-icon-rail {
+  width: 42px; min-width: 42px; display: flex; flex-direction: column;
+  align-items: center; gap: 5px; padding: 10px 0; overflow-y: auto;
+  border-left: 1px solid var(--line); background: var(--glass-soft);
+}
+.right-panel-rail-btn {
+  width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
+  padding: 0; border: 0; border-radius: 7px; color: var(--faint); background: transparent; cursor: pointer;
+}
+.right-panel-rail-btn:hover { color: var(--ink); background: var(--paper); }
+.right-panel-rail-btn.active { color: var(--ink); background: var(--paper); }
+.right-panel-rail-btn:disabled { color: var(--faint); opacity: .35; cursor: not-allowed; }
+.right-panel-local-hint { margin: 10px 12px 0; padding: 8px; border: 1px solid var(--line); border-radius: 7px; color: var(--faint); font-size: 11px; }
+.main-topbar-actions select {
+  min-width: 0;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.main-topbar-actions .topbar-remote-status {
+  flex: 0 1 220px;
+  min-width: 0;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.session-history-unavailable {
+  max-width: 560px;
+  margin: 12vh auto 0;
+  padding: 28px 32px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  text-align: center;
+  color: var(--faint);
+}
+.session-history-unavailable h1 {
+  margin: 0 0 10px;
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 650;
+}
+.session-history-unavailable p { margin: 6px 0; }
+.main.rail-open:has(.right-panel-shell.artifact-mode) .main-chat { margin-right: var(--artifact-rail-w); }
+.main.rail-open:has(.right-panel-shell.artifact-mode) .main-topbar { right: var(--artifact-rail-w); }
+.main.rail-open:has(.right-panel-shell.collapsed) .main-chat { margin-right: 42px; }
+.main.rail-open:has(.right-panel-shell.collapsed) .main-topbar { right: 42px; }
 .artifact-head { display: flex; justify-content: space-between; gap: 14px; align-items: center; }
 .rail-section { border-bottom: 1px solid var(--line); padding: 11px 0; }
 .rail-section-head { display: flex; justify-content: space-between; gap: 8px; align-items: center; min-height: 24px; }

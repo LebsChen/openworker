@@ -20,7 +20,7 @@ export function SearchModal({
 }: {
   sessions: SessionInfo[];
   personas?: Persona[];
-  onSelect: (id: string, workspace: string, agent: string) => void;
+  onSelect: (id: string, workspace: string, agent: string, hostId?: string) => void;
   onClose: () => void;
 }) {
   const [query, setQuery] = useState("");
@@ -58,7 +58,7 @@ export function SearchModal({
   const choose = (s?: SessionInfo) => {
     const target = s || ordered[active];
     if (!target) return;
-    onSelect(target.session_id, target.workspace, target.agent);
+    onSelect(target.session_id, target.workspace, target.agent, target.host_id);
     onClose();
   };
 

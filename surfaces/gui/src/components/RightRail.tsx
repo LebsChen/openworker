@@ -10,11 +10,24 @@ import {
   type SessionHost,
 } from "../api";
 import type { TodoItem } from "../types";
+import type { Item } from "../types";
 import { AccessSection } from "./AccessSection";
 import { Icon } from "./Icon";
 import { Markdown, OPEN_ARTIFACT_EVENT } from "./Markdown";
+import { hostProbeResult, HOST_STATUS_CHANGED } from "../hostStatus";
+import { selectWorklog, type WorklogEntry } from "../worklogSelector";
 
-type Panel = "progress" | "artifacts";
+export type PanelTab = "info" | "worklog" | "changes" | "shell" | "ide" | "desktop";
+const PANEL_TABS: { id: PanelTab; label: string; icon: "audit" | "clock" | "fileCode" | "terminal" | "code" | "monitor" }[] = [
+  { id: "info", label: "Info", icon: "audit" },
+  { id: "worklog", label: "Worklog", icon: "clock" },
+  { id: "changes", label: "File changes", icon: "fileCode" },
+  { id: "shell", label: "Shell", icon: "terminal" },
+  { id: "ide", label: "Web IDE", icon: "code" },
+  { id: "desktop", label: "Browser/Desktop", icon: "monitor" },
+];
+export const isRvmPanelTab = (tab: PanelTab): boolean =>
+  tab === "shell" || tab === "ide" || tab === "desktop";
 
 // Quiet file-type icons for the artifact list (the colored kind pills read as noisy).
 function kindIcon(kind: string): "file" | "fileCode" | "image" | "table" {
@@ -44,6 +57,7 @@ interface Props {
   refreshKey: number;
   toolNames: string[];
   todo: TodoItem[];
+  items: Item[];
   running: boolean;
   // Fires when a full artifact preview opens/closes, so the app can auto-collapse the left nav
   // to give the preview (PDF/webpage/sheet) more room (#3).
@@ -68,6 +82,7 @@ export function RightRail({
   refreshKey,
   toolNames,
   todo,
+  items,
   running,
   onPreviewChange,
   showArtifacts = true,
@@ -79,13 +94,15 @@ export function RightRail({
   openAccessKey = 0,
   onOpenIntegrations,
 }: Props) {
-  const [open, setOpen] = useState<Record<Panel, boolean>>({
-    progress: true,
-    artifacts: true,
-  });
+  const [tab, setTab] = useState<PanelTab>("info");
+  const [panelOpen, setPanelOpen] = useState(true);
   const [artifacts, setArtifacts] = useState<ArtifactInfo[]>([]);
   const [selected, setSelected] = useState<ArtifactInfo | null>(null);
   const [content, setContent] = useState<ArtifactContent | null>(null);
+  const [, setProbeVersion] = useState(0);
+  const worklog = selectWorklog(items);
+  const probe = host.local ? undefined : hostProbeResult(host.id);
+  const isRvmTab = isRvmPanelTab(tab);
 
   const refreshArtifacts = () => getArtifacts(sessionId, host).then(setArtifacts).catch(() => setArtifacts([]));
 
@@ -99,7 +116,19 @@ export function RightRail({
   useEffect(() => {
     setSelected(null);
     setContent(null);
+    setTab("info");
+    setPanelOpen(true);
   }, [sessionId]);
+
+  useEffect(() => {
+    const onStatus = () => {
+      // The probe cache is shared with Settings/App; the event only exists to
+      // force this panel to observe the latest result.
+      setProbeVersion((version) => version + 1);
+    };
+    window.addEventListener(HOST_STATUS_CHANGED, onStatus);
+    return () => window.removeEventListener(HOST_STATUS_CHANGED, onStatus);
+  }, []);
 
   useEffect(() => {
     setContent(null);
@@ -154,80 +183,231 @@ export function RightRail({
   if (!active) return null;
 
   return (
-    <aside className={"right-rail" + (selected ? " artifact-mode" : "")}>
-      {selected ? (
+    <aside className={"right-panel-shell" + (!panelOpen ? " collapsed" : "") + (selected ? " artifact-mode" : "")}>
+      <div className={"right-panel-drawer" + (panelOpen ? " open" : " collapsed")}>
+      <div className="right-panel-tabbody">
+        <div style={{ display: panelOpen && tab === "info" && !selected ? "block" : "none" }}>
+          <InfoPanel
+            host={host}
+            probe={probe}
+            running={running}
+            toolNames={toolNames}
+            todo={todo}
+            sessionId={sessionId}
+            personaId={personaId}
+            projectScoped={projectScoped}
+            workspace={workspace}
+            branch={branch}
+            scratchPrimary={scratchPrimary}
+            openAccessKey={openAccessKey}
+            onOpenIntegrations={onOpenIntegrations}
+          />
+        </div>
+        <div style={{ display: panelOpen && tab === "worklog" && !selected ? "block" : "none" }}>
+          <WorklogPanel entries={worklog} />
+        </div>
+        <div style={{ display: panelOpen && tab === "changes" && !selected ? "block" : "none" }}>
+          <FileChangesPanel
+            artifacts={artifacts}
+            showArtifacts={showArtifacts}
+            onRefresh={refreshArtifacts}
+            onReveal={() => artifacts[0] && revealArtifact(sessionId, artifacts[0].path, host, "reveal")}
+            onSelect={(artifact) => { setSelected(artifact); setTab("changes"); setPanelOpen(true); }}
+          />
+        </div>
+        <div style={{ display: panelOpen && isRvmTab && !selected ? "block" : "none" }}>
+          <RvmUnavailablePanel host={host} tab={tab} />
+        </div>
+      </div>
+      {selected && (
         <ArtifactViewer
           sessionId={sessionId}
           host={host}
           artifact={selected}
           content={content}
           onReload={reloadSelected}
-          onBack={() => setSelected(null)}
+          onBack={() => { setSelected(null); setTab("changes"); }}
         />
-      ) : (
-        <>
-          <RailSection title="Progress" open={open.progress} onToggle={() => setOpen({ ...open, progress: !open.progress })}>
-            <ProgressSummary running={running} toolNames={toolNames} todo={todo} />
-          </RailSection>
-
-          {showArtifacts && (
-          <RailSection
-            title={`Artifacts${artifacts.length ? ` (${artifacts.length})` : ""}`}
-            open={open.artifacts}
-            onToggle={() => setOpen({ ...open, artifacts: !open.artifacts })}
-            action={
-              <>
-                {artifacts.length > 0 && (
-                  <button
-                    className="rail-mini-btn"
-                    onClick={(e) => { e.stopPropagation(); revealArtifact(sessionId, artifacts[0].path, host, "reveal"); }}
-                    title="Show the folder where these files are saved"
-                  >
-                    <Icon name="folder" size={13} />
-                  </button>
-                )}
-                <button className="rail-mini-btn" onClick={(e) => { e.stopPropagation(); refreshArtifacts(); }} title="Refresh artifacts"><Icon name="refresh" size={13} /></button>
-              </>
-            }
-          >
-            {artifacts.length === 0 ? (
-              <div className="rail-muted">No previewable files yet.</div>
-            ) : (
-              <div className="artifact-list">
-                {artifacts.slice(0, 16).map((a) => (
-                  <button className="artifact-row" key={a.path} onClick={() => setSelected(a)}>
-                    <span className="artifact-ico" title={a.kind}>
-                      <Icon name={kindIcon(a.kind)} size={17} />
-                    </span>
-                    <span className="artifact-name">
-                      {a.name}
-                      <span className="artifact-row-meta">{formatBytes(a.size)} · {formatTime(a.modified_at)}</span>
-                    </span>
-                    <span className="artifact-open">Open</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </RailSection>
-          )}
-
-          {/* §32: Access — the former Session-settings drawer, one section among peers.
-              key: its data ownership resets with the conversation, like the old row did. */}
-          <AccessSection
-            key={sessionId}
-            sessionId={sessionId}
-            host={host}
-            personaId={personaId}
-            projectScoped={projectScoped}
-            workspace={workspace}
-            branch={branch}
-            scratchPrimary={scratchPrimary}
-            openKey={openAccessKey}
-            onOpenIntegrations={onOpenIntegrations}
-          />
-        </>
       )}
+      </div>
+      <nav className="right-panel-icon-rail" aria-label="Session panel">
+        {PANEL_TABS.map((entry) => {
+          const disabled = isRvmPanelTab(entry.id) && host.local;
+          return (
+            <button
+              key={entry.id}
+              type="button"
+              className={"right-panel-rail-btn" + (panelOpen && tab === entry.id ? " active" : "")}
+              disabled={disabled}
+              title={disabled ? "Requires an RVM host" : entry.label}
+              aria-label={entry.label}
+              aria-pressed={panelOpen && tab === entry.id}
+              onClick={() => {
+                if (disabled) return;
+                if (panelOpen && tab === entry.id) setPanelOpen(false);
+                else { setTab(entry.id); setPanelOpen(true); }
+              }}
+            >
+              <Icon name={entry.icon} size={17} />
+            </button>
+          );
+        })}
+      </nav>
     </aside>
+  );
+}
+
+function InfoPanel({
+  host,
+  probe,
+  running,
+  toolNames,
+  todo,
+  sessionId,
+  personaId,
+  projectScoped,
+  workspace,
+  branch,
+  scratchPrimary,
+  openAccessKey,
+  onOpenIntegrations,
+}: {
+  host: SessionHost;
+  probe?: ReturnType<typeof hostProbeResult>;
+  running: boolean;
+  toolNames: string[];
+  todo: TodoItem[];
+  sessionId: string;
+  personaId?: string;
+  projectScoped?: boolean;
+  workspace?: string;
+  branch?: string | null;
+  scratchPrimary?: boolean;
+  openAccessKey: number;
+  onOpenIntegrations?: () => void;
+}) {
+  return (
+    <div className="right-panel-section">
+      <h3 className="right-panel-heading">Info</h3>
+      <div className="right-panel-host">
+        <strong>{host.name}</strong>
+        <span className={"right-panel-status " + (host.local ? "online" : (probe?.status || host.status || "unknown"))}>
+          {host.local ? "online" : (probe?.status || host.status || "unknown").replace("_", " ")}
+        </span>
+      </div>
+      {host.local ? (
+        <div className="rail-muted">Local sidecar is used for this session.</div>
+      ) : probe ? (
+        <>
+          {probe.error && <div className="rail-error">{probe.error}</div>}
+          {probe.latency_ms !== undefined && <FieldRow label="Latency" value={`${probe.latency_ms} ms`} />}
+          {probe.health?.platform && <FieldRow label="Platform" value={probe.health.platform} />}
+          {(probe.health?.host || probe.info?.hostname) && <FieldRow label="Host" value={probe.health?.host || probe.info?.hostname || ""} />}
+          {probe.health?.version && <FieldRow label="Version" value={probe.health.version} />}
+          {!!probe.health?.capabilities?.length && <FieldRow label="Capabilities" value={probe.health.capabilities.join(", ")} />}
+          {probe.health?.vnc_port != null && <FieldRow label="VNC" value="Available" />}
+          {probe.health?.ide_port != null && <FieldRow label="IDE" value="Available" />}
+        </>
+      ) : (
+        <div className="rail-muted">No RVM probe result yet.</div>
+      )}
+      <RailSection title="Progress" open onToggle={() => undefined}>
+        <ProgressSummary running={running} toolNames={toolNames} todo={todo} />
+      </RailSection>
+      <AccessSection
+        key={sessionId}
+        sessionId={sessionId}
+        host={host}
+        personaId={personaId}
+        projectScoped={projectScoped}
+        workspace={workspace}
+        branch={branch}
+        scratchPrimary={scratchPrimary}
+        openKey={openAccessKey}
+        onOpenIntegrations={onOpenIntegrations}
+      />
+    </div>
+  );
+}
+
+function FieldRow({ label, value }: { label: string; value: string }) {
+  return <div className="right-panel-field"><span>{label}</span><strong>{value}</strong></div>;
+}
+
+function WorklogPanel({ entries }: { entries: WorklogEntry[] }) {
+  return (
+    <div className="right-panel-section">
+      <h3 className="right-panel-heading">Worklog</h3>
+      {!entries.length && <div className="rail-muted">No events yet.</div>}
+      <div className="right-panel-worklog">
+        {entries.map((entry) => (
+          <div className="right-panel-worklog-row" key={entry.id}>
+            <span className={"right-panel-worklog-dot right-panel-worklog-dot--" + entry.kind} />
+            <div>
+              <strong>{entry.title}</strong>
+              {entry.status && <span className="right-panel-worklog-status">{entry.status}</span>}
+              {entry.filePaths?.length ? <div className="rail-muted">{entry.filePaths.join(", ")}</div> : null}
+              {entry.detail && <pre>{entry.detail}</pre>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FileChangesPanel({
+  artifacts,
+  showArtifacts,
+  onRefresh,
+  onReveal,
+  onSelect,
+}: {
+  artifacts: ArtifactInfo[];
+  showArtifacts: boolean;
+  onRefresh: () => void;
+  onReveal: () => void;
+  onSelect: (artifact: ArtifactInfo) => void;
+}) {
+  return (
+    <div className="right-panel-section">
+      <div className="right-panel-heading-row">
+        <h3 className="right-panel-heading">File changes</h3>
+        <div>
+          <button className="rail-mini-btn" onClick={onRefresh} title="Refresh artifacts"><Icon name="refresh" size={13} /></button>
+          {artifacts.length > 0 && <button className="rail-mini-btn" onClick={onReveal} title="Show artifact folder"><Icon name="folder" size={13} /></button>}
+        </div>
+      </div>
+      <h4 className="right-panel-subheading">Workspace changes</h4>
+      <div className="rail-muted">No workspace diff data available yet.</div>
+      <h4 className="right-panel-subheading">Artifacts</h4>
+      {!showArtifacts || !artifacts.length ? (
+        <div className="rail-muted">No previewable files yet.</div>
+      ) : (
+        <div className="artifact-list">
+          {artifacts.slice(0, 16).map((a) => (
+            <button className="artifact-row" key={a.path} onClick={() => onSelect(a)}>
+              <span className="artifact-ico" title={a.kind}><Icon name={kindIcon(a.kind)} size={17} /></span>
+              <span className="artifact-name">{a.name}<span className="artifact-row-meta">{formatBytes(a.size)} · {formatTime(a.modified_at)}</span></span>
+              <span className="artifact-open">Open</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RvmUnavailablePanel({ host, tab }: { host: SessionHost; tab: PanelTab }) {
+  return (
+    <div className="right-panel-empty">
+      <h3>{PANEL_TABS.find((entry) => entry.id === tab)?.label}</h3>
+      <p>
+        {host.local
+          ? "Requires an RVM host. This session is bound to Local."
+          : "Secure connection bootstrap is not implemented yet."}
+      </p>
+    </div>
   );
 }
 

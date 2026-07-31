@@ -60,6 +60,24 @@ export const hostForSession = (sessionId: string): SessionHost => {
   return host;
 };
 
+export const isCurrentSessionBinding = (
+  sessionId: string,
+  hostId: string,
+  activeSessionId: string,
+  activeHostId: string,
+): boolean => sessionId === activeSessionId && hostId === activeHostId;
+
+export const isCurrentSessionLoad = (
+  loadId: number,
+  currentLoadId: number,
+  sessionId: string,
+  hostId: string,
+  activeSessionId: string,
+  activeHostId: string,
+): boolean =>
+  loadId === currentLoadId &&
+  isCurrentSessionBinding(sessionId, hostId, activeSessionId, activeHostId);
+
 // All local REST calls pass through this module, so a module-local wrapper applies launch
 // authentication without asking every endpoint helper to remember the security header.
 const fetch = (
@@ -227,7 +245,20 @@ export async function getSessions(workspace?: string): Promise<SessionInfo[]> {
       }
     }),
   );
-  return all.flat();
+  const unique = new Map<string, SessionInfo>();
+  for (const session of all.flat()) {
+    const previous = unique.get(session.session_id);
+    // A session id must have exactly one execution host in the GUI.  Prefer a
+    // remote record over a local duplicate: a local copy can be an accidental
+    // fallback and must never steal a remote binding.
+    if (!previous || (previous.host_id === "local" && session.host_id !== "local")) {
+      unique.set(session.session_id, session);
+    }
+  }
+  for (const session of unique.values()) {
+    if (session.host_id) sessionHostBindings.set(session.session_id, session.host_id);
+  }
+  return [...unique.values()];
 }
 
 // A structured connector-delivered inbound message (§3.1). Attached to the user message it framed,
@@ -1927,6 +1958,8 @@ export type Handlers = {
 };
 
 export class Session {
+  readonly sessionId: string;
+  readonly hostId: string;
   private ws: WebSocket;
   // Payloads sent before the socket finished opening, replayed on `onopen`. Belt-and-suspenders
   // against the first message being dropped if the user sends in the connect window.
@@ -1940,6 +1973,8 @@ export class Session {
     host?: SessionHost,
     isolate = false,
   ) {
+    this.sessionId = sessionId;
+    this.hostId = host?.id || "local";
     const q = `?workspace=${encodeURIComponent(workspace)}&agent=${encodeURIComponent(agent)}&isolate=${isolate ? "true" : "false"}`;
     const endpoint = host?.ws_url || wsBase();
     const token = host?.token;

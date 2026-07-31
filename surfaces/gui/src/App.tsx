@@ -14,6 +14,8 @@ import {
   getInbox,
   getUnattended,
   hostForSession,
+  isCurrentSessionBinding,
+  isCurrentSessionLoad,
   rememberSessionHost,
   isRemoteMode,
   PERSONAS_CHANGED,
@@ -68,6 +70,7 @@ import { Onboarding } from "./components/Onboarding";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { ScheduledView } from "./components/ScheduledView";
 import { RightRail } from "./components/RightRail";
+import { setHostProbeResult } from "./hostStatus";
 import { IntegrationsView } from "./components/IntegrationsView";
 import { SettingsView } from "./components/SettingsView";
 import { PersonaView } from "./components/PersonaView";
@@ -206,7 +209,13 @@ export function App() {
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [projects, setProjects] = useState<RecentWorkspace[]>([]);
   const [sessionId, setSessionId] = useState<string>(newId());
+  const [selectedSessionTitle, setSelectedSessionTitle] = useState("");
   const [sessionHost, setSessionHost] = useState<SessionHost>(() => sessionHosts()[0]);
+  const sessionLoadRef = useRef(0);
+  const activeSessionRef = useRef(sessionId);
+  const activeHostRef = useRef(sessionHost.id);
+  const restoreCancelledRef = useRef(false);
+  const [sessionHistoryUnavailable, setSessionHistoryUnavailable] = useState(false);
   const [isolateWorkspace, setIsolateWorkspace] = useState(false);
   // Automation-run context (§ owner ask 2026-07-04): which task an open __run__ session belongs
   // to, driving the banner + "Back to runs". Best-effort — a run session without context still
@@ -245,10 +254,9 @@ export function App() {
           if (selected) setSessionHost(selected);
           for (const host of hosts) {
             if (!host.local) {
-                void testRemoteHost(host.base_url, host.token).then((result) => {
-                const statuses = (globalThis as any).__COWORKER_HOST_STATUS__ || {};
-                statuses[host.id] = result.status;
-                (globalThis as any).__COWORKER_HOST_STATUS__ = statuses;
+              setHostProbeResult(host.id, { status: "checking", error: "Checking connection…" });
+              void testRemoteHost(host.base_url, host.token).then((result) => {
+                setHostProbeResult(host.id, result);
                 setHostStatusVersion((version) => version + 1);
               });
             }
@@ -421,6 +429,12 @@ export function App() {
   // The in-flight manual run to finalize after its first turn ({taskId, runId, sessionId}).
   const activeRunRef = useRef<{ taskId: string; runId: string; sessionId: string } | null>(null);
 
+  useEffect(() => {
+    setItems([]);
+    setUsage(emptyUsage());
+    setSessionInbox([]);
+  }, [sessionId, sessionHost.id]);
+
   // Fetch ALL sessions + known projects so the sidebar can group them.
   const refreshSessions = useCallback(() => {
     getSessions().then(setSessions).catch(() => setSessions([]));
@@ -445,37 +459,73 @@ export function App() {
   // conversation (restores its folder + agent + transcript), else the most recent project
   // folder. Only a true first run (nothing to resume) falls through to the folder gate.
   const resumeLastOrGate = async () => {
+    const loadId = ++sessionLoadRef.current;
+    if (restoreCancelledRef.current) return;
     let loadedSessions: SessionInfo[] = [];
     try {
       loadedSessions = (await getSessions()).filter((s) => s.session_id && !s.session_id.startsWith("__"));
+      if (restoreCancelledRef.current || loadId !== sessionLoadRef.current) return;
       setSessions(loadedSessions);
       const sess = loadedSessions;
       const ts = (s: SessionInfo) => Date.parse(s.updated_at || "") || Number(s.updated_at) || 0;
       const last = [...sess].sort((a, b) => ts(b) - ts(a))[0];
       if (last) {
+        if (restoreCancelledRef.current || loadId !== sessionLoadRef.current) return;
         setResumedExisting(true);
         const restoredHost =
           sessionHosts().find((host) => host.id === last.host_id) || sessionHosts()[0];
         if (restoredHost) {
+          activeSessionRef.current = last.session_id;
+          activeHostRef.current = restoredHost.id;
           setSessionHost(restoredHost);
           rememberSessionHost(last.session_id, restoredHost);
           setSessionOffline(last.host_status === "offline");
+          setSessionHistoryUnavailable(
+            !restoredHost.local &&
+              (Boolean(restoredHost.offline) ||
+                restoredHost.status !== "online" ||
+                last.host_status === "offline"),
+          );
         }
         if (last.agent) setAgent(last.agent);
+        setSelectedSessionTitle(last.title || "");
         if (last.workspace) {
           setWorkspace(last.workspace);
           setBranch(null);
         }
+        setSessionId(last.session_id);
+        setShowGate(false);
         try {
           const messages = await getSessionMessages(last.session_id, restoredHost || sessionHosts()[0]);
+          if (
+            restoreCancelledRef.current ||
+            !isCurrentSessionLoad(
+              loadId,
+              sessionLoadRef.current,
+              last.session_id,
+              restoredHost?.id || "local",
+              activeSessionRef.current,
+              activeHostRef.current,
+            )
+          ) return;
           setItems(itemsFromMessages(messages));
           setUsage(usageFromMessages(messages));
         } catch {
+          if (
+            restoreCancelledRef.current ||
+            !isCurrentSessionLoad(
+              loadId,
+              sessionLoadRef.current,
+              last.session_id,
+              restoredHost?.id || "local",
+              activeSessionRef.current,
+              activeHostRef.current,
+            )
+          ) return;
           setItems([]);
           setUsage(emptyUsage());
+          setSessionHistoryUnavailable(Boolean(restoredHost && !restoredHost.local));
         }
-        setSessionId(last.session_id);
-        setShowGate(false);
         return;
       }
     } catch {
@@ -652,7 +702,13 @@ export function App() {
   useEffect(() => {
     if (booting) return; // wait until boot/resume settles the session before connecting
     if (gatesWorkspace(agent) && !workspace) return; // Code needs a folder (gate handles it)
+    const sessionGeneration = sessionLoadRef.current;
+    const isCurrent = () =>
+      sessionGeneration === sessionLoadRef.current &&
+      isCurrentSessionBinding(sessionId, sessionHost.id, activeSessionRef.current, activeHostRef.current);
+    if (!isCurrent()) return;
     const handleEvent = (ev: WsEvent) => {
+      if (!isCurrent()) return;
       const d = ev.data || {};
       // An interrupted/errored turn never emits assistant_message, so its streamed partial
       // would otherwise live only in the ephemeral buffer until the next turn_start wipes it
@@ -850,6 +906,7 @@ export function App() {
     const session = new Session(sessionId, workspace || "", agent, {
       onEvent: handleEvent,
       onOpen: () => {
+        if (!isCurrent()) return;
         setConnected(true);
         setSessionOffline(false);
         // Auto-send the task prompt once a "Run now" session connects.
@@ -861,6 +918,7 @@ export function App() {
         }
       },
       onClose: () => {
+        if (!isCurrent()) return;
         setConnected(false);
         if (!sessionHost.local) setSessionOffline(true);
       },
@@ -933,16 +991,40 @@ export function App() {
       setArtifactCount(0);
       return;
     }
-    getArtifacts(sessionId, sessionHost).then((a) => setArtifactCount(a.length)).catch(() => {});
+    const id = sessionId;
+    const host = sessionHost;
+    const loadId = sessionLoadRef.current;
+    getArtifacts(id, host)
+      .then((a) => {
+        if (isCurrentSessionLoad(loadId, sessionLoadRef.current, id, host.id, activeSessionRef.current, activeHostRef.current)) {
+          setArtifactCount(a.length);
+        }
+      })
+      .catch(() => {});
   }, [agent, surface, sessionId, sessionHost.id, browserRefreshKey]);
 
   // Keep the active session's pending Inbox items fresh (answer-in-context card). Loads on session
   // change + after each turn, plus a slow poll so an unattended agent's new question surfaces.
   useEffect(() => {
     if (surface !== "session") return;
+    const id = sessionId;
+    const host = sessionHost;
+    const loadId = sessionLoadRef.current;
     const load = () => {
-      getInbox(sessionId, "pending", sessionHost).then(setSessionInbox).catch(() => setSessionInbox([]));
-      getUnattended(sessionId, sessionHost).then(markUnattended).catch(() => markUnattended(false));
+      getInbox(id, "pending", host)
+        .then((value) => {
+          if (isCurrentSessionLoad(loadId, sessionLoadRef.current, id, host.id, activeSessionRef.current, activeHostRef.current)) setSessionInbox(value);
+        })
+        .catch(() => {
+          if (isCurrentSessionLoad(loadId, sessionLoadRef.current, id, host.id, activeSessionRef.current, activeHostRef.current)) setSessionInbox([]);
+        });
+      getUnattended(id, host)
+        .then((value) => {
+          if (isCurrentSessionLoad(loadId, sessionLoadRef.current, id, host.id, activeSessionRef.current, activeHostRef.current)) markUnattended(value);
+        })
+        .catch(() => {
+          if (isCurrentSessionLoad(loadId, sessionLoadRef.current, id, host.id, activeSessionRef.current, activeHostRef.current)) markUnattended(false);
+        });
     };
     load();
     const t = setInterval(load, 4000);
@@ -950,6 +1032,15 @@ export function App() {
   }, [surface, sessionId, sessionHost.id, browserRefreshKey, markUnattended]);
 
   const send = (text: string, attachments?: Attachment[]) => {
+    const liveSession = sessionRef.current;
+    if (
+      !liveSession ||
+      liveSession.sessionId !== activeSessionRef.current ||
+      liveSession.hostId !== activeHostRef.current
+    ) {
+      setActionError("Switching sessions — wait for the selected session to connect.");
+      return;
+    }
     if (!connected) {
       if (!sessionHost.local) {
         setSessionOffline(true);
@@ -963,7 +1054,7 @@ export function App() {
     setActionError(null);
     setItems((p) => [...p, { kind: "user", text, attachments, ts: Date.now() / 1000 }]);
     // The visible model rides along with the message (single source of truth per turn).
-    sessionRef.current?.userMessage(text, attachments, model);
+    liveSession.userMessage(text, attachments, model);
     followLatest(); // sending always re-engages stream-following, wherever the user had scrolled
   };
   // Resolving a LIVE prompt also resolves its parked Inbox mirror server-side, but the polled
@@ -1017,6 +1108,7 @@ export function App() {
     setSurface("session"); // return to the conversation view if we were on a sub-view
     setItems([]);
     setUsage(emptyUsage());
+    setSessionHistoryUnavailable(false);
     setStreaming("");
     setTodo([]);
     setRunning(false);
@@ -1036,6 +1128,9 @@ export function App() {
     // server provisions a NEW scratch dir for the new session id. Code keeps its repo.
     if (!gatesWorkspace(target)) setWorkspace(null);
     const id = newId();
+    activeSessionRef.current = id;
+    activeHostRef.current = sessionHost.id;
+    setSelectedSessionTitle("");
     setSessionId(id);
     rememberSessionHost(id, sessionHost);
     if (isTauri()) bindSessionHost(id, sessionHost.id).catch(() => {});
@@ -1070,16 +1165,33 @@ export function App() {
 
   const openSessionFromInbox = (sid: string, ws: string, ag: string) => selectSession(sid, ws, ag);
   const selectSession = async (id: string, ws: string, ag: string, hostId?: string) => {
+    restoreCancelledRef.current = true;
+    const loadId = ++sessionLoadRef.current;
     setSurface("session"); // selecting a conversation always returns to the conversation view
+    setItems([]);
+    setUsage(emptyUsage());
     setTodo([]);
     setStreaming("");
     setRunning(false);
     if (ag) setAgent(ag);
-    const selectedHost = sessionHosts().find((host) => host.id === hostId) || sessionHosts()[0];
+    const selectedHost =
+      sessionHosts().find((host) => host.id === hostId) ||
+      (() => {
+        try { return hostForSession(id); } catch { return sessionHosts()[0]; }
+      })();
+    activeSessionRef.current = id;
+    activeHostRef.current = selectedHost?.id || "local";
     if (selectedHost) setSessionHost(selectedHost);
     if (selectedHost) rememberSessionHost(id, selectedHost);
     const selectedInfo = sessions.find((item) => item.session_id === id);
-    setSessionOffline(selectedInfo?.host_status === "offline");
+    setSelectedSessionTitle(selectedInfo?.title || "");
+    const remoteUnavailable =
+      Boolean(selectedHost && !selectedHost.local) &&
+      (Boolean(selectedHost?.offline) ||
+        selectedHost?.status !== "online" ||
+        selectedInfo?.host_status === "offline");
+    setSessionOffline(Boolean(remoteUnavailable));
+    setSessionHistoryUnavailable(Boolean(remoteUnavailable));
     setIsolateWorkspace(Boolean(selectedInfo?.workspace_isolated));
     if (isTauri()) bindSessionHost(id, selectedHost?.id || "local").catch(() => {});
     if (!gatesWorkspace(ag)) setShowGate(false);
@@ -1090,13 +1202,36 @@ export function App() {
     setSessionId(id);
     try {
       const messages = await getSessionMessages(id, selectedHost);
+      if (
+        loadId !== sessionLoadRef.current ||
+        !isCurrentSessionBinding(
+          id,
+          selectedHost?.id || "local",
+          activeSessionRef.current,
+          activeHostRef.current,
+        )
+      ) return;
       setItems(itemsFromMessages(messages));
       setUsage(usageFromMessages(messages));
+      setSessionHistoryUnavailable(false);
     } catch {
+      if (
+        loadId !== sessionLoadRef.current ||
+        !isCurrentSessionBinding(
+          id,
+          selectedHost?.id || "local",
+          activeSessionRef.current,
+          activeHostRef.current,
+        )
+      ) return;
+      setItems([]);
+      setUsage(emptyUsage());
       setSessionOffline(!selectedHost?.local);
+      setSessionHistoryUnavailable(Boolean(!selectedHost?.local));
     }
   };
   const switchAgent = async (name: string) => {
+    const loadId = ++sessionLoadRef.current;
     setSurface("session");
     if (name === agent) return;
     rememberLastSession(agent, sessionId, workspace);
@@ -1133,12 +1268,38 @@ export function App() {
       if (!gatesWorkspace(name)) setShowGate(false);
       else if (targetWorkspace) setShowGate(false);
       else setShowGate(true);
+      const targetHost = (() => {
+        try { return hostForSession(target.sessionId); } catch { return sessionHost; }
+      })();
+      activeSessionRef.current = target.sessionId;
+      activeHostRef.current = targetHost.id;
+      setSelectedSessionTitle(knownSessions.find((s) => s.session_id === target.sessionId)?.title || "");
       setSessionId(target.sessionId);
       try {
-        const messages = await getSessionMessages(target.sessionId, sessionHost);
+        const messages = await getSessionMessages(target.sessionId, targetHost);
+        if (
+          !isCurrentSessionLoad(
+            loadId,
+            sessionLoadRef.current,
+            target.sessionId,
+            targetHost.id,
+            activeSessionRef.current,
+            activeHostRef.current,
+          )
+        ) return;
         setItems(itemsFromMessages(messages));
         setUsage(usageFromMessages(messages));
       } catch {
+        if (
+          !isCurrentSessionLoad(
+            loadId,
+            sessionLoadRef.current,
+            target.sessionId,
+            targetHost.id,
+            activeSessionRef.current,
+            activeHostRef.current,
+          )
+        ) return;
         setItems([]);
         setUsage(emptyUsage());
       }
@@ -1153,6 +1314,9 @@ export function App() {
     } else if (!fallback && needsWorkspace(name)) {
       setWorkspace(null); // orphan cowork: server provisions a fresh scratch on connect
     }
+    activeSessionRef.current = id;
+    activeHostRef.current = sessionHost.id;
+    setSelectedSessionTitle("");
     setSessionId(id);
     rememberLastSession(name, id, fallback);
     if (!gatesWorkspace(name)) setShowGate(false);
@@ -1167,7 +1331,11 @@ export function App() {
     setUsage(emptyUsage());
     setStreaming("");
     setTodo([]);
-    setSessionId(newId());
+    const id = newId();
+    activeSessionRef.current = id;
+    activeHostRef.current = sessionHost.id;
+    setSelectedSessionTitle("");
+    setSessionId(id);
     getRecentWorkspaces().then(setProjects).catch(() => {});
   };
   // "New project" lives under a project-scoped persona's accordion. Switch to that persona, start a
@@ -1184,7 +1352,10 @@ export function App() {
     if (target !== agent) setAgent(target);
     setWorkspace(null);
     setBranch(null);
-    setSessionId(newId());
+    const id = newId();
+    activeSessionRef.current = id;
+    activeHostRef.current = sessionHost.id;
+    setSessionId(id);
     setGateCreate(true);
     setShowGate(true);
   };
@@ -1221,7 +1392,11 @@ export function App() {
       setStreaming("");
       setTodo([]);
       setRunning(false);
-      setSessionId(newId());
+      const nextId = newId();
+      activeSessionRef.current = nextId;
+      activeHostRef.current = sessionHost.id;
+      setSelectedSessionTitle("");
+      setSessionId(nextId);
     }
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Could not update session.");
@@ -1241,7 +1416,11 @@ export function App() {
         setStreaming("");
         setTodo([]);
         setRunning(false);
-        setSessionId(newId());
+        const nextId = newId();
+        activeSessionRef.current = nextId;
+        activeHostRef.current = sessionHost.id;
+        setSelectedSessionTitle("");
+        setSessionId(nextId);
       }
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Could not delete session.");
@@ -1288,7 +1467,7 @@ export function App() {
   const subtitleParts = [modelDisplay];
   if (isProjectScoped(personaOf(agent)) && workspace) subtitleParts.push(baseName(workspace));
   const activeInfo = sessions.find((s) => s.session_id === sessionId);
-  const activeTitle = activeInfo?.title || "New session";
+  const activeTitle = activeInfo?.title || selectedSessionTitle || "New session";
 
   const desktop = isTauri();
   // Dev-only: `?overlay=1` simulates the desktop overlay layout in the browser (adds the
@@ -1570,7 +1749,12 @@ export function App() {
                 value={sessionHost.id}
                 onChange={(e) => {
                   const host = sessionHosts().find((candidate) => candidate.id === e.target.value);
-                  if (host) setSessionHost(host);
+                  if (host) {
+                    activeHostRef.current = host.id;
+                    setSessionHost(host);
+                    rememberSessionHost(sessionId, host);
+                    if (isTauri()) bindSessionHost(sessionId, host.id).catch(() => {});
+                  }
                 }}
                 className="text-[12px] bg-transparent border border-line rounded px-1.5 py-1 text-muted"
               >
@@ -1582,7 +1766,7 @@ export function App() {
               </select>
             )}
             {!sessionHost.local && (sessionHost.offline || sessionHost.status !== "online") && (
-              <div role="status" className="text-[11px] text-warnInk">
+              <div className="topbar-remote-status text-[11px] text-warnInk" role="status">
                 Remote host "{sessionHost.name}" is {sessionHost.status === "auth_failed" ? "authentication failed" : "offline or untested"}; this session will not fall back to Local.
               </div>
             )}
@@ -1680,7 +1864,13 @@ export function App() {
               </div>
             )}
             <div className="main-scroll" ref={scrollRef} onScroll={handleScroll}>
-              {idle ? (
+              {idle && sessionHistoryUnavailable && !sessionHost.local ? (
+                <div className="session-history-unavailable">
+                  <h1>Can&apos;t load this session&apos;s history</h1>
+                  <p>Remote host &quot;{sessionHost.name}&quot; is offline.</p>
+                  <p>History remains on that host and will reload when it is available again.</p>
+                </div>
+              ) : idle ? (
                 agent === "cowork" ? (
                   <SessionIntro
                     sessionId={sessionId}
@@ -1831,6 +2021,7 @@ export function App() {
             host={sessionHost}
             refreshKey={browserRefreshKey}
             toolNames={items.filter((i) => i.kind === "tool").map((i: any) => i.name)}
+            items={items}
             todo={todo}
             running={running}
             onPreviewChange={onArtifactPreview}
@@ -1853,9 +2044,9 @@ export function App() {
         <SearchModal
           sessions={sessions}
           personas={personas ?? undefined}
-          onSelect={(id, ws, ag) => {
+          onSelect={(id, ws, ag, hostId) => {
             setSearchOpen(false);
-            selectSession(id, ws, ag);
+            selectSession(id, ws, ag, hostId);
           }}
           onClose={() => setSearchOpen(false)}
         />
