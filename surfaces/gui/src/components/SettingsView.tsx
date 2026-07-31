@@ -31,8 +31,11 @@ import {
   deleteRemoteHost,
   listRemoteHosts,
   saveRemoteHost,
+  setRemoteHostOffline,
+  testRemoteHost,
   remoteHostConfigError,
   type RemoteHostInfo,
+  type RemoteHostProbeResult,
   startDictation,
   stopDictation,
   verifyDictationModel,
@@ -40,6 +43,7 @@ import {
   type DictationStatus,
 } from "../tauri";
 import { useThemePref } from "../theme";
+import { sessionHosts } from "../api";
 import { Icon } from "./Icon";
 import { PanelHead } from "./IntegrationsView";
 import { ModelsTab } from "./ManageTabs";
@@ -145,23 +149,39 @@ export function SettingsView({
 function RemoteHostsSection() {
   const [hosts, setHosts] = useState<RemoteHostInfo[]>([]);
   const [name, setName] = useState("");
-  const [baseUrl, setBaseUrl] = useState("");
+  const [url, setUrl] = useState("");
+  const [vncPassword, setVncPassword] = useState("");
   const [token, setToken] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [configError, setConfigError] = useState<string | null>(null);
-  const refresh = () => {
-    listRemoteHosts().then((v) => setHosts(v || [])).catch(() => setHosts([]));
+  const [probeState, setProbeState] = useState<Record<string, RemoteHostProbeResult>>({});
+  const [savedTokens, setSavedTokens] = useState<Record<string, string>>({});
+  const [testing, setTesting] = useState<string | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [lastSeen, setLastSeen] = useState<Record<string, number>>({});
+  const refresh = async () => {
+    const listed = await listRemoteHosts().catch(() => []);
+    setHosts(listed || []);
     remoteHostConfigError().then(setConfigError).catch(() => setConfigError(null));
+    const runtimeHosts = sessionHosts();
+    for (const host of listed || []) {
+      const runtime = runtimeHosts.find((candidate) => candidate.id === host.name);
+      if (runtime?.token) void test(host.name, host.url, runtime.token);
+    }
   };
   useEffect(() => {
     refresh();
+    const timer = window.setInterval(refresh, 30_000);
+    return () => window.clearInterval(timer);
   }, []);
   const save = async () => {
     setError(null);
     try {
-      await saveRemoteHost(name, baseUrl, token);
+      await saveRemoteHost(name, url, token, vncPassword);
+      setSavedTokens((current) => ({ ...current, [name]: token }));
       setToken("");
+      setEditing(null);
       setSaved(true);
       refresh();
     } catch (e) {
@@ -174,11 +194,42 @@ function RemoteHostsSection() {
       );
     }
   };
+  const test = async (hostName: string, url: string, hostToken: string) => {
+    setProbeState((current) => ({
+      ...current,
+      [hostName]: { status: "unknown", error: "Checking connection…" },
+    }));
+    setTesting(hostName);
+    try {
+      const result = await testRemoteHost(url, hostToken);
+      if (result.status === "online") setLastSeen((current) => ({ ...current, [hostName]: Date.now() }));
+      setProbeState((current) => ({ ...current, [hostName]: result }));
+      const statuses = (globalThis as any).__COWORKER_HOST_STATUS__ || {};
+      statuses[hostName] = result.status;
+      (globalThis as any).__COWORKER_HOST_STATUS__ = statuses;
+    } catch (error) {
+      const result: RemoteHostProbeResult = {
+        status: "offline",
+        error: error instanceof Error ? error.message : "Connection test failed.",
+      };
+      setProbeState((current) => ({ ...current, [hostName]: result }));
+      const statuses = (globalThis as any).__COWORKER_HOST_STATUS__ || {};
+      statuses[hostName] = result.status;
+      (globalThis as any).__COWORKER_HOST_STATUS__ = statuses;
+    } finally {
+      setTesting(null);
+    }
+  };
+  const statusLabel = (status: RemoteHostProbeResult["status"]) =>
+    status === "online" ? "online" :
+    status === "auth_failed" ? "auth failed" :
+    status === "offline" ? "offline" : "unknown";
+  const currentFormResult = probeState[name];
   return (
     <section>
       <PanelHead
-        title="Remote host"
-        sub="Connect the desktop client to an OpenWorker server running on an RVM host. HTTPS certificate verification remains enabled."
+        title="RVM (Remote Virtual Machines)"
+        sub="Connect a remote host for shared development. Run node agent.js on the remote machine to start the agent."
       />
       <div className={`${CARD} p-4 space-y-3`}>
         {configError && (
@@ -189,19 +240,90 @@ function RemoteHostsSection() {
         {hosts.map((host) => (
           <div key={host.name} className="flex items-center gap-3 border-b border-line pb-3">
             <div className="min-w-0 flex-1">
-              <div className="text-[13px] font-medium">{host.name}</div>
-              <div className="text-[12px] text-muted truncate">{host.base_url}</div>
+              <div className="text-[13px] font-medium">
+                {host.name}
+                <span className="ml-2 text-[11px] text-muted">
+                  {probeState[host.name]?.error === "Checking connection…"
+                    ? "checking"
+                    : host.offline ? "offline" : statusLabel(probeState[host.name]?.status || "unknown")}
+                </span>
+              </div>
+              <div className="text-[12px] text-muted truncate">{host.url}</div>
+              {probeState[host.name] && (
+                <div className="text-[11px] text-muted">
+                  {probeState[host.name].error === "Checking connection…"
+                    ? "checking"
+                    : probeState[host.name].latency_ms != null
+                      ? `${probeState[host.name].latency_ms} ms`
+                      : ""}
+                  {probeState[host.name]?.health?.platform && ` · ${probeState[host.name]?.health?.platform}`}
+                  {probeState[host.name]?.health?.host && ` · ${probeState[host.name]?.health?.host}`}
+                  {probeState[host.name]?.health?.version && ` · v${probeState[host.name]?.health?.version}`}
+                  {probeState[host.name]?.info?.hostname && ` · ${probeState[host.name]?.info?.hostname}`}
+                  {probeState[host.name]?.health?.vnc_port != null && " · VNC"}
+                  {probeState[host.name]?.health?.ide_port != null && " · IDE"}
+                  {probeState[host.name]?.info?.cpus != null && ` · ${probeState[host.name]?.info?.cpus} CPU`}
+                  {probeState[host.name]?.info?.memory_gb != null && ` · ${probeState[host.name]?.info?.memory_gb} GB`}
+                  {lastSeen[host.name] && ` · Last seen: ${new Date(lastSeen[host.name]).toLocaleString()}`}
+                  {probeState[host.name]?.health?.capabilities?.length && ` · ${probeState[host.name]?.health?.capabilities?.join(", ")}`}
+                  {probeState[host.name].error && probeState[host.name].error !== "Checking connection…" && ` · ${probeState[host.name].error}`}
+                </div>
+              )}
             </div>
+            <button
+              className={BTN_BORDERED}
+              disabled={testing === host.name || !savedTokens[host.name]}
+              title={!savedTokens[host.name] ? "Enter the token below to test this host." : undefined}
+              onClick={() => test(host.name, host.url, savedTokens[host.name] || "")}
+            >
+              {testing === host.name ? "Testing…" : "Test connection"}
+            </button>
+            <button className="text-[12px]" onClick={() => {
+              setEditing(host.name);
+              setName(host.name);
+              setUrl(host.url);
+              setToken(savedTokens[host.name] || "");
+              setVncPassword("");
+            }}>
+              Edit
+            </button>
+            <button className="text-[12px]" onClick={() => setRemoteHostOffline(host.name, !host.offline).then(refresh)}>
+              {host.offline ? "Online" : "Offline"}
+            </button>
             <button className="text-[12px] text-danger" onClick={() => deleteRemoteHost(host.name).then(refresh)}>
-              Remove
+              Delete
             </button>
           </div>
         ))}
-        <div className="pt-2 text-[12px] font-medium">Add or update profile</div>
-        <input className={INPUT} placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
-        <input className={INPUT} placeholder="https://rvm-host:8765" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
-        <input className={INPUT} type="password" placeholder="Server token" value={token} onChange={(e) => setToken(e.target.value)} />
-        <button className={BTN_ACCENT} disabled={!name || !baseUrl || !token} onClick={save}>Save profile</button>
+        <div className="pt-2 text-[12px] font-medium">{editing ? "Edit host" : "Add host"}</div>
+        <input className={INPUT} placeholder="e.g. Linux dev server" value={name} onChange={(e) => setName(e.target.value)} />
+        <input className={INPUT} placeholder="http://192.168.1.100:9920 or https://xxx.trycloudflare.com" value={url} onChange={(e) => setUrl(e.target.value)} />
+        <input className={INPUT} type="password" placeholder="token shown when agent.js starts" value={token} onChange={(e) => setToken(e.target.value)} />
+        <input className={INPUT} type="password" placeholder="leave empty to reuse the token" value={vncPassword} onChange={(e) => setVncPassword(e.target.value)} />
+        <button
+          className={BTN_BORDERED}
+          disabled={!name || !url || !token || testing === name}
+          onClick={() => test(name, url, token)}
+        >
+          {testing === name ? "Testing…" : "Test connection"}
+        </button>
+        {currentFormResult && (
+          <div role="status" className="text-[12px] text-muted">
+            {statusLabel(currentFormResult.status)}
+            {currentFormResult.latency_ms != null && ` · ${currentFormResult.latency_ms} ms`}
+            {currentFormResult.health?.platform && ` · ${currentFormResult.health.platform}`}
+            {currentFormResult.health?.version && ` · v${currentFormResult.health.version}`}
+            {currentFormResult.info?.hostname && ` · ${currentFormResult.info.hostname}`}
+            {currentFormResult.health?.vnc_port != null && " · VNC"}
+            {currentFormResult.health?.ide_port != null && " · IDE"}
+            {currentFormResult.info?.cpus != null && ` · ${currentFormResult.info.cpus} CPU`}
+            {currentFormResult.error && ` · ${currentFormResult.error}`}
+          </div>
+        )}
+        <button className={BTN_ACCENT} disabled={!name || !url || !token} onClick={save}>{editing ? "Save" : "Add"}</button>
+        {editing && <button className={BTN_BORDERED} onClick={() => {
+          setEditing(null); setName(""); setUrl(""); setToken(""); setVncPassword("");
+        }}>Cancel</button>}
         {saved && <div className="text-[12px] text-accent">Saved securely. Remote hosts are available when selecting a VM for a new session.</div>}
         {error && <div role="alert" className="text-[12px] text-danger">{error}</div>}
       </div>

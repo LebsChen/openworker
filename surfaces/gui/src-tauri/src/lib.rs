@@ -39,8 +39,14 @@ struct KeepAwake(Mutex<Option<KeepAwakeGuard>>);
 #[derive(Clone, Debug, Deserialize, Serialize)]
 struct RemoteHostMeta {
     name: String,
-    base_url: String,
+    #[serde(rename = "url", alias = "base_url")]
+    url: String,
     token: String,
+    #[serde(default)]
+    #[serde(rename = "vncPassword", alias = "vnc_password")]
+    vnc_password: Option<String>,
+    #[serde(default)]
+    offline: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -62,7 +68,8 @@ struct RemoteHostsFile {
 #[derive(Clone, Debug, Serialize)]
 struct RemoteHostInfo {
     name: String,
-    base_url: String,
+    url: String,
+    offline: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -73,6 +80,8 @@ struct SessionHostInfo {
     ws_url: String,
     token: String,
     local: bool,
+    url: String,
+    offline: bool,
 }
 
 fn free_port() -> u16 {
@@ -252,7 +261,8 @@ fn list_remote_hosts() -> Vec<RemoteHostInfo> {
         .into_iter()
         .map(|host| RemoteHostInfo {
             name: host.name,
-            base_url: host.base_url,
+            url: host.url,
+            offline: host.offline,
         })
         .collect()
 }
@@ -266,12 +276,14 @@ fn list_session_hosts() -> Vec<SessionHostInfo> {
             id: host.name.clone(),
             name: host.name,
             ws_url: host
-                .base_url
+                .url
                 .replacen("https://", "wss://", 1)
                 .replacen("http://", "ws://", 1),
-            base_url: host.base_url,
+            base_url: host.url.clone(),
             token: host.token,
             local: false,
+            url: host.url,
+            offline: host.offline,
         })
         .collect()
 }
@@ -295,27 +307,48 @@ fn session_host(session_id: String) -> Option<String> {
 }
 
 #[tauri::command]
-fn save_remote_host(name: String, base_url: String, token: String) -> Result<(), String> {
+fn save_remote_host(
+    name: String,
+    url: String,
+    token: String,
+    vnc_password: Option<String>,
+) -> Result<(), String> {
     let name = name.trim().to_owned();
     if name.is_empty() || name.len() > 128 || name.contains(['/', '\\']) {
         return Err("Remote host name must be 1-128 characters without path separators.".into());
     }
-    let base_url = validate_remote_url(&base_url)?;
+    let url = validate_remote_url(&url)?;
     let token = token.trim().to_owned();
     if token.is_empty() {
         return Err("Remote host token cannot be empty.".into());
     }
+    let vnc_password = vnc_password.filter(|value| !value.trim().is_empty());
     let mut hosts = read_remote_hosts();
     if let Some(existing) = hosts.hosts.iter_mut().find(|h| h.name == name) {
-        existing.base_url = base_url;
+        existing.url = url;
         existing.token = token;
+        existing.vnc_password = vnc_password;
     } else {
         hosts.hosts.push(RemoteHostMeta {
             name,
-            base_url,
+            url,
             token,
+            vnc_password,
+            offline: false,
         });
     }
+    write_remote_hosts(&hosts)
+}
+
+#[tauri::command]
+fn set_remote_host_offline(name: String, offline: bool) -> Result<(), String> {
+    let mut hosts = read_remote_hosts();
+    let host = hosts
+        .hosts
+        .iter_mut()
+        .find(|host| host.name == name)
+        .ok_or_else(|| "Remote host profile not found.".to_string())?;
+    host.offline = offline;
     write_remote_hosts(&hosts)
 }
 
@@ -810,11 +843,14 @@ pub fn run() {
         serde_json::json!({
             "id": host.name,
             "name": host.name,
-            "base_url": host.base_url,
-            "ws_url": host.base_url
+            "base_url": host.url,
+            "url": host.url,
+            "ws_url": host.url
                 .replacen("https://", "wss://", 1)
                 .replacen("http://", "ws://", 1),
             "token": host.token,
+            "vnc_password": host.vnc_password,
+            "offline": host.offline,
             "local": false
         })
     }));
@@ -868,6 +904,7 @@ pub fn run() {
             bind_session_host,
             session_host,
             save_remote_host,
+            set_remote_host_offline,
             delete_remote_host,
             restart_app
         ])
@@ -1059,6 +1096,7 @@ mod tests {
             "rvm".into(),
             "https://rvm.example.test:8765".into(),
             "test-token".into(),
+            None,
         )
         .unwrap();
 

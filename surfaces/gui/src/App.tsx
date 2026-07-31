@@ -48,7 +48,14 @@ import { itemsFromMessages } from "./itemsFromMessages";
 import { addTurnUsage, emptyUsage, usageFromMessages } from "./usage";
 import { streamMode } from "./streamGate";
 import { InboxItemCard } from "./components/InboxItemCard";
-import { bindSessionHost, isTauri, platformOS, refreshSessionHosts, startWindowDrag } from "./tauri";
+import {
+  bindSessionHost,
+  isTauri,
+  platformOS,
+  refreshSessionHosts,
+  startWindowDrag,
+  testRemoteHost,
+} from "./tauri";
 import { Icon } from "./components/Icon";
 import { Sidebar } from "./components/Sidebar";
 import { ThinkingBlock, Transcript } from "./components/Transcript";
@@ -223,6 +230,7 @@ export function App() {
   // composer's "No model connected" chip. Default true so we don't flash the chip before settings
   // load; corrected by loadSettings.
   const [modelReady, setModelReady] = useState(true);
+  const [hostStatusVersion, setHostStatusVersion] = useState(0);
   const [surface, setSurface] = useState<
     "session" | "scheduled" | "integrations" | "audit" | "inbox" | "persona" | "settings"
   >("session");
@@ -235,10 +243,33 @@ export function App() {
         .then((hosts) => {
           const selected = hosts.find((host) => host.id === sessionHost.id) || hosts[0];
           if (selected) setSessionHost(selected);
+          for (const host of hosts) {
+            if (!host.local) {
+                void testRemoteHost(host.base_url, host.token).then((result) => {
+                const statuses = (globalThis as any).__COWORKER_HOST_STATUS__ || {};
+                statuses[host.id] = result.status;
+                (globalThis as any).__COWORKER_HOST_STATUS__ = statuses;
+                setHostStatusVersion((version) => version + 1);
+              });
+            }
+          }
         })
         .catch(() => {});
     }
   }, []);
+  useEffect(() => {
+    const onHostsChanged = () => {
+      const hosts = sessionHosts();
+      const selected = hosts.find((host) => host.id === sessionHost.id);
+      if (selected) {
+        setSessionHost(selected);
+        if (!selected.local) setSessionOffline(Boolean(selected.offline) || selected.status === "offline");
+      }
+      setHostStatusVersion((version) => version + 1);
+    };
+    window.addEventListener("coworker-hosts-changed", onHostsChanged);
+    return () => window.removeEventListener("coworker-hosts-changed", onHostsChanged);
+  }, [sessionHost.id]);
 
   useEffect(() => {
     if (surface !== "scheduled") setScheduledOpenId(null);
@@ -920,10 +951,12 @@ export function App() {
 
   const send = (text: string, attachments?: Attachment[]) => {
     if (!connected) {
+      if (!sessionHost.local) {
+        setSessionOffline(true);
+        return;
+      }
       setActionError(
-        sessionHost.local
-          ? "Local agent is not connected."
-          : `Remote host "${sessionHost.name}" is offline. This session remains bound to that host and will not fall back to Local.`,
+        "Local agent is not connected.",
       );
       return;
     }
@@ -1531,7 +1564,7 @@ export function App() {
           {/* Right: session-settings icon (§23) + panel toggle. Model/mode/persona chrome is
               gone — the facts live in the subtitle, the controls in the composer (§22). */}
           <div className="main-topbar-side main-topbar-actions" onPointerDown={beginWindowDrag}>
-            {sessionHosts().length > 1 && (
+            {sessionHosts().length > 1 && hostStatusVersion >= 0 && (
               <select
                 aria-label="Session host"
                 value={sessionHost.id}
@@ -1542,9 +1575,16 @@ export function App() {
                 className="text-[12px] bg-transparent border border-line rounded px-1.5 py-1 text-muted"
               >
                 {sessionHosts().map((host) => (
-                  <option key={host.id} value={host.id}>{host.name}</option>
+                  <option key={host.id} value={host.id} disabled={Boolean(host.offline)}>
+                    {host.name} · {host.offline ? "offline" : host.local ? "online" : host.status || "unknown"}
+                  </option>
                 ))}
               </select>
+            )}
+            {!sessionHost.local && (sessionHost.offline || sessionHost.status !== "online") && (
+              <div role="status" className="text-[11px] text-warnInk">
+                Remote host "{sessionHost.name}" is {sessionHost.status === "auth_failed" ? "authentication failed" : "offline or untested"}; this session will not fall back to Local.
+              </div>
             )}
             <label className="flex items-center gap-1 text-[11px] text-muted" title="Create this session in an isolated workspace">
               <input
