@@ -3,6 +3,8 @@ import {
   getArtifacts,
   createAsset,
   getHealth,
+  getGitDiff,
+  getGitStatus,
   getInbox,
   getSessionMessages,
   getSessions,
@@ -98,6 +100,27 @@ it("routes every session REST request through the bound remote host", async () =
     expect(url).toMatch(/^http:\/\/remote\.example\//);
     expect(url).not.toContain("127.0.0.1");
   }
+});
+
+it("preserves structured Git offline responses from HTTP 503", async () => {
+  const host: SessionHost = {
+    id: "rvm-a",
+    name: "rvm-a",
+    base_url: "http://remote.example",
+    ws_url: "ws://remote.example",
+    token: "remote-token",
+    local: false,
+  };
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => ({
+    ok: false,
+    status: 503,
+    json: async () => url.includes("/diff")
+      ? { ok: false, status: "offline", error: "host offline" }
+      : { repository: false, files: [], status: "offline", error: "host offline" },
+  }) as unknown as Response));
+
+  await expect(getGitStatus("s1", host)).resolves.toMatchObject({ status: "offline" });
+  await expect(getGitDiff("s1", "app.ts", host)).resolves.toMatchObject({ status: "offline" });
 });
 
 it("uses the server's persisted host binding for sessions", async () => {

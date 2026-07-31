@@ -542,13 +542,17 @@ export interface GitDiff {
 
 export async function getGitStatus(sessionId: string, host: SessionHost): Promise<GitStatus> {
   const res = await hostFetch(host, `${host.base_url}/v1/sessions/${encodeURIComponent(sessionId)}/git/status`);
-  return res.json();
+  const body = (await res.json()) as GitStatus;
+  if (!res.ok && !body.status && res.status === 503) body.status = "offline";
+  return body;
 }
 
 export async function getGitDiff(sessionId: string, path: string, host: SessionHost): Promise<GitDiff> {
   const q = new URLSearchParams({ path });
   const res = await hostFetch(host, `${host.base_url}/v1/sessions/${encodeURIComponent(sessionId)}/git/diff?${q}`);
-  return res.json();
+  const body = (await res.json()) as GitDiff;
+  if (!res.ok && !body.status && res.status === 503) body.status = "offline";
+  return body;
 }
 
 /** Show the artifact in the OS file manager ("reveal") or open it with its default app ("open"). */

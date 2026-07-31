@@ -42,6 +42,13 @@ from ..roots import RootDir
 from ..workspace_trust import WorkspaceTrustStore
 from ..remote.hosts import RvmHostStore
 from ..remote.client import RvmError, RvmUnauthorizedError, RvmUnreachableError
+from ..git_review import (
+    empty_status,
+    local_diff,
+    local_status,
+    remote_diff,
+    remote_status,
+)
 from ..remote.tools import RemoteTarget
 from ..remote.executor import RvmExecutor
 from ..automation import Schedule, ScheduledTask, Scheduler, TaskRun, TaskStore
@@ -1514,8 +1521,6 @@ class SessionManager:
         return out[:80]
 
     def git_status(self, session_id: str) -> dict[str, Any]:
-        from ..git_review import local_status, remote_status
-
         record = self.session_store.load(session_id)
         if record is not None and record.host_id and record.host_id != "local":
             target = self.resolve_remote_target(session_id)
@@ -1524,19 +1529,9 @@ class SessionManager:
             finally:
                 target.client.close()
         workspace = record.workspace if record else self.default_workspace
-        return local_status(workspace) if workspace else {
-            "repository": False,
-            "branch": None,
-            "upstream": None,
-            "sync": None,
-            "dirty": False,
-            "untracked": False,
-            "files": [],
-        }
+        return local_status(workspace) if workspace else empty_status()
 
     def git_diff(self, session_id: str, path: str) -> dict[str, Any]:
-        from ..git_review import local_diff, remote_diff
-
         if not path or path.startswith(("/", "\\")):
             return {"ok": False, "error": "path escapes workspace"}
         record = self.session_store.load(session_id)

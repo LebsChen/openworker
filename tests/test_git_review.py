@@ -64,6 +64,25 @@ def test_local_diff_rejects_workspace_escape(tmp_path):
     assert "escapes" in body["error"]
 
 
+def test_local_status_uses_new_path_for_renames(tmp_path):
+    _git(tmp_path, "init")
+    _git(tmp_path, "config", "user.name", "Test")
+    _git(tmp_path, "config", "user.email", "test@example.com")
+    (tmp_path / "old.txt").write_text("same\n", encoding="utf-8")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-m", "baseline")
+    _git(tmp_path, "mv", "old.txt", "new.txt")
+
+    manager = SessionManager(
+        workspace=tmp_path,
+        data_dir=tmp_path.parent / "coworker-data",
+    )
+    status = TestClient(create_app(manager)).get("/v1/sessions/unknown/git/status").json()
+    assert len(status["files"]) == 1
+    assert status["files"][0]["path"] == "new.txt"
+    assert status["files"][0]["status"] == "R"
+
+
 class FakeGitClient:
     def git_status(self):
         return {

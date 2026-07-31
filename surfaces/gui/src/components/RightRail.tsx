@@ -419,17 +419,13 @@ function FileChangesPanel({
       .catch((error) => setGitError(error instanceof Error ? error.message : String(error)));
   };
   if (gitFile) {
-    return (
-      <div className="right-panel-section">
-        <div className="right-panel-heading-row">
-          <button className="rail-mini-btn" onClick={() => { setGitFile(null); setGitDiff(null); setGitError(""); }} title={t("session.rail.back")}><Icon name="arrowLeft" size={13} /></button>
-          <h3 className="right-panel-heading">{gitFile.path}</h3>
-          <button className="rail-mini-btn" onClick={() => selectGitFile(gitFile)} title={t("session.rail.refreshDiff")}><Icon name="refresh" size={13} /></button>
-        </div>
-        {gitError && <div className="rail-error">{gitError}</div>}
-        {gitDiff === null ? <div className="rail-muted">{t("session.rail.loadingDiff")}</div> : <UnifiedDiff text={gitDiff} />}
-      </div>
-    );
+    return <GitDiffView
+      file={gitFile}
+      diff={gitDiff}
+      error={gitError}
+      onBack={() => { setGitFile(null); setGitDiff(null); setGitError(""); }}
+      onRefresh={() => selectGitFile(gitFile)}
+    />;
   }
   return (
     <div className="right-panel-section">
@@ -440,32 +436,12 @@ function FileChangesPanel({
           {artifacts.length > 0 && <button className="rail-mini-btn" onClick={onReveal} title={t("session.rail.showArtifactFolder")}><Icon name="folder" size={13} /></button>}
         </div>
       </div>
-      <h4 className="right-panel-subheading">{t("session.rail.workspaceChanges")}</h4>
-      {gitError && <div className="rail-error">{gitError}</div>}
-      {gitLoading ? <div className="rail-muted">{t("session.rail.loadingGitState")}</div> : git?.status === "offline" ? (
-        <div className="rail-error">{t("session.rail.workspaceOffline")}</div>
-      ) : !git?.repository ? (
-        <div className="rail-muted">{t("session.rail.notGitRepository")}</div>
-      ) : (
-        <>
-          <div className="git-review-summary">
-            <strong>{git.branch || t("session.rail.unknownBranch")}</strong>
-            <span>{git.dirty ? t("session.rail.workspaceDirty") : t("session.rail.workspaceClean")}</span>
-          </div>
-          {git.upstream && <div className="rail-muted">{git.upstream}{git.sync ? ` · ${git.sync}` : ""}</div>}
-          {!git.files.length ? <div className="rail-muted">{t("session.rail.noWorkspaceChanges")}</div> : (
-            <div className="git-change-list">
-              {git.files.map((file) => (
-                <button className="git-change-row" key={file.path} onClick={() => selectGitFile(file)}>
-                  <span className={"git-change-status git-change-status--" + file.status.replace(/[^A-Za-z?]/g, "")}>{file.status}</span>
-                  <span className="git-change-path">{file.path}</span>
-                  <span className="git-change-counts">+{file.additions} −{file.deletions}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </>
-      )}
+      <GitWorkspaceChanges
+        git={git}
+        loading={gitLoading}
+        error={gitError}
+        onSelect={selectGitFile}
+      />
       <h4 className="right-panel-subheading">Artifacts</h4>
       {!showArtifacts || !artifacts.length ? (
         <div className="rail-muted">{t("session.rail.noPreviewableFilesYet")}</div>
@@ -484,12 +460,122 @@ function FileChangesPanel({
   );
 }
 
+function GitWorkspaceChanges({
+  git,
+  loading,
+  error,
+  onSelect,
+}: {
+  git: GitStatus | null;
+  loading: boolean;
+  error: string;
+  onSelect: (file: GitFileChange) => void;
+}) {
+  if (loading) return <GitSectionMessage className="rail-muted" message={t("session.rail.loadingGitState")} />;
+  if (error) return <GitSectionMessage className="rail-error" message={error} />;
+  if (git?.status === "offline") {
+    return <GitSectionMessage className="rail-error" message={t("session.rail.workspaceOffline")} />;
+  }
+  if (!git?.repository) {
+    return <GitSectionMessage className="rail-muted" message={t("session.rail.notGitRepository")} />;
+  }
+  return (
+    <>
+      <h4 className="right-panel-subheading">{t("session.rail.workspaceChanges")}</h4>
+      <div className="git-review-summary">
+        <strong>{git.branch || t("session.rail.unknownBranch")}</strong>
+        <span>{git.dirty ? t("session.rail.workspaceDirty") : t("session.rail.workspaceClean")}</span>
+      </div>
+      {git.upstream && (
+        <div className="rail-muted">
+          {git.upstream}{git.sync ? ` · ${syncLabel(git.sync)}` : ""}
+        </div>
+      )}
+      {!git.files.length ? <div className="rail-muted">{t("session.rail.noWorkspaceChanges")}</div> : (
+        <div className="git-change-list">
+          {git.files.map((file) => (
+            <button className="git-change-row" key={file.path} onClick={() => onSelect(file)}>
+              <span className={gitStatusClass(file.status)}>{file.status}</span>
+              <span className="git-change-path">{file.path}</span>
+              <span className="git-change-counts">+{file.additions} −{file.deletions}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+function gitStatusClass(status: string): string {
+  return "git-change-status git-change-status--" + status.replace(/[^A-Za-z?]/g, "");
+}
+
+function GitSectionMessage({ className, message }: { className: string; message: string }) {
+  return (
+    <>
+      <h4 className="right-panel-subheading">{t("session.rail.workspaceChanges")}</h4>
+      <div className={className}>{message}</div>
+    </>
+  );
+}
+
+function syncLabel(sync: string): string {
+  switch (sync) {
+    case "in_sync":
+      return t("session.rail.syncInSync");
+    case "ahead":
+      return t("session.rail.syncAhead");
+    case "behind":
+      return t("session.rail.syncBehind");
+    case "ahead_behind":
+      return t("session.rail.syncAheadBehind");
+    default:
+      return sync;
+  }
+}
+
+function GitDiffView({
+  file,
+  diff,
+  error,
+  onBack,
+  onRefresh,
+}: {
+  file: GitFileChange;
+  diff: string | null;
+  error: string;
+  onBack: () => void;
+  onRefresh: () => void;
+}) {
+  return (
+    <div className="right-panel-section">
+      <div className="right-panel-heading-row">
+        <button className="rail-mini-btn" onClick={onBack} title={t("session.rail.back")}>
+          <Icon name="arrowLeft" size={13} />
+        </button>
+        <h3 className="right-panel-heading">{file.path}</h3>
+        <button className="rail-mini-btn" onClick={onRefresh} title={t("session.rail.refreshDiff")}>
+          <Icon name="refresh" size={13} />
+        </button>
+      </div>
+      {error && <div className="rail-error">{error}</div>}
+      {diff === null ? <div className="rail-muted">{t("session.rail.loadingDiff")}</div> : <UnifiedDiff text={diff} />}
+    </div>
+  );
+}
+
 function UnifiedDiff({ text }: { text: string }) {
   if (!text) return <div className="rail-muted">{t("session.rail.emptyDiff")}</div>;
   return (
     <pre className="git-diff">
       {text.split("\n").map((line, index) => {
-        const kind = line.startsWith("@@") ? "hunk" : line.startsWith("+") && !line.startsWith("+++") ? "added" : line.startsWith("-") && !line.startsWith("---") ? "removed" : "context";
+        const kind = line.startsWith("@@")
+          ? "hunk"
+          : line.startsWith("+") && !line.startsWith("+++")
+            ? "added"
+            : line.startsWith("-") && !line.startsWith("---")
+              ? "removed"
+              : "context";
         return <span className={"git-diff-line git-diff-line--" + kind} key={index}>{line}{"\n"}</span>;
       })}
     </pre>
