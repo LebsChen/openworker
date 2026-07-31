@@ -440,6 +440,7 @@
   "ide.connecting": "Connecting…",
   "ide.disconnected": "Disconnected",
   "ide.error": "Connection error",
+  "ide.frameError": "The Web IDE frame failed to load.",
   "ide.retry": "Retry",
   "ide.rvmRequired": "Requires an RVM host. Local sessions do not provide a Web IDE.",
   "assets.knowledge": "Knowledge",

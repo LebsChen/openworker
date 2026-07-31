@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { prepareRvmIde, rvmIdeUrl, type SessionHost } from "../api";
+import { openRvmIdeSession, type SessionHost } from "../api";
 import { t, useT } from "../i18n";
 
 type Props = {
@@ -12,18 +12,18 @@ export function RemoteIdePanel({ active, sessionId, host }: Props) {
   useT();
   const [status, setStatus] = useState(() => t("ide.disconnected"));
   const [error, setError] = useState("");
-  const [ready, setReady] = useState(false);
+  const [ideUrl, setIdeUrl] = useState("");
   const [generation, setGeneration] = useState(0);
 
   useEffect(() => {
     if (!active || host.local) return;
     setStatus(t("ide.connecting"));
     setError("");
-    setReady(false);
+    setIdeUrl("");
     let disposed = false;
-    void prepareRvmIde(sessionId)
-      .then(() => {
-        if (!disposed) setReady(true);
+    void openRvmIdeSession(sessionId)
+      .then((url) => {
+        if (!disposed) setIdeUrl(url);
       })
       .catch((reason: unknown) => {
         if (!disposed) {
@@ -57,14 +57,17 @@ export function RemoteIdePanel({ active, sessionId, host }: Props) {
         )}
       </div>
       <div className="remote-ide-frame-holder">
-        {active && ready && (
+        {active && ideUrl && (
           <iframe
-            key={sessionId}
+            key={`${sessionId}-${generation}`}
             className="remote-ide-frame"
-            src={rvmIdeUrl(sessionId)}
+            src={ideUrl}
             title={t("session.rail.webIde")}
             onLoad={() => setStatus(t("ide.connected"))}
-            onError={() => setStatus(t("ide.error"))}
+            onError={() => {
+              setStatus(t("ide.error"));
+              setError(t("ide.frameError"));
+            }}
             allow="clipboard-read; clipboard-write"
           />
         )}

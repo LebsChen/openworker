@@ -7,7 +7,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it("loads the same-origin IDE bootstrap without exposing an RVM token", async () => {
+it("loads an ephemeral IDE origin without exposing an RVM token", async () => {
   vi.stubGlobal("__COWORKER_HTTP__", "http://127.0.0.1:8765");
   const host = {
     id: "rvm-a",
@@ -17,10 +17,20 @@ it("loads the same-origin IDE bootstrap without exposing an RVM token", async ()
     token: "not-for-the-browser",
     local: false,
   };
-  vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true })) as unknown as typeof fetch);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        url: "http://127.0.0.1:39123/ide/?folder=C%3A%5CUsers%5CTeam&key=opaque",
+      }),
+    })) as unknown as typeof fetch,
+  );
   render(<RemoteIdePanel active sessionId="session-1" host={host} />);
   const frame = await waitFor(() => screen.getByTitle("Web IDE")) as HTMLIFrameElement;
-  expect(frame.src).toBe("http://127.0.0.1:8765/v1/sessions/session-1/ide/");
+  expect(frame.src).toBe(
+    "http://127.0.0.1:39123/ide/?folder=C%3A%5CUsers%5CTeam&key=opaque",
+  );
   expect(frame.src).not.toContain("token");
   fireEvent.load(frame);
   expect(screen.getByText("Connected")).toBeTruthy();
