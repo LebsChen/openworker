@@ -94,6 +94,22 @@ _SCOPES = {s.value for s in Scope}
 logger = logging.getLogger("coworker.manager")
 
 
+class UnknownRvmHostError(ValueError):
+    """The session refers to an RVM host that is not registered."""
+
+
+class RvmHostOfflineError(ValueError):
+    """The session's RVM host cannot be reached."""
+
+
+class RvmHostUnauthorizedError(ValueError):
+    """The session's RVM host rejected its configured credential."""
+
+
+class UnknownSessionError(ValueError):
+    """The requested session has not been persisted."""
+
+
 def _grants_of(engine) -> dict[str, Any]:
     """The engine's session-scoped "Always allow" approvals, in persistable shape."""
     tools = sorted(getattr(engine.permissions, "session_allow_tools", None) or ())
@@ -400,47 +416,12 @@ class SessionManager:
         bound_host_id = record.host_id if record else self.host_id
         remote_target = None
         if bound_host_id and bound_host_id != "local":
-            host = self.rvm_hosts.get(bound_host_id)
-            if host is None:
-                raise ValueError(f"unknown RVM host for session {session_id}: {bound_host_id}")
-            client = self.rvm_hosts.client(bound_host_id)
-            try:
-                health = client.health()
-            except RvmUnauthorizedError as exc:
-                client.close()
-                raise ValueError(
-                    f"RVM host {host.name} ({bound_host_id}) is unauthorized"
-                ) from exc
-            except RvmUnreachableError as exc:
-                client.close()
-                raise ValueError(
-                    f"RVM host {host.name} ({bound_host_id}) is offline or unreachable"
-                ) from exc
-            except RvmError as exc:
-                client.close()
-                raise ValueError(
-                    f"RVM host {host.name} ({bound_host_id}) health check failed: {exc}"
-                ) from exc
-            style = self.rvm_hosts.path_style_for(host, health=health)
-            explicit_remote_workspace = (
-                record.workspace if record and record.workspace else workspace
-            )
-            remote_workspace = explicit_remote_workspace
-            if not remote_workspace:
-                if not host.workspace:
-                    raise ValueError(
-                        f"RVM host {bound_host_id} has no workspace for session {session_id}"
-                    )
-                remote_workspace = style.join(
-                    host.workspace, f".coworker/sessions/{session_id}"
-                )
-                client.mkdir(remote_workspace)
-            remote_target = RemoteTarget(
-                host=host,
-                client=client,
-                style=style,
-                workspace=remote_workspace,
-                capabilities=set(health.get("capabilities") or []),
+            remote_target = self._resolve_remote_target(
+                session_id,
+                record=record,
+                workspace=workspace,
+                host_id=bound_host_id,
+                create_workspace=True,
             )
         managed_workspace = False
 
@@ -567,6 +548,71 @@ class SessionManager:
         if is_new_session:
             self._emit_session_created(session_id, agent_name)
         return engine
+
+    def resolve_remote_target(self, session_id: str) -> Optional[RemoteTarget]:
+        """Resolve an existing session's remote target without constructing an engine."""
+        record = self.session_store.load(session_id)
+        if record is None:
+            raise UnknownSessionError(f"unknown session: {session_id}")
+        if not record.host_id or record.host_id == "local":
+            return None
+        return self._resolve_remote_target(
+            session_id,
+            record=record,
+            host_id=record.host_id,
+            create_workspace=False,
+        )
+
+    def _resolve_remote_target(
+        self,
+        session_id: str,
+        *,
+        record: Optional[SessionRecord],
+        host_id: str,
+        workspace: Optional[str] = None,
+        create_workspace: bool,
+    ) -> RemoteTarget:
+        host = self.rvm_hosts.get(host_id)
+        if host is None:
+            raise UnknownRvmHostError(
+                f"unknown RVM host for session {session_id}: {host_id}"
+            )
+        client = self.rvm_hosts.client(host_id)
+        try:
+            health = client.health()
+        except RvmUnauthorizedError as exc:
+            client.close()
+            raise RvmHostUnauthorizedError(
+                f"RVM host {host.name} ({host_id}) is unauthorized"
+            ) from exc
+        except RvmUnreachableError as exc:
+            client.close()
+            raise RvmHostOfflineError(
+                f"RVM host {host.name} ({host_id}) is offline or unreachable"
+            ) from exc
+        except RvmError as exc:
+            client.close()
+            raise ValueError(
+                f"RVM host {host.name} ({host_id}) health check failed: {exc}"
+            ) from exc
+        style = self.rvm_hosts.path_style_for(host, health=health)
+        remote_workspace = record.workspace if record and record.workspace else workspace
+        if not remote_workspace:
+            if not host.workspace:
+                client.close()
+                raise ValueError(
+                    f"RVM host {host_id} has no workspace for session {session_id}"
+                )
+            remote_workspace = style.join(host.workspace, f".coworker/sessions/{session_id}")
+            if create_workspace:
+                client.mkdir(remote_workspace)
+        return RemoteTarget(
+            host=host,
+            client=client,
+            style=style,
+            workspace=remote_workspace,
+            capabilities=set(health.get("capabilities") or []),
+        )
 
     def _emit_session_created(self, session_id: str, persona_id: str) -> None:
         """Phase 5 telemetry, fired once per brand-new session on a background thread
