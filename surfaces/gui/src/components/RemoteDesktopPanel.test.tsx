@@ -53,8 +53,8 @@ describe("RemoteDesktopPanel", () => {
     expect(mocks.RFB).toHaveBeenCalledTimes(1);
     const connection = mocks.RFB.mock.results[0]?.value;
     expect(connection.scaleViewport).toBe(true);
-    expect(connection.clipViewport).toBe(true);
-    expect(connection.resizeSession).toBe(true);
+    expect(connection.clipViewport).toBe(false);
+    expect(connection.resizeSession).toBe(false);
     expect(screen.getByText("Connecting…")).toBeTruthy();
   });
 

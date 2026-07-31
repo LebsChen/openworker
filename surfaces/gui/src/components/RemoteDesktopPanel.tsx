@@ -28,8 +28,8 @@ export function RemoteDesktopPanel({ active, sessionId, host }: Props) {
     try {
       const connection = new RFB(holder.current, socket);
       connection.scaleViewport = true;
-      connection.clipViewport = true;
-      connection.resizeSession = true;
+      connection.clipViewport = false;
+      connection.resizeSession = false;
       rfb.current = connection;
 
       const onConnect = () => setStatus(t("desktop.connected"));
