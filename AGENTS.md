@@ -18,10 +18,9 @@ npm test
 npm run check:i18n
 ```
 
-The full backend suite currently has two pre-existing failures:
+The full backend suite currently has one pre-existing failure:
 
 ```text
-tests/test_durable_resume.py::test_durable_resume_approval_executes_tool
 tests/test_provider_router.py::test_set_provider_auto_adds_recommended_when_pulled
 ```
 

@@ -87,9 +87,11 @@ from ..providers import (
     verify_provider_key,
 )
 from ..secrets import SecretStore, state_dir
+from ..assets import AssetStore, PLAYBOOK_TEMPLATE
 from ..sessions import SessionRecord
 from ..session_workspaces import SessionWorkspaceManager
 from ..skills import SkillLoader
+from ..skills.base import _parse_skill
 
 _SCOPES = {s.value for s in Scope}
 
@@ -171,6 +173,10 @@ class SessionManager:
         self._autotitle_attempts: dict[str, int] = {}
         self.workspace_trust = WorkspaceTrustStore()
         self.secrets = SecretStore()
+        self.asset_stores = {
+            "knowledge": AssetStore("knowledge"),
+            "playbooks": AssetStore("playbooks"),
+        }
         self.rvm_hosts = RvmHostStore(secrets=self.secrets)
         # No explicit provider injected → route by the model's `provider:` prefix (OpenAI default,
         # Ollama, …). Tests inject a provider directly and bypass the router. The same router is
@@ -400,19 +406,42 @@ class SessionManager:
         plan_approver: Optional[Any] = None,
         question_asker: Optional[Any] = None,
     ) -> Optional[TurnEngine]:
+        record = self.session_store.load(session_id)
         engine = self._engines.get(session_id)
         if engine is not None:
-            if approver is not None:
-                engine.approver = approver
-            if directory_requester is not None:
-                engine.directory_requester = directory_requester
-            if plan_approver is not None:
-                engine.plan_approver = plan_approver
-            if question_asker is not None:
-                engine.question_asker = question_asker
-            return engine
+            record_host = record.host_id if record is not None else None
+            if record_host and host_id and host_id != record_host:
+                raise ValueError(
+                    f"session {session_id} is permanently bound to {record_host}; "
+                    "start a new session to use another host"
+                )
+            expected_host = record_host or host_id
+            if expected_host:
+                actual_host = (
+                    getattr(getattr(engine, "remote_target", None), "host", None).id
+                    if getattr(engine, "remote_target", None) is not None
+                    else "local"
+                )
+                if actual_host != expected_host:
+                    stale = self._engines.pop(session_id, None)
+                    executor = getattr(stale, "executor", None)
+                    close = getattr(executor, "close", None)
+                    if callable(close):
+                        close()
+                    engine = None
+            if engine is None:
+                pass
+            else:
+                if approver is not None:
+                    engine.approver = approver
+                if directory_requester is not None:
+                    engine.directory_requester = directory_requester
+                if plan_approver is not None:
+                    engine.plan_approver = plan_approver
+                if question_asker is not None:
+                    engine.question_asker = question_asker
+                return engine
 
-        record = self.session_store.load(session_id)
         is_new_session = record is None
         agent_name = (record.agent if record else agent) or "code"
         ag = get_agent(agent_name)
@@ -548,7 +577,14 @@ class SessionManager:
             engine.compaction_state = CompactionState.from_dict(record.compaction)
         engine.compaction_settings = self.compaction_settings
         self._engines[session_id] = engine
+        if record is not None and remote_target is not None and record.workspace != remote_target.workspace:
+            self.save(session_id, engine)
         if is_new_session:
+            # Bind remote sessions durably before the first turn. Host selection is a
+            # session invariant, not transient WebSocket state; a reload must reconstruct
+            # the same remote executor from the server record.
+            if remote_target is not None:
+                self.save(session_id, engine)
             self._emit_session_created(session_id, agent_name)
         return engine
 
@@ -565,6 +601,15 @@ class SessionManager:
             host_id=record.host_id,
             create_workspace=False,
         )
+
+    def ensure_remote_available(self, session_id: str) -> None:
+        """Revalidate a bound remote host immediately before starting a turn."""
+        record = self.session_store.load(session_id)
+        if record is None or not record.host_id or record.host_id == "local":
+            return
+        target = self.resolve_remote_target(session_id)
+        if target is not None:
+            target.client.close()
 
     def _resolve_remote_target(
         self,
@@ -603,13 +648,35 @@ class SessionManager:
                 f"RVM host {host.name} ({host_id}) health check failed: {exc}"
             ) from exc
         style = self.rvm_hosts.path_style_for(host, health=health)
-        remote_workspace = record.workspace if record and record.workspace else workspace
+        requested_workspace = record.workspace if record and record.workspace else workspace
+        remote_workspace = None
+        if requested_workspace:
+            try:
+                normalized = style.normalize(str(requested_workspace))
+                resolvable = True
+                exists = getattr(client, "exists", None)
+                if callable(exists):
+                    resolvable = bool(exists(normalized).get("exists"))
+                if style.is_absolute(normalized) and resolvable:
+                    remote_workspace = normalized
+            except Exception:
+                remote_workspace = None
         if not remote_workspace:
             if not host.workspace:
                 client.close()
                 raise ValueError(
-                    f"RVM host {host_id} has no workspace for session {session_id}"
+                    f"RVM host {host_id} has no usable workspace for session {session_id}; "
+                    "enter the remote workspace in Settings and test the connection"
                 )
+            try:
+                if not style.is_absolute(style.normalize(host.workspace)):
+                    raise ValueError("configured workspace is not absolute for this host")
+            except (ValueError, TypeError) as exc:
+                client.close()
+                raise ValueError(
+                    f"RVM host {host_id} has no usable workspace for session {session_id}; "
+                    "enter the remote workspace in Settings and test the connection"
+                ) from exc
             remote_workspace = style.join(host.workspace, f".coworker/sessions/{session_id}")
             if create_workspace:
                 client.mkdir(remote_workspace)
@@ -1343,6 +1410,44 @@ class SessionManager:
 
     def list_artifacts(self, session_id: str) -> list[dict[str, Any]]:
         record = self.session_store.load(session_id)
+        if record is not None and record.host_id and record.host_id != "local":
+            target = self.resolve_remote_target(session_id)
+            try:
+                suffixes = {
+                    ".md", ".markdown", ".html", ".htm", ".txt", ".json", ".csv", ".tsv",
+                    ".py", ".js", ".ts", ".tsx", ".css", ".png", ".jpg", ".jpeg", ".webp",
+                    ".gif", ".pdf", ".xlsx", ".xls", ".pptx", ".ppt", ".pptm", ".docx",
+                    ".doc", ".docm",
+                }
+                pending = [target.workspace]
+                out: list[dict[str, Any]] = []
+                while pending and len(out) < 80:
+                    current = pending.pop(0)
+                    listing = target.client.ls(current)
+                    for item in listing.get("items", []):
+                        name = str(item.get("name", ""))
+                        if not name or name.startswith(".") or name in {"node_modules", "target", "dist", "__pycache__"}:
+                            continue
+                        child = target.style.join(current, name)
+                        if item.get("dir"):
+                            pending.append(child)
+                            continue
+                        suffix = Path(name).suffix.lower()
+                        if suffix not in suffixes:
+                            continue
+                        metadata = target.client.stat(child)
+                        out.append({
+                            "path": target.style.relative(target.workspace, child),
+                            "abs_path": child,
+                            "name": name,
+                            "kind": _artifact_kind(Path(name)),
+                            "size": metadata.get("size", item.get("size", 0)),
+                            "modified_at": metadata.get("modified_at", metadata.get("mtime", item.get("mtime", 0))),
+                        })
+                out.sort(key=lambda artifact: artifact["modified_at"], reverse=True)
+                return out[:80]
+            finally:
+                target.client.close()
         workspace = record.workspace if record else self.default_workspace
         if not workspace:
             return []
@@ -1429,6 +1534,40 @@ class SessionManager:
         return target, None
 
     def read_artifact(self, session_id: str, path: str) -> dict[str, Any]:
+        record = self.session_store.load(session_id)
+        if record is not None and record.host_id and record.host_id != "local":
+            target = self.resolve_remote_target(session_id)
+            try:
+                try:
+                    remote_path = target.resolve(path)
+                except Exception as exc:
+                    return {"ok": False, "error": str(exc)}
+                metadata = target.client.stat(remote_path)
+                if not metadata.get("exists", True):
+                    return {"ok": False, "error": "not found"}
+                kind = _artifact_kind(Path(remote_path))
+                if kind == "office":
+                    return {"ok": True, "path": path, "kind": "office"}
+                remote = target.client.read(remote_path)
+                if isinstance(remote.get("data_url"), str):
+                    return {
+                        "ok": True,
+                        "path": path,
+                        "kind": kind,
+                        "data_url": remote["data_url"],
+                    }
+                content = remote.get("content")
+                if not isinstance(content, str):
+                    return {"ok": False, "error": "remote file cannot be previewed"}
+                return {
+                    "ok": True,
+                    "path": path,
+                    "kind": kind,
+                    "content": content[:500000],
+                    "truncated": len(content) > 500000,
+                }
+            finally:
+                target.client.close()
         target, err = self._artifact_target(session_id, path)
         if target is None:
             return {"ok": False, "error": err}
@@ -1485,6 +1624,26 @@ class SessionManager:
         import subprocess
         import sys
 
+        record = self.session_store.load(session_id)
+        if record is not None and record.host_id and record.host_id != "local":
+            target = self.resolve_remote_target(session_id)
+            try:
+                remote_path = target.resolve(path)
+                if target.style.name == "windows":
+                    command = (
+                        f'explorer.exe /select,"{remote_path}"'
+                        if mode == "reveal"
+                        else f'start "" "{remote_path}"'
+                    )
+                else:
+                    command = f'xdg-open "{remote_path}"'
+                result = target.client.exec_sync(command)
+                return {
+                    "ok": result.get("exit_code", 0) == 0,
+                    **({"error": result.get("stderr")} if result.get("exit_code", 0) else {}),
+                }
+            finally:
+                target.client.close()
         target, err = self._artifact_target(session_id, path)
         if target is None:
             return {"ok": False, "error": err}
@@ -3669,11 +3828,13 @@ class SessionManager:
 
     def save(self, session_id: str, engine: TurnEngine) -> None:
         executor = getattr(engine, "executor", None)
-        if isinstance(executor, RvmExecutor):
+        remote_target = getattr(engine, "remote_target", None)
+        if remote_target is not None:
+            workspace = str(remote_target.workspace)
+        elif isinstance(executor, RvmExecutor):
             workspace = str(executor.cwd)
         else:
             workspace = os.path.realpath(str(executor.cwd)) if executor else ""
-        remote_target = getattr(engine, "remote_target", None)
         self.session_store.save(
             SessionRecord(
                 session_id=session_id,
@@ -3937,6 +4098,24 @@ class SessionManager:
         """
         engine = self._engines.get(session_id)
         if engine is not None and getattr(engine, "roots", None):
+            remote_target = getattr(engine, "remote_target", None)
+            if remote_target is not None:
+                def remote_exists(path: str) -> bool:
+                    try:
+                        return bool(remote_target.client.exists(path).get("exists"))
+                    except Exception:
+                        return False
+
+                return [
+                    {
+                        "path": str(r.path),
+                        "writable": bool(r.writable),
+                        "label": r.label,
+                        "primary": i == 0,
+                        "exists": remote_exists(str(r.path)),
+                    }
+                    for i, r in enumerate(engine.roots)
+                ]
             return [
                 {
                     "path": str(r.path),
@@ -3948,6 +4127,35 @@ class SessionManager:
                 for i, r in enumerate(engine.roots)
             ]
         record = self.session_store.load(session_id)
+        remote_target = None
+        if record is not None and record.host_id and record.host_id != "local":
+            remote_target = self.resolve_remote_target(session_id)
+        if remote_target is not None:
+            primary = record.workspace or remote_target.workspace
+            extra = (record.extra_roots if record else []) or []
+            def remote_exists(path: str) -> bool:
+                try:
+                    return bool(remote_target.client.exists(path).get("exists"))
+                except Exception:
+                    return False
+            out = [{
+                "path": primary,
+                "writable": True,
+                "label": "scratch",
+                "primary": True,
+                "exists": remote_exists(primary),
+            }]
+            for r in extra:
+                p = str(r.get("path", ""))
+                out.append({
+                    "path": p,
+                    "writable": bool(r.get("writable", False)),
+                    "label": r.get("label") or remote_target.style.basename(p),
+                    "primary": False,
+                    "exists": remote_exists(p),
+                })
+            remote_target.client.close()
+            return out
         primary = (
             record.workspace
             if record and record.workspace
@@ -4220,8 +4428,79 @@ class SessionManager:
         return _list_agents()
 
     def list_skills(self) -> list[dict[str, Any]]:
-        loader = SkillLoader([state_dir() / "skills"])
-        return loader.catalog()
+        skills_dir = state_dir() / "skills"
+        result: list[dict[str, Any]] = []
+        for path in sorted(skills_dir.glob("*/SKILL.md")):
+            try:
+                skill = _parse_skill(path)
+            except (OSError, ValueError):
+                continue
+            result.append(
+                {
+                    "name": skill.name,
+                    "description": skill.description,
+                    "enabled": skill.enabled,
+                    "body": skill.instructions,
+                    "path": str(path),
+                }
+            )
+        return result
+
+    def get_agents_md(self) -> dict[str, Any]:
+        path = state_dir() / "AGENTS.md"
+        return {"name": "AGENTS.md", "body": path.read_text(encoding="utf-8") if path.is_file() else ""}
+
+    def save_agents_md(self, body: str) -> dict[str, Any]:
+        from ..secrets import write_private_text
+        write_private_text(state_dir() / "AGENTS.md", body)
+        return self.get_agents_md()
+
+    def save_skill(
+        self, name: str, body: str, enabled: bool = True, description: str = ""
+    ) -> dict[str, Any]:
+        if not name or Path(name).name != name:
+            raise ValueError("invalid skill name")
+        path = state_dir() / "skills" / name / "SKILL.md"
+        from ..secrets import write_private_text
+        if "\n" in name or "\r" in name or "\n" in description or "\r" in description:
+            raise ValueError("skill name and description must not contain newlines")
+        content = (
+            f"---\nname: {name}\ndescription: {description}\n"
+            f"enabled: {'true' if enabled else 'false'}\n---\n\n{body.rstrip()}\n"
+        )
+        write_private_text(path, content)
+        return {"name": name, "description": description, "enabled": enabled, "body": body, "path": str(path)}
+
+    def delete_skill(self, name: str) -> dict[str, Any]:
+        path = state_dir() / "skills" / Path(name).name
+        if path.name != name:
+            return {"ok": False}
+        import shutil
+        shutil.rmtree(path, ignore_errors=True)
+        return {"ok": True}
+
+    def list_assets(self, kind: str, *, workspace: str | None = None) -> list[dict[str, Any]]:
+        return self.asset_stores[kind].list(workspace=workspace)
+
+    def get_asset(self, kind: str, name: str, *, workspace: str | None = None) -> dict[str, Any] | None:
+        asset = self.asset_stores[kind].get(name, workspace=workspace)
+        return (asset.metadata() | {"body": asset.body}) if asset else None
+
+    def save_asset(self, kind: str, body: dict[str, Any], *, existing: str | None = None) -> dict[str, Any]:
+        return self.asset_stores[kind].save(body, existing=existing)
+
+    def delete_asset(self, kind: str, name: str) -> dict[str, Any]:
+        return {"ok": self.asset_stores[kind].delete(name)}
+
+    def list_secrets(self) -> list[dict[str, Any]]:
+        return self.secrets.status()
+
+    def save_secret(self, profile: str, value: dict[str, Any]) -> dict[str, Any]:
+        self.secrets.put(profile, value)
+        return {"ok": True, "secrets": self.list_secrets()}
+
+    def delete_secret(self, profile: str) -> dict[str, Any]:
+        return {"ok": self.secrets.delete(profile), "secrets": self.list_secrets()}
 
     def list_memory(self) -> list[dict[str, Any]]:
         return [

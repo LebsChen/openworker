@@ -45,10 +45,12 @@ export type RvmHostInfo = {
 export type RemoteHostProbeResult = {
   status: "online" | "offline" | "auth_failed" | "checking" | "unknown";
   latency_ms?: number;
+  workspace?: string;
   health?: {
     platform?: string;
     host?: string;
     version?: string;
+    workspace?: string;
     capabilities?: string[];
     vnc_port?: number | null;
     ide_port?: number | null;
@@ -109,10 +111,19 @@ export async function saveRvmHost(
   platform?: string,
   workspace?: string,
 ): Promise<void> {
+  const body: Record<string, unknown> = {
+    id,
+    name,
+    base_url: baseUrl,
+    platform,
+    workspace,
+  };
+  if (token) body.token = token;
+  if (vncPassword) body.vnc_password = vncPassword;
   const res = await fetch(`${httpBase()}/v1/rvm/hosts`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-OpenWorker-Token": apiToken() },
-    body: JSON.stringify({ id, name, base_url: baseUrl, token, vnc_password: vncPassword, platform, workspace }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error((await res.json()).error || `Unable to save remote host (HTTP ${res.status}).`);
   window.dispatchEvent(new Event("coworker-hosts-changed"));
@@ -168,10 +179,19 @@ const sessionHostBindings = new Map<string, string>();
 
 export const rememberSessionHost = (sessionId: string, host: SessionHost): void => {
   sessionHostBindings.set(sessionId, host.id);
+  try {
+    localStorage.setItem(`openworker:session-host:${sessionId}`, host.id);
+  } catch {}
 };
 
 export const hostForSession = (sessionId: string): SessionHost => {
-  const hostId = sessionHostBindings.get(sessionId);
+  let hostId = sessionHostBindings.get(sessionId);
+  if (!hostId) {
+    try {
+      hostId = localStorage.getItem(`openworker:session-host:${sessionId}`) || undefined;
+    } catch {}
+    if (hostId) sessionHostBindings.set(sessionId, hostId);
+  }
   const host = sessionHosts().find((candidate) => candidate.id === hostId);
   if (!host) throw new Error(`No host binding found for session ${sessionId}.`);
   return host;
@@ -205,6 +225,19 @@ const fetch = (
   const token = apiToken();
   if (token) headers.set("X-OpenWorker-Token", token);
   return globalThis.fetch(input, { ...init, headers });
+};
+
+const request = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
+  const headers = new Headers(init.headers);
+  if (typeof init.body === "string" && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  const res = await fetch(`${httpBase()}${path}`, { ...init, headers });
+  const data = await res.json();
+  if (!res.ok || data?.ok === false) {
+    throw new Error(data?.error || `request failed: ${res.status}`);
+  }
+  return data as T;
 };
 
 const openWebSocket = (url: string): WebSocket => {
@@ -453,7 +486,7 @@ export interface ArtifactInfo {
   name: string;
   kind: "markdown" | "html" | "image" | "code" | "text" | string;
   size: number;
-  modified_at: number;
+  modified_at: number | string;
 }
 
 export interface ArtifactContent {
@@ -848,6 +881,86 @@ export interface ConnectorTool {
 export async function getConnectors(): Promise<Connector[]> {
   const res = await fetch(`${httpBase()}/v1/connectors`);
   return (await res.json()).connectors ?? [];
+}
+
+export interface Asset {
+  name: string;
+  description: string;
+  body?: string;
+  enabled: boolean;
+  scope: "global" | "project";
+  project?: string;
+  trigger?: string;
+}
+
+export async function getAssets(kind: "knowledge" | "playbooks"): Promise<Asset[]> {
+  const data = await request<{ assets: Asset[] }>(`/v1/assets/${kind}`);
+  return data.assets || [];
+}
+export async function getAsset(kind: "knowledge" | "playbooks", name: string): Promise<Asset> {
+  return request<Asset>(`/v1/assets/${kind}/${encodeURIComponent(name)}`);
+}
+
+export async function createAsset(kind: "knowledge" | "playbooks", asset: Partial<Asset>) {
+  return request<Asset>(`/v1/assets/${kind}`, { method: "POST", body: JSON.stringify(asset) });
+}
+
+export async function updateAsset(kind: "knowledge" | "playbooks", name: string, asset: Partial<Asset>) {
+  return request<Asset>(`/v1/assets/${kind}/${encodeURIComponent(name)}`, {
+    method: "PATCH",
+    body: JSON.stringify(asset),
+  });
+}
+
+export async function deleteAsset(kind: "knowledge" | "playbooks", name: string) {
+  return request<{ ok: boolean }>(`/v1/assets/${kind}/${encodeURIComponent(name)}`, { method: "DELETE" });
+}
+
+export interface SecretStatus {
+  profile: string;
+  type?: string;
+  account?: string;
+  expired: boolean;
+}
+
+export async function getSecrets(): Promise<SecretStatus[]> {
+  const data = await request<{ secrets: SecretStatus[] }>("/v1/secrets");
+  return data.secrets || [];
+}
+
+export async function saveSecret(profile: string, value: Record<string, unknown>) {
+  return request<{ ok: boolean }>(`/v1/secrets/${encodeURIComponent(profile)}`, {
+    method: "PUT",
+    body: JSON.stringify(value),
+  });
+}
+
+export async function deleteSecret(profile: string) {
+  return request<{ ok: boolean }>(`/v1/secrets/${encodeURIComponent(profile)}`, { method: "DELETE" });
+}
+
+export async function getAgentsMd(): Promise<{ name: string; body: string }> {
+  return request("/v1/agents-md");
+}
+export async function saveAgentsMd(body: string) {
+  return request<{ name: string; body: string }>("/v1/agents-md", { method: "PUT", body: JSON.stringify({ body }) });
+}
+export async function saveSkill(name: string, body: string, enabled = true, description = "") {
+  return request<Skill>(`/v1/skills/${encodeURIComponent(name)}`, { method: "PUT", body: JSON.stringify({ body, enabled, description }) });
+}
+export async function deleteSkill(name: string) {
+  return request(`/v1/skills/${encodeURIComponent(name)}`, { method: "DELETE" });
+}
+export interface Skill {
+  name: string;
+  description: string;
+  body?: string;
+  enabled: boolean;
+  path?: string;
+}
+export async function getSkills(): Promise<Skill[]> {
+  const data = await request<{ skills: Skill[] }>("/v1/skills");
+  return data.skills || [];
 }
 
 export async function connectConnector(

@@ -21,7 +21,6 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Optional
 
-
 @dataclass
 class MentionThread:
     thread_target: str  # "platform:chat_id:thread_ts" — the reply/grant target

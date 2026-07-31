@@ -9,6 +9,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Optional
 
+import aisuite as ai
+
 from .agents import Agent, AgentContext, code_agent
 from .automation import scheduling_tools
 from .selfwake import selfwake_tools
@@ -31,6 +33,7 @@ from .providers import ProviderClient, ProviderRouter
 from .overrides import RiskOverrideStore
 from .secrets import SecretStore, state_dir
 from .skills import SkillLoader, skill_catalog_text, skill_tools
+from .assets import AssetStore
 from .tools import ToolRegistry
 from .tools.ask import ask_user_tool
 from .tools.directories import request_directory_tool
@@ -308,6 +311,52 @@ def build_engine(
     catalog = skill_catalog_text(skill_loader)
     if catalog:
         instructions = f"{instructions}\n\n{catalog}"
+
+    knowledge = AssetStore("knowledge")
+    playbooks = AssetStore("playbooks")
+    workspace_key = str(ws) if ws is not None else None
+    workspace_style = remote_target.style.name if remote_target is not None else None
+    always_notes = [
+        note.body
+        for note in knowledge.iter_matching(
+            workspace=workspace_key, path_style=workspace_style
+        )
+        if note.trigger == "always"
+    ]
+    if always_notes:
+        instructions = f"{instructions}\n\nKnowledge notes:\n\n" + "\n\n".join(always_notes)
+
+    def make_asset_loader(store: AssetStore, tool_name: str):
+        def load_asset(name: str) -> dict[str, Any]:
+            asset = store.get(name, workspace=workspace_key)
+            if asset is None or not asset.enabled:
+                return {"error": f"unknown {tool_name.removeprefix('load_')}: {name}"}
+            return {"name": asset.name, "description": asset.description, "body": asset.body}
+
+        load_asset.__name__ = tool_name
+        return load_asset
+
+    for store, tool_name in ((knowledge, "load_knowledge"), (playbooks, "load_playbook")):
+        load_asset = make_asset_loader(store, tool_name)
+        registry.register(
+            ai.tool(
+                load_asset,
+                metadata=ai.ToolMetadata(
+                    category="assets", risk_level="low", capabilities=[tool_name]
+                ),
+            )
+        )
+    for asset_catalog in (
+        knowledge.catalog_text(workspace=workspace_key, path_style=workspace_style),
+        playbooks.catalog_text(workspace=workspace_key, path_style=workspace_style),
+    ):
+        if asset_catalog:
+            instructions = f"{instructions}\n\n{asset_catalog}"
+    if list(playbooks.iter_matching(workspace=workspace_key)):
+        instructions = (
+            f"{instructions}\n\nExplicit playbook mentions use @playbook <name>; "
+            "resolve them by calling load_playbook before following the procedure."
+        )
 
     # User-local risk overrides (mainly to relax MCP's conservative default). Empty store →
     # no-op; never written by persona loading (the no-self-grant rule).

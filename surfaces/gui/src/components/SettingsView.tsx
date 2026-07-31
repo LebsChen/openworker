@@ -155,6 +155,7 @@ function RemoteHostsSection() {
   const [url, setUrl] = useState("");
   const [vncPassword, setVncPassword] = useState("");
   const [token, setToken] = useState("");
+  const [workspace, setWorkspace] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [probeState, setProbeState] = useState<Record<string, RemoteHostProbeResult>>({});
@@ -176,7 +177,7 @@ function RemoteHostsSection() {
   const save = async () => {
     setError(null);
     try {
-      await saveRvmHost(name, name, url, token, vncPassword);
+      await saveRvmHost(name, name, url, token, vncPassword, undefined, workspace || undefined);
       setToken("");
       setEditing(null);
       setSaved(true);
@@ -200,6 +201,9 @@ function RemoteHostsSection() {
     setTesting(hostName);
     try {
       const result = await testRvmHost(hostName);
+      if (result.status === "online" && result.workspace && !workspace.trim()) {
+        setWorkspace(result.workspace);
+      }
       if (result.status === "online") setLastSeen((current) => ({ ...current, [hostName]: Date.now() }));
       setProbeState((current) => ({ ...current, [hostName]: result }));
       setHostProbeResult(hostName, result);
@@ -272,6 +276,7 @@ function RemoteHostsSection() {
               setUrl(host.base_url || "");
               setToken("");
               setVncPassword("");
+              setWorkspace(host.workspace || "");
             }}>
               Edit
             </button>
@@ -288,6 +293,7 @@ function RemoteHostsSection() {
         <input className={INPUT} placeholder="http://192.168.1.100:9920 or https://xxx.trycloudflare.com" value={url} onChange={(e) => setUrl(e.target.value)} />
         <input className={INPUT} type="password" placeholder={t("settings.tokenShownWhenAgentJsStarts")} value={token} onChange={(e) => setToken(e.target.value)} />
         <input className={INPUT} type="password" placeholder={t("settings.leaveEmptyReuseToken")} value={vncPassword} onChange={(e) => setVncPassword(e.target.value)} />
+        <input className={INPUT} placeholder="Workspace (optional, e.g. C:\Users\Team)" value={workspace} onChange={(e) => setWorkspace(e.target.value)} />
         <button
           className={BTN_BORDERED}
           disabled={!name || !url || !token || testing === name}
@@ -296,6 +302,7 @@ function RemoteHostsSection() {
             setTesting(name);
             try {
               const result = await probeRvmHost(url, token);
+              if (result.status === "online" && result.workspace && !workspace.trim()) setWorkspace(result.workspace);
               setProbeState((current) => ({ ...current, [name]: result }));
               setHostProbeResult(name, result);
             } catch (error) {
@@ -320,7 +327,7 @@ function RemoteHostsSection() {
             {currentFormResult.error && ` · ${currentFormResult.error}`}
           </div>
         )}
-        <button className={BTN_ACCENT} disabled={!name || !url || !token} onClick={save}>{editing ? "Save" : "Add"}</button>
+        <button className={BTN_ACCENT} disabled={!name || !url || (!editing && !token)} onClick={save}>{editing ? "Save" : "Add"}</button>
         {editing && <button className={BTN_BORDERED} onClick={() => {
           setEditing(null); setName(""); setUrl(""); setToken(""); setVncPassword("");
         }}>{t("settings.cancel")}</button>}

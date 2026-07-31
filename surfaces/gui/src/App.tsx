@@ -70,7 +70,7 @@ import { Onboarding } from "./components/Onboarding";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { ScheduledView } from "./components/ScheduledView";
 import { RightRail } from "./components/RightRail";
-import { setHostProbeResult } from "./hostStatus";
+import { hostProbeResult, setHostProbeResult } from "./hostStatus";
 import { IntegrationsView } from "./components/IntegrationsView";
 import { SettingsView } from "./components/SettingsView";
 import { PersonaView } from "./components/PersonaView";
@@ -475,15 +475,32 @@ export function App() {
         const restoredHost =
           sessionHosts().find((host) => host.id === last.host_id) || sessionHosts()[0];
         if (restoredHost) {
+          let historyHost = restoredHost;
           activeSessionRef.current = last.session_id;
-          activeHostRef.current = restoredHost.id;
-          setSessionHost(restoredHost);
-          rememberSessionHost(last.session_id, restoredHost);
+          activeHostRef.current = historyHost.id;
+          setSessionHost(historyHost);
+          rememberSessionHost(last.session_id, historyHost);
           setSessionOffline(last.host_status === "offline");
+          if (!historyHost.local) {
+            setHostProbeResult(historyHost.id, { status: "checking", error: "Checking connection…" });
+            try {
+              const result = await testRvmHost(historyHost.id);
+              setHostProbeResult(historyHost.id, result);
+              historyHost = {
+                ...historyHost,
+                status: result.status === "checking" ? "unknown" : result.status,
+                offline: result.status === "offline" || result.status === "auth_failed",
+              };
+              setSessionHost(historyHost);
+              setSessionOffline(historyHost.offline || last.host_status === "offline");
+            } catch {
+              setSessionHistoryUnavailable(true);
+            }
+          }
           setSessionHistoryUnavailable(
-            !restoredHost.local &&
-              (Boolean(restoredHost.offline) ||
-                restoredHost.status !== "online" ||
+            !historyHost.local &&
+              (Boolean(historyHost.offline) ||
+                historyHost.status !== "online" ||
                 last.host_status === "offline"),
           );
         }
@@ -915,7 +932,7 @@ export function App() {
       }
     };
 
-    const session = new Session(sessionId, workspace || "", agent, {
+    const session = new Session(sessionId, sessionHost.local ? workspace || "" : "", agent, {
       onEvent: handleEvent,
       onOpen: () => {
         if (!isCurrent()) return;
@@ -1807,11 +1824,15 @@ export function App() {
                 })}
               </select>
             )}
-            {!sessionHost.local && (sessionHost.offline || sessionHost.status !== "online") && (
+            {!sessionHost.local && (() => {
+              const probe = hostProbeResult(sessionHost.id);
+              const status = sessionHost.offline ? "offline" : (probe?.status || sessionHost.status || "unknown");
+              return status !== "online" && (
               <div className="topbar-remote-status text-[11px] text-warnInk" role="status">
-                Remote host "{sessionHost.name}" is {sessionHost.status === "auth_failed" ? "authentication failed" : "offline or untested"}; this session will not fall back to Local.
+                Remote host "{sessionHost.name}" is {status === "auth_failed" ? "authentication failed" : "offline or untested"}; this session will not fall back to Local.
               </div>
-            )}
+              );
+            })()}
             <label className="flex items-center gap-1 text-[11px] text-muted" title={t("app.createSessionIsolatedWorkspace")}>
               <input
                 type="checkbox"
@@ -2028,7 +2049,7 @@ export function App() {
                 ) : !unattended && pendingDirReq?.kind === "dirreq" ? (
                   <DirectoryRequestCard item={pendingDirReq} onRespond={respondDirectory} />
                 ) : !unattended && pendingApproval?.kind === "approval" ? (
-                  <ApprovalCard item={pendingApproval} onApprove={approve} runTask={runContext} compact />
+                  <ApprovalCard item={pendingApproval} onApprove={approve} runTask={runContext} compact host={sessionHost} />
                 ) : !unattended && pendingQuestion?.kind === "question" ? (
                   // Live ask_user in an attended session — answer inline (reuses the Inbox card UI).
                   <InboxItemCard

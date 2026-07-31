@@ -296,8 +296,8 @@ function InfoPanel({
       <h3 className="right-panel-heading">{t("session.rail.info")}</h3>
       <div className="right-panel-host">
         <strong>{host.name}</strong>
-        <span className={"right-panel-status " + (host.local ? "online" : (probe?.status || host.status || "unknown"))}>
-          {host.local ? "online" : (probe?.status || host.status || "unknown").replace("_", " ")}
+        <span className={"right-panel-status " + (host.local ? "online" : (host.offline ? "offline" : (probe?.status || host.status || "unknown")))}>
+          {host.local ? "online" : (host.offline ? "offline" : (probe?.status || host.status || "unknown")).replace("_", " ")}
         </span>
       </div>
       {host.local ? (
@@ -766,7 +766,12 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function formatTime(epochSeconds: number): string {
-  if (!epochSeconds) return "";
+export function formatTime(value: number | string): string {
+  if (!value) return "";
+  const epochSeconds =
+    typeof value === "number"
+      ? value
+      : (Date.parse(value) / 1000);
+  if (!Number.isFinite(epochSeconds) || epochSeconds <= 0) return "";
   return new Date(epochSeconds * 1000).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }

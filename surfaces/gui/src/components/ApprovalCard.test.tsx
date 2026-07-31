@@ -83,6 +83,29 @@ describe("ApprovalCard — standing scoped approvals (§25)", () => {
 });
 
 describe("ApprovalCard — §35 shapes", () => {
+  it("names the bound remote host instead of the local Mac", () => {
+    render(
+      <ApprovalCard
+        item={sendApproval({
+          name: "write_file",
+          args: { path: "notes.txt", content: "draft" },
+          category: undefined,
+          standingTarget: "notes.txt",
+        })}
+        onApprove={vi.fn()}
+        runTask={RUN_TASK}
+        host={{
+          id: "winrvm",
+          name: "Antec",
+          base_url: "https://rvm",
+          ws_url: "wss://rvm",
+          token: "",
+          local: false,
+        }}
+      />,
+    );
+    expect(screen.getByText("stays on Antec")).toBeTruthy();
+  });
   it("routine file writes render as a compact row: humanized title, inline preview, Allow → once", () => {
     const onApprove = vi.fn();
     render(

@@ -192,7 +192,21 @@ def _probe_rvm(base_url: str, token: str) -> dict[str, Any]:
             return {"status": "offline", "latency_ms": round((time.monotonic() - started) * 1000), "error": str(exc), "capabilities": health.get("capabilities", [])}
         except Exception as exc:
             return {"status": "offline", "latency_ms": round((time.monotonic() - started) * 1000), "error": str(exc), "capabilities": health.get("capabilities", [])}
-        return {"status": "online", "latency_ms": round((time.monotonic() - started) * 1000), "capabilities": health.get("capabilities", []), "platform": health.get("platform"), "workspace": health.get("workspace"), "info": info}
+        workspace = health.get("workspace")
+        return {
+            "status": "online",
+            "latency_ms": round((time.monotonic() - started) * 1000),
+            "capabilities": health.get("capabilities", []),
+            "platform": health.get("platform"),
+            "workspace": workspace,
+            "health": health,
+            "info": info,
+            "error": (
+                None
+                if workspace
+                else "Connected, but the RVM reported no workspace; enter one manually in the Workspace field."
+            ),
+        }
     except RvmUnauthorizedError as exc:
         return {"status": "auth_failed", "latency_ms": round((time.monotonic() - started) * 1000), "error": str(exc)}
     except (RvmUnreachableError, RvmTimeoutError) as exc:
@@ -594,6 +608,79 @@ def create_app(manager: SessionManager) -> FastAPI:
     @app.get("/v1/skills")
     def skills() -> dict[str, Any]:
         return {"skills": manager.list_skills()}
+
+    @app.get("/v1/agents-md")
+    def agents_md() -> dict[str, Any]:
+        return manager.get_agents_md()
+
+    @app.put("/v1/agents-md")
+    def agents_md_save(body: dict) -> dict[str, Any]:
+        return manager.save_agents_md(str((body or {}).get("body", "")))
+
+    @app.put("/v1/skills/{name}")
+    def skill_save(name: str, body: dict) -> dict[str, Any]:
+        try:
+            return manager.save_skill(
+                name,
+                str((body or {}).get("body", "")),
+                bool((body or {}).get("enabled", True)),
+                str((body or {}).get("description", "")),
+            )
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
+
+    @app.delete("/v1/skills/{name}")
+    def skill_delete(name: str) -> dict[str, Any]:
+        return manager.delete_skill(name)
+
+    @app.get("/v1/assets/{kind}")
+    def assets(kind: str, workspace: str | None = None) -> dict[str, Any]:
+        if kind not in {"knowledge", "playbooks"}:
+            return {"ok": False, "error": "unknown asset kind"}
+        return {"assets": manager.list_assets(kind, workspace=workspace)}
+
+    @app.get("/v1/assets/{kind}/{name}")
+    def asset_detail(kind: str, name: str, workspace: str | None = None) -> dict[str, Any]:
+        if kind not in {"knowledge", "playbooks"}:
+            return {"ok": False, "error": "unknown asset kind"}
+        item = manager.get_asset(kind, name, workspace=workspace)
+        return item or {"ok": False, "error": "asset not found"}
+
+    @app.post("/v1/assets/{kind}")
+    def asset_create(kind: str, body: dict) -> dict[str, Any]:
+        if kind not in {"knowledge", "playbooks"}:
+            return {"ok": False, "error": "unknown asset kind"}
+        try:
+            return manager.save_asset(kind, body or {})
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
+
+    @app.patch("/v1/assets/{kind}/{name}")
+    def asset_update(kind: str, name: str, body: dict) -> dict[str, Any]:
+        if kind not in {"knowledge", "playbooks"}:
+            return {"ok": False, "error": "unknown asset kind"}
+        try:
+            return manager.save_asset(kind, body or {}, existing=name)
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
+
+    @app.delete("/v1/assets/{kind}/{name}")
+    def asset_delete(kind: str, name: str) -> dict[str, Any]:
+        if kind not in {"knowledge", "playbooks"}:
+            return {"ok": False, "error": "unknown asset kind"}
+        return manager.delete_asset(kind, name)
+
+    @app.get("/v1/secrets")
+    def secrets() -> dict[str, Any]:
+        return {"secrets": manager.list_secrets()}
+
+    @app.put("/v1/secrets/{profile}")
+    def secret_save(profile: str, body: dict) -> dict[str, Any]:
+        return manager.save_secret(profile, body or {})
+
+    @app.delete("/v1/secrets/{profile}")
+    def secret_delete(profile: str) -> dict[str, Any]:
+        return manager.delete_secret(profile)
 
     @app.get("/v1/workspaces/recent")
     def recent_workspaces() -> dict[str, Any]:
@@ -1857,6 +1944,7 @@ def create_app(manager: SessionManager) -> FastAPI:
             # The receive loop atomically claims this session before scheduling the task.
             # Keeping the claim outside prevents two back-to-back frames from both starting.
             try:
+                manager.ensure_remote_available(session_id)
                 events = engine.retry() if retry else engine.run(content)
                 async for event in events:
                     # Broadcast to every socket viewing this session (this socket included — it's a
@@ -1866,6 +1954,16 @@ def create_app(manager: SessionManager) -> FastAPI:
                     )
                     if event.type.value in _CHECKPOINTS:
                         manager.save(session_id, engine)
+            except (
+                UnknownRvmHostError,
+                RvmHostOfflineError,
+                RvmHostUnauthorizedError,
+                ValueError,
+            ) as exc:
+                await manager.broadcast_session(
+                    session_id,
+                    {"type": "error", "data": {"error": str(exc)}},
+                )
             finally:
                 manager.mark_idle(session_id)
                 manager.save(session_id, engine)
@@ -2264,7 +2362,22 @@ def create_app(manager: SessionManager) -> FastAPI:
             return JSONResponse({"status": "offline", "error": "host not found"}, status_code=404)
         if host.offline:
             return {"status": "offline", "error": "host is marked offline"}
-        return _probe_rvm(host.base_url, manager.rvm_hosts.token(host_id) or "")
+        result = _probe_rvm(host.base_url, manager.rvm_hosts.token(host_id) or "")
+        workspace = result.get("workspace")
+        if result.get("status") == "online" and workspace and not host.workspace:
+            from ..remote.hosts import RvmHost
+
+            manager.rvm_hosts.put(
+                RvmHost(
+                    id=host.id,
+                    name=host.name,
+                    base_url=host.base_url,
+                    platform=host.platform or result.get("platform"),
+                    workspace=str(workspace),
+                    offline=host.offline,
+                )
+            )
+        return result
 
     @app.post("/v1/rvm/hosts/test")
     def rvm_host_probe(body: dict[str, Any]) -> dict[str, Any]:

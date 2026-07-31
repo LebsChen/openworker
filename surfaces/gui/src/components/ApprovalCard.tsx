@@ -2,6 +2,8 @@ import { useState } from "react";
 import type { ApprovalDecision, Item } from "../types";
 import { humanizeApprovalTitle, type HumanLine } from "../humanize";
 import { Icon } from "./Icon";
+import type { SessionHost } from "../api";
+import { t, useT } from "../i18n";
 
 export function shortArgs(args: any): string {
   if (!args || typeof args !== "object") return "";
@@ -64,6 +66,7 @@ export function scopeNote(
   name: string,
   args: any,
   category?: string,
+  host?: SessionHost,
 ): { text: string; external: boolean } {
   if (category === "connector") return { text: "acts on a connected service", external: true };
   if (EXTERNAL.has(name)) {
@@ -72,7 +75,8 @@ export function scopeNote(
     return { text: `leaves this Mac → ${names[platform] || platform || "a connected chat"}`, external: true };
   }
   const overwrite = name === "write_file" && args?.overwrite;
-  return { text: "stays on this Mac" + (overwrite ? " · overwrites the existing file" : ""), external: false };
+  const location = host && !host.local ? `stays on ${host.name}` : "stays on this Mac";
+  return { text: location + (overwrite ? " · overwrites the existing file" : ""), external: false };
 }
 
 // The proposed content/command, straight from the tool call's ARGS — the file/action
@@ -179,6 +183,7 @@ export function ApprovalCard({
   onApprove,
   runTask,
   compact = false,
+  host,
 }: {
   item: ApprovalItem;
   onApprove: (decision: ApprovalDecision) => void;
@@ -186,10 +191,16 @@ export function ApprovalCard({
   // task-persistent "Allow every time" (in-app only, §25).
   runTask?: { id: string; title: string } | null;
   compact?: boolean;
+  host?: SessionHost;
 }) {
+  useT();
   const [peek, setPeek] = useState(false);
   const title = humanizeApprovalTitle(item.name, item.args);
-  const scope = scopeNote(item.name, item.args, item.category);
+  const rawScope = scopeNote(item.name, item.args, item.category, host);
+  const scope =
+    host && !host.local && !rawScope.external
+      ? { ...rawScope, text: t("approval.staysOnRemoteHost", { host: host.name }) }
+      : rawScope;
   const grants = item.name === "create_scheduled_task" ? permissionLines(item.args) : [];
   // "requires approval" is the engine's default boilerplate — only surface a real reason.
   const reason = item.reason && item.reason !== "requires approval" ? item.reason : "";

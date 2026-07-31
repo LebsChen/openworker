@@ -22,6 +22,13 @@ describe("Markdown artifact links", () => {
     window.removeEventListener(OPEN_ARTIFACT_EVENT, listener);
   });
 
+  it("decodes encoded Windows separators for display and events", () => {
+    render(<Markdown text={"[report](artifact:C:%5CUsers%5CTeam%5Creport.txt)"} />);
+    expect(screen.getByTestId("artifact-chip").getAttribute("title")).toBe(
+      "C:\\Users\\Team\\report.txt",
+    );
+  });
+
   it("ordinary links stay external and never become chips", () => {
     const { container } = render(<Markdown text="see [the docs](https://example.com)" />);
     expect(screen.queryByTestId("artifact-chip")).toBeNull();
