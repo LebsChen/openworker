@@ -249,7 +249,7 @@ describe("New-session split button", () => {
     expect(baseProps.onManagePersonas).toHaveBeenCalled();
   });
 
-  it("shows Manage personas… by default", async () => {
+  it("hides Manage personas… until the launch flag is enabled", async () => {
     localStorage.removeItem("ocw.flag.personas");
     stubFetch([
       { match: "/v1/personas", method: "GET", json: PERSONAS },
@@ -260,6 +260,6 @@ describe("New-session split button", () => {
     fireEvent.click(screen.getByLabelText("Choose a persona"));
     const menu = (await screen.findByText("Start a session as")).closest(".newsplit-menu") as HTMLElement;
     expect(within(menu).getByText("Ops")).toBeTruthy();
-    expect(within(menu).getByText("Manage personas…")).toBeTruthy();
+    expect(within(menu).queryByText("Manage personas…")).toBeNull();
   });
 });

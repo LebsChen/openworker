@@ -571,7 +571,7 @@ export function Sidebar(props: Props) {
               {s.host_status === "offline" && (
                 <span className="text-[10px] text-red-500 shrink-0">offline</span>
               )}
-              {s.host_id && (
+              {s.host_id && s.host_id !== "local" && (
                 <span className="text-[10px] text-muted shrink-0">{s.host_id}</span>
               )}
               {s.workspace_isolated && (
@@ -648,7 +648,7 @@ export function Sidebar(props: Props) {
             <span className="min-w-0 flex-1 block truncate text-[13px] font-medium">
               {title}
             </span>
-            {s.host_id && (
+            {s.host_id && s.host_id !== "local" && (
               <span className="text-[10px] text-muted shrink-0">{s.host_id}</span>
             )}
             {s.workspace_isolated && (

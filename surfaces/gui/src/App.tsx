@@ -702,9 +702,7 @@ export function App() {
   useEffect(() => {
     if (booting) return; // wait until boot/resume settles the session before connecting
     if (gatesWorkspace(agent) && !workspace) return; // Code needs a folder (gate handles it)
-    const sessionGeneration = sessionLoadRef.current;
     const isCurrent = () =>
-      sessionGeneration === sessionLoadRef.current &&
       isCurrentSessionBinding(sessionId, sessionHost.id, activeSessionRef.current, activeHostRef.current);
     if (!isCurrent()) return;
     const handleEvent = (ev: WsEvent) => {

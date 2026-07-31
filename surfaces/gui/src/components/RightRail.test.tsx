@@ -15,8 +15,9 @@ describe("right panel tab model", () => {
     expect(isRvmPanelTab("changes")).toBe(false);
   });
 
-  it("uses a vertical icon rail that toggles without unmounting panes", () => {
+  it("uses a vertical icon rail and mounts only the selected local pane", () => {
     const host = { id: "local", name: "Local", base_url: "http://local", ws_url: "ws://local", token: "", local: true };
+    const transcriptText = "assistant text belongs in the transcript";
     render(
       <RightRail
         active
@@ -25,17 +26,19 @@ describe("right panel tab model", () => {
         refreshKey={0}
         toolNames={[]}
         todo={[]}
-        items={[]}
+        items={[{ kind: "assistant", text: transcriptText }]}
         running={false}
         showArtifacts={false}
       />,
     );
     const info = screen.getByRole("button", { name: "Info" });
     const worklog = screen.getByRole("button", { name: "Worklog" });
-    expect(screen.getAllByText("Worklog").length).toBeGreaterThan(0);
+    expect(worklog).toBeTruthy();
+    expect(screen.queryAllByText(transcriptText)).toHaveLength(0);
     fireEvent.click(info);
     fireEvent.click(worklog);
-    expect(screen.getAllByText("Worklog").length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "Worklog" })).toBeTruthy();
+    expect(screen.getAllByText(transcriptText)).toHaveLength(1);
     expect((screen.getByRole("button", { name: "Shell" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Web IDE" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Browser/Desktop" }) as HTMLButtonElement).disabled).toBe(true);
