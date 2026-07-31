@@ -276,7 +276,6 @@
   "session.rail.workspaceClean": "工作区干净",
   "session.rail.noWorkspaceChanges": "暂无工作区更改。",
   "session.rail.workspaceOffline": "工作区 Git 状态离线。",
-  "session.rail.rvmRequiredForPanel": "需要 RVM 主机。此会话绑定到本地。",
   "settings.4CpuCoresRecommended": "建议 4 核 CPU",
   "settings.8GbRecommended": "建议 8 GB 内存",
   "settings.always": "始终运行",

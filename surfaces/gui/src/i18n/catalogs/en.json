@@ -276,7 +276,6 @@
   "session.rail.workspaceClean": "Clean",
   "session.rail.noWorkspaceChanges": "No workspace changes.",
   "session.rail.workspaceOffline": "Workspace Git state is offline.",
-  "session.rail.rvmRequiredForPanel": "Requires an RVM host. This session is bound to Local.",
   "settings.4CpuCoresRecommended": "4 CPU cores recommended",
   "settings.8GbRecommended": "8 GB recommended",
   "settings.always": "Always-on",
