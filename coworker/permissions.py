@@ -32,6 +32,7 @@ from .risk import (  # re-exported for back-compat (manager.py imports WRITE_TOO
     classify,
     is_consequential,
 )
+from .remote.paths import RemotePathStyle
 
 
 class Mode(str, Enum):
@@ -82,7 +83,7 @@ def standing_rule_candidate(
 
 @dataclass
 class PermissionEngine:
-    workspace_root: Path
+    workspace_root: Any
     mode: Mode = Mode.INTERACTIVE
     allowed_commands: list[str] = field(default_factory=list)
     auto_allow_tools: set[str] = field(default_factory=set)
@@ -98,15 +99,19 @@ class PermissionEngine:
     # `workspace_root` is the sole writable root (back-compat). Kept by reference and re-read on
     # every check, so runtime add/remove of folders takes effect without rebuilding the engine.
     roots: Optional[list] = None
+    path_style: Optional[RemotePathStyle] = None
 
     def __post_init__(self) -> None:
-        self.workspace_root = Path(self.workspace_root).expanduser().resolve()
+        if self.path_style:
+            self.workspace_root = self.path_style.normalize(str(self.workspace_root))
+        else:
+            self.workspace_root = Path(self.workspace_root).expanduser().resolve()
         self.auto_allow_tools = set(self.auto_allow_tools)
         if self.roots is None:
             self.roots = [{"path": self.workspace_root, "writable": True}]
 
-    def _resolved_roots(self) -> list[tuple[Path, bool]]:
-        out: list[tuple[Path, bool]] = []
+    def _resolved_roots(self) -> list[tuple[Any, bool]]:
+        out: list[tuple[Any, bool]] = []
         for r in self.roots or []:
             if isinstance(r, dict):
                 p, w = r["path"], bool(r.get("writable", False))
@@ -114,7 +119,11 @@ class PermissionEngine:
                 p, w = r, True
             else:  # duck-typed RootDir-like
                 p, w = getattr(r, "path"), bool(getattr(r, "writable", False))
-            out.append((Path(p).expanduser().resolve(), w))
+            out.append((
+                self.path_style.normalize(str(p))
+                if self.path_style else Path(p).expanduser().resolve(),
+                w,
+            ))
         return out
 
     def evaluate(
@@ -186,19 +195,28 @@ class PermissionEngine:
             self.session_allow_commands.add(command)
 
     # -- helpers ----------------------------------------------------------------
-    def _candidate(self, path: str) -> Path:
+    def _candidate(self, path: str) -> Any:
         # Relative paths resolve against the primary (workspace_root); absolute/`~` taken as-is.
+        if self.path_style:
+            return self.path_style.normalize(
+                path if self.path_style.is_absolute(path)
+                else self.path_style.join(str(self.workspace_root), path)
+            )
         p = Path(path).expanduser()
         return p.resolve() if p.is_absolute() else (self.workspace_root / p).resolve()
 
     def _under_root(self, path: str) -> bool:
         candidate = self._candidate(path)
         for rp, _ in self._resolved_roots():
-            try:
-                candidate.relative_to(rp)
-                return True
-            except ValueError:
-                continue
+            if self.path_style:
+                if self.path_style.is_under(str(rp), str(candidate)):
+                    return True
+            else:
+                try:
+                    candidate.relative_to(rp)
+                    return True
+                except ValueError:
+                    continue
         return False
 
     def _under_writable_root(self, path: str) -> bool:
@@ -206,11 +224,15 @@ class PermissionEngine:
         for rp, writable in self._resolved_roots():
             if not writable:
                 continue
-            try:
-                candidate.relative_to(rp)
-                return True
-            except ValueError:
-                continue
+            if self.path_style:
+                if self.path_style.is_under(str(rp), str(candidate)):
+                    return True
+            else:
+                try:
+                    candidate.relative_to(rp)
+                    return True
+                except ValueError:
+                    continue
         return False
 
     def _command_allowed(self, command: str) -> bool:
