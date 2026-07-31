@@ -39,3 +39,29 @@ it("does not render an iframe for local sessions", () => {
   expect(screen.queryByTitle("Web IDE")).toBeNull();
   expect(screen.getByText(/Requires an RVM host/)).toBeTruthy();
 });
+
+it("shows the server error and offers retry when bootstrap fails", async () => {
+  vi.stubGlobal("__COWORKER_HTTP__", "http://127.0.0.1:8765");
+  const host = {
+    id: "rvm-a",
+    name: "Windows",
+    base_url: "http://ignored",
+    ws_url: "ws://ignored",
+    token: "",
+    local: false,
+  };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => ({
+      ok: false,
+      status: 503,
+      json: async () => ({ error: "RVM host is offline" }),
+    })) as unknown as typeof fetch,
+  );
+
+  render(<RemoteIdePanel active sessionId="session-1" host={host} />);
+
+  expect((await screen.findByRole("alert")).textContent).toContain("RVM host is offline");
+  expect(screen.getByText("Connection error")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
+});
