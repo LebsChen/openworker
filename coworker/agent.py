@@ -348,6 +348,11 @@ def build_engine(
     ):
         if asset_catalog:
             instructions = f"{instructions}\n\n{asset_catalog}"
+    if list(playbooks.iter_matching(workspace=workspace_key)):
+        instructions = (
+            f"{instructions}\n\nExplicit playbook mentions use @playbook <name>; "
+            "resolve them by calling load_playbook before following the procedure."
+        )
 
     # User-local risk overrides (mainly to relax MCP's conservative default). Empty store →
     # no-op; never written by persona loading (the no-self-grant rule).
