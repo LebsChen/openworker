@@ -23,7 +23,7 @@ import {
 // those modes keeps working; the picker just doesn't offer them.
 const PERMISSION_OPTIONS: Option[] = [
   { value: "discuss", label: "Discuss", description: "Chat and explore — no edits or commands" },
-  { value: "interactive", label: "Ask for approval", description: "Ask before edits and commands" },
+  { value: "interactive", label: t("composer.askApproval"), description: "Ask before edits and commands" },
   { value: "auto", label: "Full access", description: "Run everything without asking" },
 ];
 
@@ -398,7 +398,7 @@ export function Composer(props: Props) {
         <textarea
           ref={textareaRef}
           className="w-full block px-3.5 pt-3.5 pb-1.5 text-[14.5px]"
-          placeholder={props.placeholder || "Ask the coworker…  (drop or paste files)"}
+          placeholder={props.placeholder || t("composer.askCoworker")}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKey}

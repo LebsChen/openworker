@@ -866,7 +866,14 @@ export function App() {
           setItems((p) => [...p, { kind: "notice", tone: "info", text: d.text || "Model switched" }]);
           break;
         case "persona_changed":
-          if (d.persona) setAgent(d.persona);
+          if (d.persona) {
+            setAgent(d.persona);
+            setSessions((current) =>
+              current.map((session) =>
+                session.session_id === sessionId ? { ...session, agent: d.persona } : session,
+              ),
+            );
+          }
           setItems((p) => [
             ...p,
             { kind: "notice", tone: "info", text: d.text || "Persona switched" },
@@ -942,7 +949,7 @@ export function App() {
     // first connect, dropping the user's first message (the "send twice" bug). The scratch
     // dir is deterministic from `sessionId` server-side, so skipping that reconnect is safe.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [booting, sessionId, agent, sessionHost.id, refreshSessions]);
+  }, [booting, sessionId, sessionHost.id, refreshSessions]);
 
   // Stream-following (FB-004): auto-scroll only while the user is AT the bottom, so scrolling
   // up to read during a streaming turn sticks. `atBottomRef` is the live truth (per scroll
@@ -1483,7 +1490,7 @@ export function App() {
   const subtitleParts = [modelDisplay];
   if (isProjectScoped(personaOf(agent)) && workspace) subtitleParts.push(baseName(workspace));
   const activeInfo = sessions.find((s) => s.session_id === sessionId);
-  const activeTitle = activeInfo?.title || selectedSessionTitle || "New session";
+  const activeTitle = activeInfo?.title || selectedSessionTitle || t("app.newSession");
 
   const desktop = isTauri();
   // Dev-only: `?overlay=1` simulates the desktop overlay layout in the browser (adds the
@@ -1788,7 +1795,7 @@ export function App() {
                 disabled={running}
                 onChange={(e) => changePersona(e.target.value)}
                 className="text-[12px] bg-transparent border border-line rounded px-1.5 py-1 text-muted"
-                title={running ? "Persona switching is unavailable while a turn is running" : "Switch persona for this live session"}
+                title={running ? t("app.personaSwitchUnavailable") : t("app.switchPersona")}
               >
                 {personas.map((persona) => {
                   const compatible = persona.needs_workspace === needsWorkspace(agent);
@@ -1838,8 +1845,8 @@ export function App() {
                 className="topbar-icon-btn"
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={() => setRailHidden((h) => !h)}
-                aria-label={railHidden ? "Show side panel" : "Hide side panel"}
-                title={railHidden ? "Show side panel" : "Hide side panel"}
+                aria-label={railHidden ? t("app.showSidePanel") : t("app.hideSidePanel")}
+                title={railHidden ? t("app.showSidePanel") : t("app.hideSidePanel")}
               >
                 <Icon name="sidebarRight" size={16} />
               </button>
@@ -2014,10 +2021,10 @@ export function App() {
               contextWindow={modelContextWindows[model]}
               placeholder={
                 agent === "code"
-                  ? "Ask the coder to build, fix, or explain…  (drop or paste files)"
+                  ? t("app.askCoder")
                   : agent === "chat"
-                    ? "Ask anything…  (drop or paste files)"
-                    : "Ask the coworker…  (drop or paste files)"
+                    ? t("app.askAnything")
+                    : t("composer.askCoworker")
               }
               approvalSlot={
                 // Live inline cards are for ATTENDED sessions only; when Unattended the prompt is

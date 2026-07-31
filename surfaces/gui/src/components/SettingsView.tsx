@@ -72,12 +72,12 @@ const BTN_ACCENT = "text-[12.5px] px-3 py-2 rounded-lg bg-accent text-white shri
 const BTN_BORDERED =
   "text-[12.5px] px-3 py-2 rounded-lg border border-line bg-paper hover:border-lineStrong shrink-0";
 
-const SET_TABS: { key: SetTab; label: string; icon: "sliders" | "code" | "mic" | "sparkle" }[] = [
-  { key: "appearance", label: "General", icon: "sliders" },
-  { key: "models", label: "Models", icon: "code" },
-  { key: "voice", label: "Voice input", icon: "mic" },
-  { key: "remote", label: "Remote host", icon: "sliders" },
-  { key: "personas", label: "Personas", icon: "sparkle" },
+const SET_TABS: { key: SetTab; labelKey: string; icon: "sliders" | "code" | "mic" | "sparkle" }[] = [
+  { key: "appearance", labelKey: "settings.generalTab", icon: "sliders" },
+  { key: "models", labelKey: "settings.modelsTab", icon: "code" },
+  { key: "voice", labelKey: "settings.voiceInputTab", icon: "mic" },
+  { key: "remote", labelKey: "settings.remoteHostTab", icon: "sliders" },
+  { key: "personas", labelKey: "settings.personasTab", icon: "sparkle" },
 ];
 
 export function SettingsView({
@@ -100,20 +100,20 @@ export function SettingsView({
     <main className="flex-1 min-w-0 flex bg-paper">
       <nav className="page-subnav w-[208px] shrink-0 border-r border-line bg-panel/40 px-3 py-4">
         <div className="px-2 text-[13.5px] font-semibold mb-3 flex items-center gap-2">
-          <Icon name="gear" size={16} /> Settings
+          <Icon name="gear" size={16} /> {t("settings.settings")}
         </div>
-        {tabs.map((t) => {
-          const active = tab === t.key;
+        {tabs.map((entry) => {
+          const active = tab === entry.key;
           return (
             <button
-              key={t.key}
+              key={entry.key}
               className={
                 "w-full text-left px-2.5 py-2 rounded-lg text-[13px] flex items-center gap-2 " +
                 (active ? "bg-paper text-accent font-medium" : "text-muted hover:bg-paper hover:text-ink")
               }
-              onClick={() => setTab(t.key)}
+              onClick={() => setTab(entry.key)}
             >
-              <Icon name={t.icon} size={15} /> {t.label}
+              <Icon name={entry.icon} size={15} /> {t(entry.labelKey)}
             </button>
           );
         })}
@@ -614,11 +614,11 @@ function AppearanceSection() {
       <PanelHead title={t("settings.general")} sub="How OpenWorker looks and behaves on this machine." />
 
       <div className={CARD + " p-4 mb-4"}>
-        <div className={FIELD_LABEL}>Theme</div>
+        <div className={FIELD_LABEL}>{t("settings.theme")}</div>
         <div className="seg mt-2.5" role="radiogroup" aria-label={t("settings.appearance")}>
           {(["light", "dark", "auto"] as const).map((p) => (
             <button key={p} className={p === theme ? "active" : ""} onClick={() => setTheme(p)}>
-              {p === "light" ? "Light" : p === "dark" ? "Dark" : "Auto"}
+              {p === "light" ? t("settings.light") : p === "dark" ? t("settings.dark") : t("settings.auto")}
             </button>
           ))}
         </div>
@@ -626,7 +626,7 @@ function AppearanceSection() {
       </div>
 
       <div className={CARD + " p-4 mb-4"}>
-        <div className={FIELD_LABEL}>Language</div>
+        <div className={FIELD_LABEL}>{t("settings.languageLabel")}</div>
         <select
           className={INPUT + " mt-2.5"}
           value={locale}
@@ -672,7 +672,7 @@ function AppearanceSection() {
         <div className={FIELD_LABEL + " mb-2"}>{t("settings.setupUpdates")}</div>
         <div className="flex items-center gap-2">
           <button className={BTN_BORDERED} onClick={runSetupAgain}>
-            Run setup again
+            {t("settings.runSetupAgain")}
           </button>
           {desktop && <UpdateInline />}
         </div>
@@ -778,7 +778,7 @@ function UpdateInline() {
           disabled={state === "checking" || state === "installing"}
           data-testid="settings-update-check"
         >
-          {state === "checking" ? "Checking…" : "Check for updates"}
+          {state === "checking" ? t("settings.checkingForUpdates") : t("settings.checkForUpdates")}
         </button>
       )}
       {(state === "none" || state === "error" || state === "installing") && (
@@ -1021,7 +1021,7 @@ function SidebarCard() {
   if (peek === null) return null;
   return (
     <div className={CARD + " p-4 mb-4"}>
-      <div className={FIELD_LABEL}>Sidebar</div>
+      <div className={FIELD_LABEL}>{t("settings.sidebarLabel")}</div>
       <label className="flex items-center gap-3 mt-2.5">
         <span className="text-[13px] text-ink">{t("settings.conversationsShownPerCoworker")}</span>
         <input
@@ -1092,11 +1092,11 @@ function FilesCard() {
           />
           {desktop && (
             <button className={BTN_BORDERED} onClick={browseScratch} title={t("settings.pickFolder")}>
-              Browse
+              {t("settings.browse")}
             </button>
           )}
           <button className={BTN_ACCENT} onClick={saveScratch} disabled={!scratchDraft.trim()}>
-            Save
+            {t("settings.save")}
           </button>
         </div>
       <div className={FIELD_HELP}>

@@ -83,6 +83,20 @@ describe("itemsFromMessages model switch", () => {
   });
 });
 
+describe("itemsFromMessages persona switch", () => {
+  it("replays the persisted persona_switch marker as an info notice", () => {
+    const items = itemsFromMessages([
+      { role: "user", content: "hi" },
+      { role: "notice", kind: "persona_switch", text: "Persona switched to Code" },
+    ] as any);
+    expect(items[1]).toEqual({
+      kind: "notice",
+      tone: "info",
+      text: "Persona switched to Code",
+    });
+  });
+});
+
 describe("itemsFromMessages compaction", () => {
   it("replays the persisted compacted marker as an info notice (the divider)", () => {
     const items = itemsFromMessages([

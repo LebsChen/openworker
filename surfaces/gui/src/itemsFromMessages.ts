@@ -64,7 +64,7 @@ export function itemsFromMessages(messages: ConversationMessage[]): Item[] {
         });
       }
     } else if (m.role === "notice") {
-      // Persisted markers (engine `_append_notice`): error/interrupted/model-switch survive
+      // Persisted markers (engine `_append_notice`): error/interrupted/model/persona-switch survive
       // reload exactly like the live view rendered them. An error notice is retriable —
       // the Transcript only offers the button when it's the transcript tail.
       items.push(
@@ -72,6 +72,8 @@ export function itemsFromMessages(messages: ConversationMessage[]): Item[] {
           ? { kind: "notice", tone: "warn", text: "Interrupted." }
           : m.kind === "model_switch"
             ? { kind: "notice", tone: "info", text: m.text || "Model switched" }
+            : m.kind === "persona_switch"
+              ? { kind: "notice", tone: "info", text: m.text || "Persona switched" }
             : m.kind === "compacted"
               ? // The subtle "compacted here" divider (OPE-27) — the transcript itself is intact.
                 { kind: "notice", tone: "info", text: m.text || "Context compacted" }

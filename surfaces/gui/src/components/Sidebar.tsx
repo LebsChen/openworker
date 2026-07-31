@@ -727,7 +727,7 @@ export function Sidebar(props: Props) {
     return (
     <div className="relative flex items-center justify-between px-1.5 mb-1" data-testid="recent-header">
       <span className="text-[10.5px] uppercase tracking-[0.07em] text-faint font-semibold">
-        Recent
+        {t("sidebar.recent")}
       </span>
       <button
         className="w-6 h-6 grid place-items-center rounded-md text-faint hover:text-ink hover:bg-paper -mr-1"
@@ -1040,7 +1040,7 @@ export function Sidebar(props: Props) {
           className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] text-left text-muted hover:bg-paper hover:text-ink"
           onClick={() => setSearchModalOpen(true)}
         >
-          <Icon name="search" size={15} className="shrink-0" /> Search
+          <Icon name="search" size={15} className="shrink-0" /> {t("sidebar.search")}
         </button>
       </div>
 
@@ -1336,7 +1336,7 @@ function NewSessionSplit({
           }
           onClick={() => onNew(solo && enabled.length === 1 ? enabled[0].id : current)}
         >
-          <Icon name="plus" size={15} className="shrink-0" /> New session
+          <Icon name="plus" size={15} className="shrink-0" /> {t("sidebar.newSession")}
         </button>
         {!solo && (
           <button

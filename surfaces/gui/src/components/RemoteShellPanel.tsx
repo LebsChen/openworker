@@ -16,7 +16,7 @@ export function RemoteShellPanel({ active, sessionId, host }: Props) {
   const holder = useRef<HTMLDivElement | null>(null);
   const terminal = useRef<TerminalInstance | null>(null);
   const socket = useRef<WebSocket | null>(null);
-  const [status, setStatus] = useState("Disconnected");
+  const [status, setStatus] = useState(() => t("shell.disconnected"));
   const [generation, setGeneration] = useState(0);
 
   useEffect(() => {
@@ -52,10 +52,10 @@ export function RemoteShellPanel({ active, sessionId, host }: Props) {
       observer.observe(holder.current);
       ws = openRvmPty(sessionId, instance.cols || 80, instance.rows || 24);
       socket.current = ws;
-      setStatus("Connecting…");
+      setStatus(t("shell.connecting"));
       ws.binaryType = "arraybuffer";
       ws.onopen = () => {
-        setStatus("Connected");
+        setStatus(t("shell.connected"));
         resize();
         instance?.focus();
       };
@@ -66,9 +66,9 @@ export function RemoteShellPanel({ active, sessionId, host }: Props) {
           event.data.arrayBuffer().then((bytes) => instance?.write(new Uint8Array(bytes)));
         }
       };
-      ws.onerror = () => setStatus("Disconnected");
+      ws.onerror = () => setStatus(t("shell.disconnected"));
       ws.onclose = () => {
-        setStatus("Disconnected");
+        setStatus(t("shell.disconnected"));
         socket.current = null;
       };
       input = instance.onData((data) => {
@@ -101,7 +101,7 @@ export function RemoteShellPanel({ active, sessionId, host }: Props) {
       <div className="remote-shell-toolbar">
         <span>{status}</span>
         <button type="button" onClick={() => setGeneration((value) => value + 1)}>
-          Start a new shell
+          {t("shell.startNew")}
         </button>
       </div>
       <div ref={holder} className="remote-shell-terminal" onClick={() => terminal.current?.focus()} />
