@@ -207,6 +207,15 @@ const fetch = (
   return globalThis.fetch(input, { ...init, headers });
 };
 
+const request = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
+  const res = await fetch(`${httpBase()}${path}`, init);
+  const data = await res.json();
+  if (!res.ok || data?.ok === false) {
+    throw new Error(data?.error || `request failed: ${res.status}`);
+  }
+  return data as T;
+};
+
 const openWebSocket = (url: string): WebSocket => {
   const token = apiToken();
   return token
@@ -848,6 +857,59 @@ export interface ConnectorTool {
 export async function getConnectors(): Promise<Connector[]> {
   const res = await fetch(`${httpBase()}/v1/connectors`);
   return (await res.json()).connectors ?? [];
+}
+
+export interface Asset {
+  name: string;
+  description: string;
+  body?: string;
+  enabled: boolean;
+  scope: "global" | "project";
+  project?: string;
+  trigger?: string;
+}
+
+export async function getAssets(kind: "knowledge" | "playbooks"): Promise<Asset[]> {
+  const data = await request<{ assets: Asset[] }>(`/v1/assets/${kind}`);
+  return data.assets || [];
+}
+
+export async function createAsset(kind: "knowledge" | "playbooks", asset: Partial<Asset>) {
+  return request<Asset>(`/v1/assets/${kind}`, { method: "POST", body: JSON.stringify(asset) });
+}
+
+export async function updateAsset(kind: "knowledge" | "playbooks", name: string, asset: Partial<Asset>) {
+  return request<Asset>(`/v1/assets/${kind}/${encodeURIComponent(name)}`, {
+    method: "PATCH",
+    body: JSON.stringify(asset),
+  });
+}
+
+export async function deleteAsset(kind: "knowledge" | "playbooks", name: string) {
+  return request<{ ok: boolean }>(`/v1/assets/${kind}/${encodeURIComponent(name)}`, { method: "DELETE" });
+}
+
+export interface SecretStatus {
+  profile: string;
+  type?: string;
+  account?: string;
+  expired: boolean;
+}
+
+export async function getSecrets(): Promise<SecretStatus[]> {
+  const data = await request<{ secrets: SecretStatus[] }>("/v1/secrets");
+  return data.secrets || [];
+}
+
+export async function saveSecret(profile: string, value: Record<string, unknown>) {
+  return request<{ ok: boolean }>(`/v1/secrets/${encodeURIComponent(profile)}`, {
+    method: "PUT",
+    body: JSON.stringify(value),
+  });
+}
+
+export async function deleteSecret(profile: string) {
+  return request<{ ok: boolean }>(`/v1/secrets/${encodeURIComponent(profile)}`, { method: "DELETE" });
 }
 
 export async function connectConnector(

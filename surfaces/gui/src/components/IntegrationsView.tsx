@@ -4,19 +4,25 @@ import { getConnectors } from "../api";
 import { McpTab } from "./ManageTabs";
 import { ConnectorsSection } from "./connectors/ConnectorsSection";
 import { Icon } from "./Icon";
+import { AssetEditor, SecretsEditor } from "./AssetEditor";
 
 // The Connectors surface (renamed from "Integrations", §26) keeps the left sub-nav, now just
 // Connectors · MCP. The old "Messaging routing" tab (and its ⚠ unrouted badge) moved whole to
 // Inbox ▸ Configure (§28): inbox-delivery config belongs with the Inbox, and Unrouted is
 // "messages that never reached you". The one remaining Activity is the audit log, reached from
 // the account menu.
-type IntTab = "connectors" | "mcp";
+type IntTab = "connectors" | "mcp" | "agents" | "knowledge" | "playbook" | "skill" | "secrets";
 
 // Fixed sub-nav (UX-DECISIONS §21): connector detail lives as a SUBPAGE under
 // Connectors, never as a nav item — the nav must not grow per connector.
 const INT_TABS: { key: IntTab; label: string; icon: "plug" | "code" }[] = [
   { key: "connectors", label: "Connectors", icon: "plug" },
   { key: "mcp", label: "MCP servers", icon: "code" },
+  { key: "agents", label: "AGENTS.md", icon: "code" },
+  { key: "knowledge", label: "Knowledge", icon: "code" },
+  { key: "playbook", label: "Playbook", icon: "code" },
+  { key: "skill", label: "Skill", icon: "code" },
+  { key: "secrets", label: "Secrets", icon: "code" },
 ];
 
 export function IntegrationsView() {
@@ -75,7 +81,7 @@ export function IntegrationsView() {
               />
               <ConnectorsSection />
             </section>
-          ) : (
+          ) : tab === "mcp" ? (
             <section>
               <PanelHead
                 title={t("integrations.mcpServers")}
@@ -83,6 +89,14 @@ export function IntegrationsView() {
               />
               <McpTab />
             </section>
+          ) : tab === "knowledge" ? (
+            <section><PanelHead title={t("assets.knowledge")} sub={t("assets.knowledgeSub")} /><AssetEditor kind="knowledge" /></section>
+          ) : tab === "playbook" ? (
+            <section><PanelHead title={t("assets.playbook")} sub={t("assets.playbookSub")} /><AssetEditor kind="playbooks" /></section>
+          ) : tab === "secrets" ? (
+            <section><PanelHead title={t("assets.secrets")} sub={t("assets.secretsSub")} /><SecretsEditor /></section>
+          ) : (
+            <section><PanelHead title={tab === "agents" ? t("assets.agents") : t("assets.skill")} sub={t("assets.localSub")} /><div className="rounded-xl2 border border-line bg-panel p-5 text-[13px] text-muted">{t("assets.editorComingSoon")}</div></section>
           )}
         </div>
       </div>
