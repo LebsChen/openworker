@@ -24,6 +24,7 @@ class RemoteTarget:
     style: RemotePathStyle
     workspace: str
     roots: list[Any] | None = None
+    capabilities: set[str] | None = None
 
     @staticmethod
     def _root_path(root: Any) -> str:
@@ -396,6 +397,124 @@ def remote_search_tools(target: RemoteTarget) -> list:
     fn = _wrap(grep, "search", "low", False)
     fn.__coworker_schema__ = schema
     return [fn]
+
+
+_COMPUTER_READ_ACTIONS = frozenset(
+    {"cursor_position", "resolution", "read_dom", "perception", "zoom"}
+)
+_COMPUTER_ACTIONS = frozenset(
+    {
+        "mouse_move",
+        "left_click",
+        "right_click",
+        "middle_click",
+        "double_click",
+        "triple_click",
+        "left_click_drag",
+        "left_mouse_down",
+        "left_mouse_up",
+        "scroll",
+        "key",
+        "type",
+        "hold_key",
+        "wait",
+    }
+)
+
+
+def _computer_schema() -> dict[str, Any]:
+    return {
+        "type": "function",
+        "function": {
+            "name": "computer",
+            "description": (
+                "Interact with the remote desktop through the RVM. Supported actions are "
+                "mouse_move, left_click, right_click, middle_click, double_click, triple_click, "
+                "left_click_drag, left_mouse_down, left_mouse_up, scroll, key, type, hold_key, "
+                "wait, cursor_position, zoom, read_dom, perception, and resolution. Coordinates "
+                "use a logical 1024x768 screen with top-left origin; take a fresh screenshot or "
+                "zoom before acting because the RVM rescales coordinates to that space. The "
+                "zoom action is misnamed upstream: it crops a region and returns an image, it "
+                "does not zoom the desktop. On Windows, type uses SendKeys; Microsoft Pinyin "
+                "can remove spaces or alter typed text, so use clipboard paste to recover when "
+                "that happens. Pass one action or an actions array for sequential batched actions."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": sorted(_COMPUTER_READ_ACTIONS | _COMPUTER_ACTIONS)},
+                    "actions": {"type": "array", "items": {"type": "object"}},
+                    "coordinate": {"type": "array", "items": {"type": "number"}},
+                    "coordinate2": {"type": "array", "items": {"type": "number"}},
+                    "start_coordinate": {"type": "array", "items": {"type": "number"}},
+                    "region": {"type": "array", "items": {"type": "number"}},
+                    "key": {"type": "string"},
+                    "text": {"type": "string"},
+                    "duration": {"type": "number"},
+                    "scroll_direction": {"type": "string"},
+                    "scroll_amount": {"type": "number"},
+                    "button": {"type": "string"},
+                    "modifiers": {"type": "array", "items": {"type": "string"}},
+                },
+                "additionalProperties": True,
+            },
+        },
+    }
+
+
+def remote_computer_tools(target: RemoteTarget) -> list:
+    capabilities = target.capabilities
+    if capabilities is None:
+        try:
+            capabilities = set(target.client.health().get("capabilities") or [])
+        except RvmError:
+            return []
+
+    def screenshot() -> dict[str, Any]:
+        try:
+            return target.client.screenshot()
+        except RvmError as exc:
+            return _error(exc)
+
+    def computer(
+        action: Optional[str] = None,
+        actions: Optional[list[dict[str, Any]]] = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        body: dict[str, Any] = dict(kwargs)
+        if actions:
+            body["actions"] = actions
+        elif action:
+            body["action"] = action
+        else:
+            return {"error": "action required"}
+        try:
+            return target.client.computer(**body)
+        except RvmError as exc:
+            return _error(exc)
+
+    screenshot.__doc__ = (
+        "Capture the remote desktop as a PNG image. This is read-only and uses the RVM's "
+        "logical 1024x768 screenshot space."
+    )
+    screenshot.__aisuite_tool_metadata__ = ai.ToolMetadata(
+        category="computer", risk_level="low", requires_approval=False,
+        capabilities=["screenshot"],
+    )
+    computer.__doc__ = _computer_schema()["function"]["description"]
+    computer.__coworker_schema__ = _computer_schema()
+    computer.__aisuite_tool_metadata__ = ai.ToolMetadata(
+        category="computer", risk_level="high", requires_approval=True,
+        capabilities=["computer_use"],
+    )
+    computer.__computer_host__ = getattr(target.host, "name", target.client.host_label)
+    screenshot.__computer_host__ = getattr(target.host, "name", target.client.host_label)
+    tools = []
+    if "screenshot" in capabilities:
+        tools.append(screenshot)
+    if "computer_use" in capabilities:
+        tools.append(computer)
+    return tools
 
 
 def remote_git_tools(target: RemoteTarget) -> list:

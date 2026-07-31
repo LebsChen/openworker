@@ -131,7 +131,7 @@ class PermissionEngine:
     ) -> Decision:
         arguments = arguments or {}
         is_connector = getattr(metadata, "category", "") == "connector"
-        risk = classify(tool_name, metadata, self.risk_overrides)
+        risk = classify(tool_name, metadata, self.risk_overrides, arguments)
         is_write = risk is RiskClass.WRITE_LOCAL
         is_shell = risk is RiskClass.EXEC
         consequential = is_consequential(risk)

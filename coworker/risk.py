@@ -19,6 +19,7 @@ class RiskClass(str, Enum):
     READ = "read"  # no side effects — always allowed
     WRITE_LOCAL = "write_local"  # mutates the workspace — path-scoped + mode-gated
     EXEC = "exec"  # runs commands — mode-gated
+    COMPUTER = "computer"  # interacts with a remote desktop — mode-gated
     EXTERNAL = "external"  # side effects off the machine — the unattended Inbox hook
 
 
@@ -35,9 +36,33 @@ _BASE: dict[str, RiskClass] = {
 # Wired in Phase 2 (mainly to relax MCP's conservative default); always None until then.
 RiskOverrides = Callable[[str], Optional["RiskClass"]]
 
+_COMPUTER_READ_ACTIONS = frozenset(
+    {"cursor_position", "resolution", "read_dom", "perception", "zoom"}
+)
+
+
+def computer_risk(arguments: Any) -> "RiskClass":
+    """Classify one computer call from its action(s), including batched actions."""
+    values = arguments.get("actions") if isinstance(arguments, dict) else None
+    if not values:
+        values = [arguments] if isinstance(arguments, dict) else []
+    names = {
+        str(item.get("action", "")).strip().lower()
+        for item in values
+        if isinstance(item, dict)
+    }
+    aliases = {"click": "left_click", "move": "mouse_move"}
+    names = {aliases.get(name, name) for name in names}
+    if names and names <= _COMPUTER_READ_ACTIONS:
+        return RiskClass.READ
+    return RiskClass.COMPUTER
+
 
 def classify(
-    tool_name: str, metadata: Any = None, overrides: Optional[RiskOverrides] = None
+    tool_name: str,
+    metadata: Any = None,
+    overrides: Optional[RiskOverrides] = None,
+    arguments: Any = None,
 ) -> RiskClass:
     """Effective risk of a tool call. ``overrides`` (user-local) wins, then the by-name base
     table, then aisuite metadata (`requires_approval` → external), else read."""
@@ -48,6 +73,8 @@ def classify(
     base = _BASE.get(tool_name)
     if base is not None:
         return base
+    if tool_name == "computer":
+        return computer_risk(arguments or {})
     if bool(getattr(metadata, "requires_approval", False)):
         return RiskClass.EXTERNAL
     return RiskClass.READ

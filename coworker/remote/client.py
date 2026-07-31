@@ -113,6 +113,12 @@ class RvmClient:
     def info(self) -> dict[str, Any]:
         return self._request("GET", "/api/info")
 
+    def screenshot(self) -> dict[str, Any]:
+        return self._request("POST", "/api/screenshot", json={})
+
+    def computer(self, **body: Any) -> dict[str, Any]:
+        return self._request("POST", "/api/computer-use", json=body)
+
     def exec_sync(
         self, cmd: str, *, cwd: str | None = None, timeout: float | None = None,
         session: str | None = None, env: dict[str, str] | None = None,

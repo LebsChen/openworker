@@ -5,6 +5,7 @@ from coworker.remote.paths import RemotePathStyle
 from coworker.remote.tools import (
     RemoteTarget,
     remote_environment_context,
+    remote_computer_tools,
     remote_file_tools,
     remote_git_tools,
     remote_search_tools,
@@ -78,7 +79,20 @@ class FakeClient:
         return {"result": {"stdout": "", "stderr": "", "exit_code": 0}}
 
     def health(self):
-        return {"platform": "linux", "host": "devbox", "workspace": "/workspace"}
+        return {
+            "platform": "linux",
+            "host": "devbox",
+            "workspace": "/workspace",
+            "capabilities": ["screenshot", "computer_use"],
+        }
+
+    def screenshot(self):
+        self.calls.append(("screenshot",))
+        return {"image": "abc", "format": "png"}
+
+    def computer(self, **body):
+        self.calls.append(("computer", body))
+        return {"ok": True, **body}
 
     def info(self):
         return {"hostname": "devbox", "platform": "linux", "arch": "x64", "cpus": 4, "memory_gb": 8}
@@ -122,6 +136,27 @@ def test_file_read_windowing_and_mutations():
     replace = by_name(tools, "replace_in_file")
     assert "error" in replace(path="main.py", old="missing", new="x")
     assert replace(path="main.py", old="first", new="updated")["replacements"] == 1
+
+
+def test_computer_tools_support_single_and_batched_actions():
+    client = FakeClient()
+    tools = remote_computer_tools(target(client))
+    screenshot = by_name(tools, "screenshot")
+    computer = by_name(tools, "computer")
+    assert screenshot()["format"] == "png"
+    assert computer(action="resolution")["action"] == "resolution"
+    actions = [{"action": "mouse_move", "coordinate": [10, 20]}, {"action": "left_click"}]
+    assert computer(actions=actions)["actions"] == actions
+    assert ("screenshot",) in client.calls
+
+
+def test_computer_tools_are_capability_gated():
+    client = FakeClient()
+    remote = target(client)
+    remote.capabilities = {"screenshot"}
+    assert [tool.__name__ for tool in remote_computer_tools(remote)] == ["screenshot"]
+    remote.capabilities = {"computer_use"}
+    assert [tool.__name__ for tool in remote_computer_tools(remote)] == ["computer"]
 
 
 def test_list_files_recursion_glob_and_cap():

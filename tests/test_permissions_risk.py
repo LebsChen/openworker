@@ -44,6 +44,43 @@ def test_is_consequential():
     assert is_consequential(RiskClass.WRITE_LOCAL)
     assert is_consequential(RiskClass.EXEC)
     assert is_consequential(RiskClass.EXTERNAL)
+    assert is_consequential(RiskClass.COMPUTER)
+
+
+@pytest.mark.parametrize(
+    "arguments,expected",
+    [
+        ({"action": "resolution"}, RiskClass.READ),
+        ({"action": "zoom", "region": [0, 0, 10, 10]}, RiskClass.READ),
+        ({"action": "click", "coordinate": [1, 2]}, RiskClass.COMPUTER),
+        (
+            {"actions": [{"action": "cursor_position"}, {"action": "left_click"}]},
+            RiskClass.COMPUTER,
+        ),
+    ],
+)
+def test_computer_risk_is_argument_aware(arguments, expected):
+    assert classify("computer", arguments=arguments) == expected
+
+
+@pytest.mark.parametrize("mode", [Mode.DISCUSS, Mode.PLAN])
+def test_computer_mutations_block_read_only_modes(tmp_path, mode):
+    decision = PermissionEngine(workspace_root=tmp_path, mode=mode).evaluate(
+        "computer", {"action": "left_click", "coordinate": [1, 2]}
+    )
+    assert not decision.allowed and not decision.needs_user
+
+
+def test_computer_mutations_ask_or_allow_by_mode(tmp_path):
+    interactive = PermissionEngine(workspace_root=tmp_path)
+    assert interactive.evaluate(
+        "computer", {"action": "type", "text": "hello"}
+    ).needs_user
+    auto = PermissionEngine(workspace_root=tmp_path, mode=Mode.AUTO)
+    assert auto.evaluate("computer", {"action": "type", "text": "hello"}).allowed
+    assert PermissionEngine(workspace_root=tmp_path).evaluate(
+        "computer", {"action": "cursor_position"}
+    ).allowed
 
 
 def test_overrides_win_over_base_and_metadata():
