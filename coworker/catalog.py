@@ -27,6 +27,7 @@ from .tools.search import search_tools
 from .tools.shell import shell_tools
 from .tools.todo import todo_tools
 from .remote.tools import (
+    remote_browser_tools,
     remote_computer_tools,
     remote_file_tools,
     remote_git_tools,
@@ -110,7 +111,10 @@ def _shell(context: AgentContext) -> list:
 
 def _computer(context: AgentContext) -> list:
     if context.remote_target:
-        return remote_computer_tools(context.remote_target)
+        return [
+            *remote_computer_tools(context.remote_target),
+            *remote_browser_tools(context.remote_target),
+        ]
     return []
 
 

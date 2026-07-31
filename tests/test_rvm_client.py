@@ -1,3 +1,5 @@
+import json
+
 import httpx
 import pytest
 
@@ -90,6 +92,17 @@ def test_client_maps_screenshot_and_computer_routes():
         seen.append(request)
         if request.url.path == "/api/screenshot":
             return httpx.Response(200, json={"image": "abc", "format": "png"})
+        if request.url.path == "/mcp":
+            body = json.loads(request.content)
+            name = body["params"]["name"]
+            if name == "browser_navigate":
+                result = {"url": body["params"]["arguments"]["url"], "result": {}}
+                return httpx.Response(200, json={"jsonrpc": "2.0", "id": body["id"], "result": {"content": [{"type": "text", "text": json.dumps(result)}]}})
+            if name == "browser_eval":
+                return httpx.Response(200, json={"jsonrpc": "2.0", "id": body["id"], "result": {"content": [{"type": "text", "text": '{"result":{"value":"Example"}}'}]}})
+            if name == "browser_screenshot":
+                return httpx.Response(200, json={"jsonrpc": "2.0", "id": body["id"], "result": {"content": [{"type": "image", "data": "png-data", "mimeType": "image/png"}]}})
+            return httpx.Response(200, json={"jsonrpc": "2.0", "id": body["id"], "result": {"content": [{"type": "text", "text": "Browser closed"}]}})
         return httpx.Response(200, json={"ok": True})
 
     client = RvmClient(
@@ -100,10 +113,17 @@ def test_client_maps_screenshot_and_computer_routes():
     assert client.computer(
         actions=[{"action": "mouse_move", "coordinate": [1, 2]}]
     ) == {"ok": True}
+    assert client.browser_navigate("https://example.com")["url"] == "https://example.com"
+    assert client.browser_eval("document.title")["result"]["value"] == "Example"
+    assert client.browser_screenshot() == {"image": "png-data", "format": "png"}
+    assert client.browser_close()["ok"] is True
     assert seen[0].content == b"{}"
     assert seen[1].content == b'{"action":"left_click","coordinate":[1,2]}'
     assert seen[2].content == b'{"actions":[{"action":"mouse_move","coordinate":[1,2]}]}'
     assert all(request.headers["authorization"] == "Bearer secret" for request in seen)
+    mcp = [request for request in seen if request.url.path == "/mcp"]
+    assert all(request.headers["authorization"] == "Bearer secret" for request in mcp)
+    assert all("secret" not in repr(request) for request in mcp)
 
 
 def test_client_classifies_timeout_and_malformed_json_without_token():

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any, Optional
 
 import httpx
@@ -51,6 +52,7 @@ class RvmClient:
         if transport is not None:
             kwargs["transport"] = transport
         self._http = httpx.Client(**kwargs)
+        self._mcp_id = 0
 
     def __repr__(self) -> str:
         return f"RvmClient(host_label={self.host_label!r})"
@@ -118,6 +120,103 @@ class RvmClient:
 
     def computer(self, **body: Any) -> dict[str, Any]:
         return self._request("POST", "/api/computer-use", json=body)
+
+    def _mcp_call(self, name: str, arguments: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+        self._mcp_id += 1
+        response = self._request(
+            "POST",
+            "/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": self._mcp_id,
+                "method": "tools/call",
+                "params": {"name": name, "arguments": arguments or {}},
+            },
+        )
+        if response.get("error"):
+            error = response["error"]
+            detail = error.get("message") if isinstance(error, dict) else str(error)
+            raise RvmRemoteError(f"{self.host_label}: browser request failed: {detail}")
+        result = response.get("result")
+        if not isinstance(result, dict):
+            raise RvmMalformedResponseError(f"{self.host_label} returned malformed MCP response")
+        content = result.get("content")
+        if not isinstance(content, list):
+            raise RvmMalformedResponseError(f"{self.host_label} returned malformed MCP content")
+        if result.get("isError"):
+            text = next(
+                (item.get("text") for item in content if isinstance(item, dict) and isinstance(item.get("text"), str)),
+                "remote browser request failed",
+            )
+            raise RvmRemoteError(f"{self.host_label}: {text}")
+        return content
+
+    def mcp_tools(self) -> list[str]:
+        self._mcp_id += 1
+        response = self._request(
+            "POST",
+            "/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": self._mcp_id,
+                "method": "tools/list",
+                "params": {},
+            },
+        )
+        if response.get("error"):
+            error = response["error"]
+            detail = error.get("message") if isinstance(error, dict) else str(error)
+            raise RvmRemoteError(f"{self.host_label}: MCP capability query failed: {detail}")
+        result = response.get("result")
+        tools = result.get("tools") if isinstance(result, dict) else None
+        if not isinstance(tools, list):
+            raise RvmMalformedResponseError(f"{self.host_label} returned malformed MCP capabilities")
+        return [item["name"] for item in tools if isinstance(item, dict) and isinstance(item.get("name"), str)]
+
+    def browser_navigate(self, url: str) -> dict[str, Any]:
+        content = self._mcp_call("browser_navigate", {"url": url})
+        text = next((item.get("text") for item in content if item.get("type") == "text"), None)
+        if not isinstance(text, str):
+            raise RvmMalformedResponseError(f"{self.host_label} returned malformed browser navigation")
+        try:
+            value = json.loads(text)
+        except (TypeError, ValueError) as exc:
+            raise RvmMalformedResponseError(f"{self.host_label} returned malformed browser navigation") from exc
+        if not isinstance(value, dict):
+            raise RvmMalformedResponseError(f"{self.host_label} returned malformed browser navigation")
+        return value
+
+    def browser_eval(self, expression: str) -> dict[str, Any]:
+        content = self._mcp_call("browser_eval", {"expression": expression})
+        text = next((item.get("text") for item in content if item.get("type") == "text"), None)
+        if not isinstance(text, str):
+            raise RvmMalformedResponseError(f"{self.host_label} returned malformed browser evaluation")
+        try:
+            value = json.loads(text)
+        except (TypeError, ValueError) as exc:
+            raise RvmMalformedResponseError(f"{self.host_label} returned malformed browser evaluation") from exc
+        if not isinstance(value, dict):
+            raise RvmMalformedResponseError(f"{self.host_label} returned malformed browser evaluation")
+        return value
+
+    def browser_screenshot(self) -> dict[str, Any]:
+        content = self._mcp_call("browser_screenshot")
+        image = next(
+            (
+                item.get("data")
+                for item in content
+                if isinstance(item, dict) and item.get("type") == "image" and isinstance(item.get("data"), str)
+            ),
+            None,
+        )
+        if not image:
+            raise RvmMalformedResponseError(f"{self.host_label} returned no browser screenshot")
+        return {"image": image, "format": "png"}
+
+    def browser_close(self) -> dict[str, Any]:
+        content = self._mcp_call("browser_close")
+        text = next((item.get("text") for item in content if item.get("type") == "text"), "Browser closed")
+        return {"ok": True, "message": text}
 
     def exec_sync(
         self, cmd: str, *, cwd: str | None = None, timeout: float | None = None,
