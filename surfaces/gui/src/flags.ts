@@ -18,4 +18,4 @@ function flag(key: string, fallback: boolean): boolean {
 /** Personas management is hidden for launch (owner call, 2026-07-19): the Settings tab
  * and the "Manage personas…" menu entry stay off until the persona catalog is ready.
  * The e2e suite sets `ocw.flag.personas` to keep the hidden flows covered. */
-export const showPersonas = () => flag("ocw.flag.personas", true);
+export const showPersonas = () => flag("ocw.flag.personas", false);

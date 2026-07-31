@@ -320,7 +320,6 @@ interface Props {
 // models and THEN retrying is the intended recovery path). -1 when the tail is anything else.
 export function retryAnchor(items: Item[]): number {
   for (let i = items.length - 1; i >= 0; i--) {
-  useT();
     const it = items[i];
     if (it.kind !== "notice") return -1;
     if (it.retriable) return i;

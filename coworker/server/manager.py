@@ -447,7 +447,7 @@ class SessionManager:
             ws = self.resolve_workspace(workspace) if ag.needs_workspace else None
             if remote_target is not None:
                 ws = remote_target.workspace or ws
-            if ag.needs_workspace and (isolate or ag.family == "knowledge"):
+            if ag.needs_workspace and (isolate or (ag.family == "knowledge" and workspace is None)):
                 try:
                     repository = (
                         ws

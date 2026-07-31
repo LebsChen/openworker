@@ -188,7 +188,7 @@ export function RightRail({
     <aside className={"right-panel-shell" + (!panelOpen ? " collapsed" : "") + (selected ? " artifact-mode" : "")}>
       <div className={"right-panel-drawer" + (panelOpen ? " open" : " collapsed")}>
       <div className="right-panel-tabbody">
-        <div style={{ display: panelOpen && tab === "info" && !selected ? "block" : "none" }}>
+        {panelOpen && tab === "info" && !selected && (
           <InfoPanel
             host={host}
             probe={probe}
@@ -204,11 +204,9 @@ export function RightRail({
             openAccessKey={openAccessKey}
             onOpenIntegrations={onOpenIntegrations}
           />
-        </div>
-        <div style={{ display: panelOpen && tab === "worklog" && !selected ? "block" : "none" }}>
-          <WorklogPanel entries={worklog} />
-        </div>
-        <div style={{ display: panelOpen && tab === "changes" && !selected ? "block" : "none" }}>
+        )}
+        {panelOpen && tab === "worklog" && !selected && <WorklogPanel entries={worklog} />}
+        {panelOpen && tab === "changes" && !selected && (
           <FileChangesPanel
             artifacts={artifacts}
             showArtifacts={showArtifacts}
@@ -216,7 +214,7 @@ export function RightRail({
             onReveal={() => artifacts[0] && revealArtifact(sessionId, artifacts[0].path, host, "reveal")}
             onSelect={(artifact) => { setSelected(artifact); setTab("changes"); setPanelOpen(true); }}
           />
-        </div>
+        )}
         <div style={{ display: panelOpen && isRvmTab && !selected ? "block" : "none" }}>
           {tab === "shell" ? (
             <RemoteShellPanel active={panelOpen && tab === "shell"} sessionId={sessionId} host={host} />
